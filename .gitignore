@@ -1,0 +1,19 @@
+# VM disks and ISOs live outside the repo
+*.qcow2
+*.img
+*.iso
+*.iso.sig
+
+# Build output (layers 6 and 8)
+*.pkg.tar.zst
+*.pkg.tar.zst.sig
+pkg/*/src/
+pkg/*/pkg/
+iso/work/
+iso/out/
+
+# Keys never go in the repo
+*.gpg
+*.asc
+*.key
+secring*

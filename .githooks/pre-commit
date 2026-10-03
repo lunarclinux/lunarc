@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Blocks commits that
+#   1. write the distro name anywhere except distro.conf, or
+#   2. mention the reference distro or its makers (clean-room rule, ADR 0001).
+# docs/ is exempt from both: decision records and the build log need to name
+# things. Run `git config core.hooksPath .githooks` once after cloning.
+set -euo pipefail
+
+root=$(git rev-parse --show-toplevel)
+# shellcheck source=/dev/null
+source "$root/distro.conf"
+
+blocked=''
+names="\\b(${DISTRO_ID}|${DISTRO_REPO}|${DISTRO_NAME})\\b"
+
+fail=0
+while IFS= read -r -d '' file; do
+  case "$file" in
+    distro.conf|docs/*|.githooks/*) continue ;;
+  esac
+  added=$(git diff --cached -U0 -- "$file" | grep -E '^\+[^+]' || true)
+  checks=("$file" "$added")
+  for text in "${checks[@]}"; do
+    if grep -qiE "$blocked" <<<"$text"; then
+      echo "pre-commit: $file mentions a blocked reference (clean-room rule)." >&2
+      fail=1
+      break
+    fi
+    if grep -qE "$names" <<<"$text"; then
+      echo "pre-commit: $file writes the distro name literally; read it from distro.conf." >&2
+      fail=1
+      break
+    fi
+  done
+done < <(git diff --cached --name-only -z --diff-filter=ACMR)
+
+exit "$fail"
