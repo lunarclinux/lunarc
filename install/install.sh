@@ -58,6 +58,13 @@ if (( ! ASSUME_YES )); then
   [[ $answer == yes ]] || die "cancelled"
 fi
 
+# On the live ISO the pacman keyring is set up by a service at boot; installing
+# before it finishes fails with "keyring is not writable".
+if systemctl cat pacman-init.service >/dev/null 2>&1; then
+  step "waiting for the live system's pacman keyring"
+  systemctl start pacman-init.service
+fi
+
 export root DISK USERNAME PASSWORD SSH_KEY HOSTNAME_NEW TIMEZONE MNT=/mnt
 for step in "$root"/install/steps/*.sh; do
   step "${step##*/}"
