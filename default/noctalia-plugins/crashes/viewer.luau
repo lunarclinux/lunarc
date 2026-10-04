@@ -41,6 +41,8 @@ local function detailText(c)
   local capture = noctalia.readFile(c.last_capture)
   if capture then
     if #capture > 4000 then capture = string.sub(capture, 1, 4000) .. "\n…" end
+    -- The capture is untrusted text; keep it inside the code block.
+    capture = string.gsub(capture, "```", "'''")
     return "```\n" .. capture .. "\n```"
   end
   return "_No details captured._"

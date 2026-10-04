@@ -3,12 +3,14 @@
 set -euo pipefail
 source "$DISTRO_LIB/lib.sh"
 
-# name | command | install (pkg:<package> or script:<url>) | interactive with prompt | one-shot (prints the answer)
+# name | command | install (pkg:<package> or script:<url>) | interactive with prompt | one-shot, read-only
+# One-shot runs happen unattended (background crash diagnosis), so they must not
+# be able to change anything: "-" means the agent has no mode we trust for that.
 known=(
-  "claude|claude|script:https://claude.ai/install.sh|claude {}|claude -p {}"
-  "codex|codex|pkg:openai-codex|codex {}|codex exec {}"
+  "claude|claude|script:https://claude.ai/install.sh|claude {}|claude -p --permission-mode plan {}"
+  "codex|codex|pkg:openai-codex|codex {}|codex exec --sandbox read-only {}"
   "gemini|gemini|pkg:gemini-cli|gemini -i {}|gemini -p {}"
-  "opencode|opencode|pkg:opencode|opencode --prompt {}|opencode run {}"
+  "opencode|opencode|pkg:opencode|opencode --prompt {}|-"
 )
 row() { local r; for r in "${known[@]}"; do [[ ${r%%|*} == "$1" ]] && { echo "$r"; return; }; done; return 1; }
 field() { cut -d'|' -f"$2" <<<"$(row "$1")"; }
@@ -72,6 +74,7 @@ case ${1:-} in
       install_agent "$name"; cmd=$(find_cmd "$(field "$name" 2)") || die "install failed"
     fi
     template=$(field "$name" $(( headless ? 5 : 4 )))
+    [[ $template == "-" ]] && die "$name has no read-only one-shot mode; use crash.diagnose_all = terminal"
     read -ra parts <<<"$template"
     argv=("$cmd")
     for p in "${parts[@]:1}"; do
