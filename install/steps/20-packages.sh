@@ -3,6 +3,12 @@ repo=$root/pkg/out/repo
 [[ -f $repo/$DISTRO_REPO.db ]] || die "no distro packages in $repo; build them first with pkg/build"
 
 # The live system needs the local repository to resolve the distro packages.
+# pacman downloads as an unprivileged user, so the repository must be readable
+# by everyone: copy it out of wherever the source was unpacked (often /root).
+local_repo=/var/cache/$DISTRO_ID-install-repo
+rm -rf "$local_repo"; install -d -m755 "$local_repo"
+cp -L "$repo"/* "$local_repo"/; chmod 644 "$local_repo"/*
+repo=$local_repo
 sed -i 's/^#\?ParallelDownloads.*/ParallelDownloads = 8/' /etc/pacman.conf
 if ! grep -q "^\[$DISTRO_REPO\]" /etc/pacman.conf; then
   printf '\n[%s]\nSigLevel = Optional TrustAll\nServer = file://%s\n' "$DISTRO_REPO" "$repo" >> /etc/pacman.conf
