@@ -35,13 +35,21 @@ sed -i "s|^title .*Arch Linux install medium|title    $DISTRO_NAME installer|" "
 # The installer (source tree and built packages) in /root/installer.
 dest=$profile/airootfs/root/installer
 mkdir -p "$dest"
-tar -C "$root" --exclude=./iso/out --exclude=./pkg/out --exclude=./.git -cf - . | tar -C "$dest" -xf -
+# Only tracked files: a working checkout can hold untracked local files that
+# must never end up on a published ISO.
+if git -C "$root" rev-parse --git-dir >/dev/null 2>&1; then
+  git -C "$root" archive HEAD | tar -C "$dest" -xf -
+else
+  # An unpacked `git archive` (e.g. copied into a build VM) has nothing else in it.
+  tar -C "$root" --exclude=./iso/out --exclude=./pkg/out -cf - . | tar -C "$dest" -xf -
+fi
 mkdir -p "$dest/pkg/out" && cp -r "$repo" "$dest/pkg/out/repo"
 
 cat > "$profile/airootfs/usr/local/bin/install-$DISTRO_ID" <<SCRIPT
 #!/usr/bin/env bash
 # Starts the $DISTRO_NAME installer (see /root/installer).
-exec /root/installer/install/install.sh "\$@"
+# mkarchiso resets file modes in the live filesystem, so run it through bash.
+exec bash /root/installer/install/install.sh "\$@"
 SCRIPT
 
 cat >> "$profile/airootfs/etc/motd" <<MOTD
