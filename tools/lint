@@ -4,7 +4,7 @@
 #
 #   tools/lint
 set -uo pipefail
-root=$(cd "$(dirname "$0")/.." && pwd); cd "$root"
+root=$(cd "$(dirname "$0")/.." && pwd); cd "$root" || exit
 source distro.conf
 fail=0
 problem() { printf '\033[31m%s\033[0m %s\n' "lint:" "$*"; fail=1; }

@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Shared helpers for the CLI's commands. Sourced, not run.
 # Expects DISTRO_ID and DISTRO_LIB from the dispatcher.
 

@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # initramfs and the Limine bootloader at the UEFI fallback path. Sourced by install.sh.
 in_target mkinitcpio -P >/dev/null 2>&1
 

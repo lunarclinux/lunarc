@@ -22,7 +22,7 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 source "$root/distro.conf"
 source "$root/install/lib.sh"
 
-DISK= USERNAME= PASSWORD_FILE= SSH_KEY= ASSUME_YES=0 AUTOLOGIN=0
+DISK='' USERNAME='' PASSWORD_FILE='' SSH_KEY='' ASSUME_YES=0 AUTOLOGIN=0
 HOSTNAME_NEW=$DISTRO_ID TIMEZONE=UTC
 
 while [[ $# -gt 0 ]]; do

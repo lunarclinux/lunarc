@@ -161,7 +161,8 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
   check "screen-sharing portal available" "$hypr"' busctl --user introspect org.freedesktop.portal.Desktop /org/freedesktop/portal/desktop | grep -q org.freedesktop.portal.ScreenCast'
   shots=~/.local/share/arch-distro-vm/screenshots; mkdir -p "$shots"
   screenshot() { # screenshot <label>
-    local shot=$shots/$vm-$(date +%Y%m%d-%H%M%S)-$1.png
+    local shot
+    shot=$shots/$vm-$(date +%Y%m%d-%H%M%S)-$1.png
     if "$here/ssh" "$vm" "$user" -- "$hypr sleep 2; grim -" > "$shot" 2>/dev/null && [[ -s $shot ]]; then
       log "screenshot: $shot"
     else

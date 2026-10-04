@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Ghostty announced every theme switch ("Reloaded the configuration") until
 # the starter config turned that off. Bring existing configs in line.
 config=${XDG_CONFIG_HOME:-$HOME/.config}/ghostty/config
