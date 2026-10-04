@@ -23,7 +23,7 @@ end
 
 local function barRow(key, label, value, max, bold)
   return ui.row({ key = key, gap = 10, align = "center" }, {
-    ui.label({ text = label, width = 120, maxLines = 1, fontWeight = bold and "bold" or "normal" }),
+    ui.row({ width = 132 }, { ui.label({ text = label, maxLines = 1, fontWeight = bold and "bold" or "normal" }) }),
     ui.progress({ progress = (max > 0) and (value / max) or 0, flexGrow = 1, height = 8, radius = 4,
       fill = bold and "primary" or "primary/0.55", track = "surface_variant" }),
     ui.label({ text = common.short(value), width = 54, textAlign = "end", fontWeight = bold and "bold" or "normal" }),
@@ -36,7 +36,8 @@ local function agentView(a)
   local body = {}
   table.insert(body, ui.column({ gap = 2 }, {
     ui.label({ text = common.short(a.today.tokens) .. " tokens today", fontSize = 20, fontWeight = "bold" }),
-    ui.label({ text = a.today.messages .. " messages · " .. a.today.sessions .. " sessions · "
+    ui.label({ text = a.today.messages .. (a.today.messages == 1 and " message · " or " messages · ")
+      .. a.today.sessions .. (a.today.sessions == 1 and " session · " or " sessions · ")
       .. common.short(a.today.cache_read) .. " read from cache", color = "on_surface_variant", fontSize = 12 }),
   }))
 
@@ -111,4 +112,14 @@ noctalia.state.watch("usage", function(d) data = d; render() end)
 function onOpen(_context)
   render()
   common.fetch(function(d) data = d; render() end)
+end
+
+-- `noctalia msg plugin <id>/agents:panel all select <agent>` picks an agent's tab.
+function onIpc(event, payload)
+  if event == "select" and data and data.agents then
+    for i, a in ipairs(data.agents) do
+      if a.name == payload then selected = i end
+    end
+    render()
+  end
 end

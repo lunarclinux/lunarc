@@ -162,6 +162,8 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     check "AI usage collected"            "$id agent usage --json | jq -e '(.agents | length) == 2 and (.agents[] | select(.name == \"claude\") | .today.messages == 3 and (.days | length) == 7 and (.models | length) == 2) and (.agents[] | select(.name == \"codex\") | (.limits | length) == 2)' >/dev/null"
     "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg plugin $id/agents:usage all refresh >/dev/null 2>&1; sleep 3; noctalia msg panel-close >/dev/null 2>&1; noctalia msg panel-toggle $id/agents:panel >/dev/null 2>&1" || true
     screenshot ai-usage
+    "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg plugin $id/agents:panel all select codex >/dev/null 2>&1" || true
+    screenshot ai-usage-codex
     check "agent list knows claude"       "$id agent list | grep -qE '^\\* claude'"
     check "update check runs"             "$id update check >/dev/null"
   fi
