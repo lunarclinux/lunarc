@@ -37,6 +37,7 @@ case $part in
     copy_tree "$src/themes" "$dest/usr/share/$id/themes"
     copy_tree "$src/config" "$dest/etc/skel/.config"
     copy_tree "$src/migrations" "$dest/usr/share/$id/migrations"
+    install -d "$dest/usr/share/$id/migrations/system" "$dest/usr/share/$id/migrations/user"
 
     # Launcher entries hidden from the menu: a data dir placed first in XDG_DATA_DIRS.
     for entry in "$src"/default/applications-hidden/*.desktop; do
