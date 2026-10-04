@@ -102,6 +102,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     check "shell answers its IPC"        "$hypr"' noctalia msg status >/dev/null'
     check "shell config has no errors"   "$hypr"' noctalia config validate 2>&1 | tail -3; noctalia config validate >/dev/null 2>&1'
     check "distro shell defaults applied" "$hypr"' noctalia config export | grep -qE "^polkit_agent *= *true"'
+    check "clutter hidden from launcher"  'grep -q "^NoDisplay=true" /usr/local/share/applications/avahi-discover.desktop'
     check "launcher opens"               "$hypr"' noctalia msg panel-open launcher'
   else
     check "polkit agent running"         'systemctl --user is-active --quiet hyprpolkitagent'
