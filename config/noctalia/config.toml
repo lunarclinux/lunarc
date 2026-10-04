@@ -1,0 +1,7 @@
+# Your Noctalia config. The distro defaults load first; settings below override
+# them. Changes made in Noctalia's Settings window are saved separately in
+# ~/.local/state/noctalia/settings.toml and win over this file.
+# Reference: https://docs.noctalia.dev
+
+[include]
+files = ["/usr/share/@DISTRO_ID@/default/noctalia/"]

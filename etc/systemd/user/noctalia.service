@@ -1,0 +1,15 @@
+# Runs the Noctalia shell for the length of the graphical session, restarting
+# it if it crashes. uwsm starts graphical-session.target.
+[Unit]
+Description=Noctalia desktop shell
+PartOf=graphical-session.target
+After=graphical-session.target
+Requisite=graphical-session.target
+
+[Service]
+ExecStart=/usr/bin/noctalia
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target

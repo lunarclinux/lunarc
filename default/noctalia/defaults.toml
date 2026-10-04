@@ -1,0 +1,17 @@
+# Distro defaults for Noctalia. Included by ~/.config/noctalia/config.toml.
+# Don't edit: updates replace this file. Override in your own config.
+
+[shell]
+polkit_agent = true          # Noctalia's own password prompt, themed like the rest
+telemetry_enabled = false
+
+# Lock after 10 minutes idle, screens off a minute later.
+[idle.behavior.lock]
+timeout = 600
+action = "lock"
+enabled = true
+
+[idle.behavior.screen-off]
+timeout = 660
+action = "screen_off"
+enabled = true

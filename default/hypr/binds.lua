@@ -24,18 +24,7 @@ end
 hl.bind(mod .. " + mouse:272", hl.dsp.window.drag(), { mouse = true })
 hl.bind(mod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
 
--- Screenshots: whole screen, or a selected area, to the clipboard.
-hl.bind("Print", run("grim - | wl-copy"))
-hl.bind("SHIFT + Print", run([[grim -g "$(slurp)" - | wl-copy]]))
-
--- Media and brightness keys work on the lock screen too.
-local held = { locked = true, repeating = true }
-hl.bind("XF86AudioRaiseVolume", run("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"), held)
-hl.bind("XF86AudioLowerVolume", run("wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"), held)
-hl.bind("XF86AudioMute", run("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"), held)
-hl.bind("XF86AudioMicMute", run("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"), held)
-hl.bind("XF86MonBrightnessUp", run("brightnessctl -e4 -n2 set 5%+"), held)
-hl.bind("XF86MonBrightnessDown", run("brightnessctl -e4 -n2 set 5%-"), held)
+-- Media keys. Volume, brightness and screenshots are bound in shell.lua.
 hl.bind("XF86AudioPlay", run("playerctl play-pause"), { locked = true })
 hl.bind("XF86AudioPause", run("playerctl play-pause"), { locked = true })
 hl.bind("XF86AudioNext", run("playerctl next"), { locked = true })

@@ -14,6 +14,11 @@ copy_tree() {
 copy_tree "$root/default" "$share/default"
 copy_tree "$root/config" "$MNT/etc/skel/.config"
 
+# Hide dependency clutter from the launcher.
+for entry in "$root"/default/applications-hidden/*.desktop; do
+  install -Dm644 "$entry" "$MNT/usr/local/share/applications/${entry##*/}"
+done
+
 install_etc greetd/config.toml
 if [[ $AUTOLOGIN == 1 ]]; then
   cat >> "$MNT/etc/greetd/config.toml" <<TOML
@@ -26,4 +31,6 @@ TOML
   info "autologin for $USERNAME"
 fi
 in_target systemctl enable greetd.service >/dev/null 2>&1
-in_target systemctl --global enable hyprpolkitagent.service >/dev/null 2>&1
+install_etc systemd/user/noctalia.service
+in_target systemctl --global enable noctalia.service >/dev/null 2>&1
+in_target systemctl enable power-profiles-daemon.service >/dev/null 2>&1

@@ -1,0 +1,6 @@
+# Layer 3: desktop shell (bar, launcher, notifications, lock screen, OSD,
+# wallpaper, clipboard, idle, polkit prompts).
+noctalia
+upower
+power-profiles-daemon
+libnotify
