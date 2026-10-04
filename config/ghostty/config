@@ -7,3 +7,5 @@ window-padding-x = 10
 window-padding-y = 8
 window-decoration = none
 confirm-close-surface = false
+# Theme switches reload the config; don't announce it.
+app-notifications = no-config-reload
