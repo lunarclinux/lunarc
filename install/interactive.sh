@@ -49,6 +49,18 @@ while :; do
   echo "  Unknown time zone; names are like Europe/Berlin or America/New_York."
 done
 
+read -rp "Encrypt the disk? You'll type a passphrase at every boot. [Y/n] " answer
+if [[ ${answer,,} != n* ]]; then
+  while :; do
+    read -rsp "Disk passphrase: " phrase; echo
+    read -rsp "Again: " again; echo
+    [[ -n $phrase && $phrase == "$again" ]] && break
+    echo "  Empty or not matching; try again."
+  done
+  ENCRYPT=1; ENCRYPT_FILE=$(mktemp); printf '%s' "$phrase" > "$ENCRYPT_FILE"; chmod 600 "$ENCRYPT_FILE"
+  unset phrase again
+fi
+
 read -rp "Log in automatically at boot? [y/N] " answer
 [[ ${answer,,} == y* ]] && AUTOLOGIN=1
 
@@ -57,5 +69,6 @@ echo "  Disk:      $DISK (everything on it will be erased)"
 echo "  User:      $USERNAME"
 echo "  Computer:  $HOSTNAME_NEW"
 echo "  Time zone: $TIMEZONE"
+echo "  Encrypted: $( ((ENCRYPT)) && echo yes || echo no )"
 echo "  Autologin: $( ((AUTOLOGIN)) && echo yes || echo no )"
 echo
