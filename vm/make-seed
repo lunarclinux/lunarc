@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Builds the cloud-init seed disk that lets the Arch live ISO accept SSH logins
+# from the test key, so VMs can be driven without typing into their screens.
+# The key and seed live outside the repo, in ~/.local/share/arch-distro-vm.
+set -euo pipefail
+export LIBVIRT_DEFAULT_URI=qemu:///system
+dir=~/.local/share/arch-distro-vm
+mkdir -p "$dir" && chmod 700 "$dir"
+[[ -f $dir/id_ed25519 ]] || ssh-keygen -q -t ed25519 -N '' -C arch-distro-vm-test -f "$dir/id_ed25519"
+
+tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+printf 'instance-id: archiso-seed\nlocal-hostname: archiso\n' > "$tmp/meta-data"
+cat > "$tmp/user-data" <<CFG
+#cloud-config
+users:
+  - name: root
+    ssh_authorized_keys:
+      - $(cat "$dir/id_ed25519.pub")
+CFG
+xorriso -as mkisofs -quiet -V CIDATA -J -r -o "$dir/seed.iso" "$tmp/user-data" "$tmp/meta-data"
+
+virsh vol-delete --pool default seed.iso >/dev/null 2>&1 || true
+virsh vol-create-as default seed.iso "$(stat -c %s "$dir/seed.iso")" --format raw >/dev/null
+virsh vol-upload --pool default seed.iso "$dir/seed.iso"
+echo "seed.iso uploaded to the default pool"
