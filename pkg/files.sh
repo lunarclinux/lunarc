@@ -61,6 +61,7 @@ case $part in
     put "$src/etc/profile.d/local-bin.sh" "$dest/etc/profile.d/$id-local-bin.sh"
     ;;
   settings)
+    install -d -m750 "$dest/etc/sudoers.d"   # sudo's own package creates it 750
     put "$src/etc/sudoers.d/10-wheel" "$dest/etc/sudoers.d/10-$id-wheel" 440
     put "$src/etc/systemd/zram-generator.conf" "$dest/etc/systemd/zram-generator.conf"
     # greetd's own package owns /etc/greetd/config.toml, so ours lives beside it

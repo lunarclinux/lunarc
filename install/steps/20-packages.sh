@@ -18,7 +18,9 @@ pacman -Sy >/dev/null
 mapfile -t pkgs < <(package_list "$root/packages/base.packages")
 pkgs+=("$DISTRO_ID" "$DISTRO_ID-settings")
 info "${#pkgs[@]} packages and their dependencies"
-pacstrap -K "$MNT" "${pkgs[@]}" >/dev/null
+# pacstrap's output is long; keep it in a log and show only problems.
+pacstrap -K "$MNT" "${pkgs[@]}" > /tmp/pacstrap.log 2>&1 || { tail -30 /tmp/pacstrap.log; die "pacstrap failed"; }
+grep -iE '^(error|warning):' /tmp/pacstrap.log | grep -v 'directory permissions differ on /mnt/boot' || true
 genfstab -U "$MNT" >> "$MNT/etc/fstab"
 # The EFI partition holds the bootloader and random seed: root-only, like the
 # Arch Wiki advises. Applied here rather than at mount time so pacstrap doesn't
