@@ -1,7 +1,7 @@
 # Graphics drivers for the GPUs present. Sourced by install.sh.
 # PCI display devices (class 0x03xxxx), by vendor: 1002 AMD, 8086 Intel, 10de NVIDIA.
 gpus=$(for dev in /sys/bus/pci/devices/*; do
-  [[ $(<"$dev/class") == 0x03* ]] && cat "$dev/vendor"
+  if [[ $(<"$dev/class") == 0x03* ]]; then cat "$dev/vendor"; fi
 done | sort -u)
 
 extra=() EXTRA_CMDLINE=""
@@ -18,7 +18,7 @@ LIBVA_DRIVER_NAME=nvidia
 __GLX_VENDOR_LIBRARY_NAME=nvidia
 ENV
 fi
-[[ -z $gpus ]] && info "no PCI graphics found"
+if [[ -z $gpus ]]; then info "no PCI graphics found"; fi
 
 if (( ${#extra[@]} )); then
   arch-chroot "$MNT" pacman -S --needed --noconfirm "${extra[@]}" > /tmp/hardware.log 2>&1 \
