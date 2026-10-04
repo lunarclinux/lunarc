@@ -19,6 +19,9 @@ pacman -Sy >/dev/null
 # be removed freely later.
 mapfile -t pkgs < <(package_list "$root/packages/base.packages" "$root/packages/apps.packages")
 pkgs+=("$DISTRO_ID" "$DISTRO_ID-settings")
+# Name the providers for virtual dependencies some apps have, so pacman doesn't
+# pick its defaults (jack2 would conflict with PipeWire's JACK).
+pkgs+=(pipewire-jack noto-fonts)
 info "${#pkgs[@]} packages and their dependencies"
 # pacstrap's output is long; keep it in a log and show only problems.
 pacstrap -K "$MNT" "${pkgs[@]}" > /tmp/pacstrap.log 2>&1 || { tail -30 /tmp/pacstrap.log; die "pacstrap failed"; }
