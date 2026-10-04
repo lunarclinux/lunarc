@@ -20,3 +20,4 @@ secring*
 
 # Package build output
 pkg/out/
+iso/out/

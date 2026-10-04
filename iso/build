@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Builds the installer ISO from Arch's releng profile. Run as root on an Arch
+# system with archiso installed, from a source tree whose packages are built
+# (pkg/build), e.g. an unpacked copy in a VM:
+#
+#   sudo iso/build [output dir]        default output: iso/out/
+#
+# The ISO is the official live environment plus this distro's installer and
+# package repository; `install-<id>` on the live system starts the installer.
+set -euo pipefail
+[[ $EUID -eq 0 ]] || { echo "iso/build: run as root" >&2; exit 1; }
+root=$(cd "$(dirname "$0")/.." && pwd)
+source "$root/distro.conf"
+out=${1:-$root/iso/out}
+repo=$root/pkg/out/repo
+[[ -f $repo/$DISTRO_REPO.db ]] || { echo "iso/build: build the packages first (pkg/build)" >&2; exit 1; }
+
+work=$(mktemp -d /var/tmp/$DISTRO_ID-iso.XXXXXX)
+trap 'rm -rf "$work"' EXIT
+profile=$work/profile
+cp -r /usr/share/archiso/configs/releng "$profile"
+
+# Identity and boot: UEFI only, like the installer.
+date_stamp=$(date --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y%m)
+sed -i \
+  -e "s|^iso_name=.*|iso_name=\"$DISTRO_ID\"|" \
+  -e "s|^iso_label=.*|iso_label=\"${DISTRO_ID^^}_$date_stamp\"|" \
+  -e "s|^iso_publisher=.*|iso_publisher=\"$DISTRO_NAME\"|" \
+  -e "s|^iso_application=.*|iso_application=\"$DISTRO_NAME installer\"|" \
+  -e "/^bootmodes=/,/)/c\\bootmodes=('uefi.systemd-boot')" \
+  "$profile/profiledef.sh"
+sed -i "s|^file_permissions=(|file_permissions=(\n  [\"/usr/local/bin/install-$DISTRO_ID\"]=\"0:0:755\"|" "$profile/profiledef.sh"
+sed -i "s|^title .*Arch Linux install medium|title    $DISTRO_NAME installer|" "$profile"/efiboot/loader/entries/*.conf
+
+# The installer (source tree and built packages) in /root/installer.
+dest=$profile/airootfs/root/installer
+mkdir -p "$dest"
+tar -C "$root" --exclude=./iso/out --exclude=./pkg/out --exclude=./.git -cf - . | tar -C "$dest" -xf -
+mkdir -p "$dest/pkg/out" && cp -r "$repo" "$dest/pkg/out/repo"
+
+cat > "$profile/airootfs/usr/local/bin/install-$DISTRO_ID" <<SCRIPT
+#!/usr/bin/env bash
+# Starts the $DISTRO_NAME installer (see /root/installer).
+exec /root/installer/install/install.sh "\$@"
+SCRIPT
+
+cat >> "$profile/airootfs/etc/motd" <<MOTD
+
+To install $DISTRO_NAME, connect to the internet (Ethernet works automatically;
+Wi-Fi: iwctl) and run:  install-$DISTRO_ID
+
+MOTD
+
+mkdir -p "$out"
+mkarchiso -v -r -w "$work/work" -o "$out" "$profile"
+ls -lh "$out"/*.iso
