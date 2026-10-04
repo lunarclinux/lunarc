@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# summary: Choose, install and open the terminal
+set -euo pipefail
+source "$DISTRO_LIB/lib.sh"
+
+# name | package | how to make it run a command
+known=(
+  "ghostty|ghostty|ghostty -e"
+  "alacritty|alacritty|alacritty -e"
+  "kitty|kitty|kitty"
+  "wezterm|wezterm|wezterm start --"
+  "foot|foot|foot"
+)
+field() { local row; for row in "${known[@]}"; do [[ ${row%%|*} == "$1" ]] && { cut -d'|' -f"$2" <<<"$row"; return; }; done; return 1; }
+installed() { command -v "$1" >/dev/null; }
+current() { setting terminal ghostty; }
+
+usage() {
+  cat <<USAGE
+Usage: $DISTRO_ID terminal <command>
+
+  list               terminals this distro knows about, and which are installed
+  current            the default terminal
+  set <name>         make <name> the default (installs it first if needed)
+  install <name>     install <name> without changing the default
+  launch [-- cmd]    open the default terminal, optionally running cmd
+USAGE
+}
+
+case ${1:-} in
+  list)
+    cur=$(current)
+    for row in "${known[@]}"; do
+      name=${row%%|*}
+      mark=" "; [[ $name == "$cur" ]] && mark="*"
+      state="not installed"; installed "$name" && state="installed"
+      printf '%s %-10s %s\n' "$mark" "$name" "$state"
+    done ;;
+  current) current ;;
+  install)
+    [[ -n ${2:-} ]] || die "which terminal? see '$DISTRO_ID terminal list'"
+    pkg=$(field "$2" 2) || die "unknown terminal: $2"
+    installed "$2" || install_packages "$pkg" ;;
+  set)
+    [[ -n ${2:-} ]] || die "which terminal? see '$DISTRO_ID terminal list'"
+    pkg=$(field "$2" 2) || die "unknown terminal: $2"
+    installed "$2" || install_packages "$pkg"
+    set_setting terminal "$2"
+    info "default terminal: $2" ;;
+  launch)
+    shift
+    [[ ${1:-} == "--" ]] && shift
+    name=$(current)
+    installed "$name" || name=$(for row in "${known[@]}"; do n=${row%%|*}; installed "$n" && { echo "$n"; break; }; done)
+    [[ -n $name ]] || die "no known terminal is installed"
+    if [[ $# -eq 0 ]]; then
+      launch_app "$name"
+    else
+      read -ra run <<<"$(field "$name" 3)"
+      launch_app "${run[@]}" "$@"
+    fi ;;
+  -h|--help|"") usage ;;
+  *) die "unknown terminal command: $1" ;;
+esac

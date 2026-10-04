@@ -15,11 +15,17 @@ pipewire-alsa
 pipewire-jack
 wireplumber
 
-# Terminal and fonts
-wezterm
+# Terminal (others can be added with the terminal command) and fonts
+ghostty
 noto-fonts
 noto-fonts-emoji
 ttf-jetbrains-mono-nerd
+inter-font
+
+# App look: GTK and Qt follow the desktop theme
+adw-gtk-theme
+papirus-icon-theme
+qt6ct
 
 # Desktop utilities
 grim

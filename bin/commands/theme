@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# summary: List and switch desktop themes
+set -euo pipefail
+source "$DISTRO_LIB/lib.sh"
+
+themes=$SHARE/themes
+palettes=${XDG_CONFIG_HOME:-$HOME/.config}/noctalia/palettes
+
+usage() {
+  cat <<USAGE
+Usage: $DISTRO_ID theme <command>
+
+  list                       available themes (* marks the current one)
+  current                    the current theme
+  set <theme> [dark|light]   switch theme; the mode defaults to the theme's own
+  mode <dark|light>          switch the current theme between dark and light
+USAGE
+}
+
+meta() { awk -F' *= *' -v k="$2" '$1 == k { sub(/^[^=]*= */, ""); gsub(/^"|"$/, ""); print; exit }' "$themes/$1/theme.toml"; }
+# Palette files keep "dark" and "light" as top-level keys, indented two spaces.
+has_variant() { grep -qE "^  \"$2\":" "$themes/$1/palette.json"; }
+
+# Noctalia only reads palettes from its own config folder, so each distro theme is linked there.
+link_palettes() {
+  mkdir -p "$palettes"
+  local dir
+  for dir in "$themes"/*/; do
+    dir=${dir%/}
+    ln -sfn "$dir/palette.json" "$palettes/$DISTRO_ID-${dir##*/}.json"
+  done
+}
+
+apply_mode() { # apply_mode <dark|light>
+  local mode=$1 icons=Papirus-Dark gtk=adw-gtk3-dark
+  [[ $mode == light ]] && { icons=Papirus-Light; gtk=adw-gtk3; }
+  noctalia msg theme-mode-set "$mode" >/dev/null
+  gsettings set org.gnome.desktop.interface icon-theme "$icons"
+  gsettings set org.gnome.desktop.interface gtk-theme "$gtk"
+  local qt=${XDG_CONFIG_HOME:-$HOME/.config}/qt6ct/qt6ct.conf
+  [[ -f $qt ]] && sed -i "s/^icon_theme=.*/icon_theme=$icons/" "$qt"
+  set_setting theme.mode "$mode"
+}
+
+case ${1:-} in
+  list)
+    cur=$(setting theme)
+    for dir in "$themes"/*/; do
+      name=$(basename "$dir")
+      mark=" "; [[ $name == "$cur" ]] && mark="*"
+      printf '%s %-10s %s\n' "$mark" "$name" "$(meta "$name" description)"
+    done ;;
+  current) printf '%s (%s)\n' "$(setting theme)" "$(setting theme.mode)" ;;
+  set)
+    name=${2:-}; [[ -n $name && -d $themes/$name ]] || die "unknown theme '${name}'; see '$DISTRO_ID theme list'"
+    mode=${3:-$(meta "$name" mode)}
+    [[ $mode == dark || $mode == light ]] || die "mode must be dark or light"
+    has_variant "$name" "$mode" || { info "$name has no $mode variant; using its default"; mode=$(meta "$name" mode); }
+    shell_ready || die "the desktop shell isn't running"
+    link_palettes
+    noctalia msg color-scheme-set custom "$DISTRO_ID-$name" >/dev/null
+    apply_mode "$mode"
+    [[ -f $themes/$name/wallpaper.svg ]] && noctalia msg wallpaper-set "$themes/$name/wallpaper.svg" >/dev/null
+    set_setting theme "$name"
+    info "theme: $name ($mode)" ;;
+  mode)
+    mode=${2:-}; [[ $mode == dark || $mode == light ]] || die "mode must be dark or light"
+    name=$(setting theme)
+    has_variant "$name" "$mode" || die "$name has no $mode variant"
+    shell_ready || die "the desktop shell isn't running"
+    apply_mode "$mode"
+    info "theme: $name ($mode)" ;;
+  -h|--help|"") usage ;;
+  *) die "unknown theme command: $1" ;;
+esac
