@@ -10,4 +10,6 @@ user = "$USERNAME"
 TOML
   info "autologin for $USERNAME"
 fi
+# A fresh install already has every change existing migrations would make.
+in_target "/usr/bin/$DISTRO_ID" migrate --system --mark-all
 in_target systemctl enable greetd.service power-profiles-daemon.service bluetooth.service >/dev/null 2>&1

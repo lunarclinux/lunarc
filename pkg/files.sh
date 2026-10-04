@@ -36,6 +36,7 @@ case $part in
     copy_tree "$src/default" "$dest/usr/share/$id/default"
     copy_tree "$src/themes" "$dest/usr/share/$id/themes"
     copy_tree "$src/config" "$dest/etc/skel/.config"
+    copy_tree "$src/migrations" "$dest/usr/share/$id/migrations"
 
     # Launcher entries hidden from the menu: a data dir placed first in XDG_DATA_DIRS.
     for entry in "$src"/default/applications-hidden/*.desktop; do
@@ -50,13 +51,15 @@ case $part in
     put "$src/etc/systemd/user/noctalia.service" "$units/noctalia.service"
     put "$src/etc/systemd/user/first-login.service" "$units/$id-first-login.service"
     put "$src/etc/systemd/user/crash-watch.service" "$units/$id-crash-watch.service"
+    put "$src/etc/systemd/user/migrate.service" "$units/$id-migrate.service"
     install -d "$units/graphical-session.target.wants"
-    for unit in noctalia.service "$id-first-login.service" "$id-crash-watch.service"; do
+    for unit in noctalia.service "$id-first-login.service" "$id-crash-watch.service" "$id-migrate.service"; do
       ln -s "../$unit" "$units/graphical-session.target.wants/$unit"
     done
 
     # pacman hook keeping Limine current at the UEFI fallback path.
     put "$src/etc/pacman.d/hooks/limine-update.hook" "$dest/usr/share/libalpm/hooks/$id-limine-update.hook"
+    put "$src/etc/pacman.d/hooks/migrate.hook" "$dest/usr/share/libalpm/hooks/$id-migrate.hook"
     # ~/.local/bin on PATH for shells.
     put "$src/etc/profile.d/local-bin.sh" "$dest/etc/profile.d/$id-local-bin.sh"
     ;;

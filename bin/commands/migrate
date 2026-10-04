@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# summary: Bring an installed system or user up to date with changed defaults
+set -euo pipefail
+source "$DISTRO_LIB/lib.sh"
+
+usage() {
+  cat <<USAGE
+Usage: $DISTRO_ID migrate --system | --user [--mark-all] [--list]
+
+Migrations are scripts in $SHARE/migrations/{system,user}/, run once each, in
+name order. System migrations run as root after the distro package updates (a
+pacman hook); user migrations run at each login (a user service).
+
+  --system     run pending system migrations (as root)
+  --user       run pending migrations for the current user
+  --mark-all   record every migration as applied without running it
+               (fresh installs and new users start out current)
+  --list       show each migration and whether it has been applied
+USAGE
+}
+
+kind="" mark=0 list=0
+for a in "$@"; do
+  case $a in
+    --system) kind=system ;; --user) kind=user ;;
+    --mark-all) mark=1 ;; --list) list=1 ;;
+    -h|--help) usage; exit 0 ;;
+    *) die "unknown option: $a" ;;
+  esac
+done
+[[ -n $kind ]] || { usage >&2; exit 2; }
+
+dir=$SHARE/migrations/$kind
+if [[ $kind == system ]]; then
+  [[ $EUID -eq 0 ]] || die "system migrations need root (sudo $DISTRO_ID migrate --system)"
+  applied=/var/lib/$DISTRO_ID/migrations-applied
+else
+  applied=$STATE_DIR/migrations-applied
+fi
+# A user who has never logged in starts with current configs from /etc/skel.
+if [[ $kind == user && ! -f $STATE_DIR/first-login-done && ! -s $applied ]]; then mark=1; fi
+mkdir -p "$(dirname "$applied")"; touch "$applied"
+
+shopt -s nullglob
+for script in "$dir"/*.sh; do
+  name=${script##*/}
+  if grep -qxF "$name" "$applied"; then
+    (( list )) && printf 'applied  %s\n' "$name"
+    continue
+  fi
+  if (( list )); then printf 'pending  %s\n' "$name"; continue; fi
+  if (( mark )); then echo "$name" >> "$applied"; continue; fi
+  info "migration: $name"
+  # Each migration runs in its own shell; one that fails stops the run, so the
+  # rest wait until it's fixed and later ones never run against a half-migrated state.
+  if bash -euo pipefail "$script"; then
+    echo "$name" >> "$applied"
+  else
+    die "migration $name failed; fix it and run '$DISTRO_ID migrate --$kind' again"
+  fi
+done

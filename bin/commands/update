@@ -16,6 +16,9 @@ case ${1:-} in
   "")
     if [[ ! -t 0 ]]; then exec "/usr/bin/$DISTRO_ID" terminal launch -- "/usr/bin/$DISTRO_ID" update; fi
     sudo pacman -Syu
+    # The package's pacman hook runs system migrations; user ones run now
+    # rather than waiting for the next login.
+    "/usr/bin/$DISTRO_ID" migrate --user
     info ""; read -rp "Done. Press Enter to close." _ ;;
   check)
     if out=$(checkupdates 2>/dev/null); then

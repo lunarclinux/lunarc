@@ -1,0 +1,10 @@
+# After the distro package updates, run any new system migrations.
+[Trigger]
+Operation = Upgrade
+Type = Package
+Target = @DISTRO_ID@
+
+[Action]
+Description = Applying system migrations...
+When = PostTransaction
+Exec = /usr/bin/@DISTRO_ID@ migrate --system
