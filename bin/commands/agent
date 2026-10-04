@@ -28,6 +28,7 @@ Usage: $DISTRO_ID agent <command>
   install <name>          install <name>
   launch                  open the default agent in a terminal
   prompt <text>           open the default agent in a terminal, starting with <text>
+  usage [--json]          tokens per day and per model over the last week, and plan limits where the agent records them
   run [--headless] [--cwd DIR] -- <prompt>
                           run the default agent here (headless prints the answer and exits)
 USAGE
@@ -43,7 +44,54 @@ install_agent() {
   esac
 }
 
+# Usage records, one JSON object per line (see agent-usage.jq for the shape).
+claude_records() {
+  local dir=$HOME/.claude/projects
+  [[ -d $dir ]] || return 0
+  find "$dir" -name '*.jsonl' -mtime -8 -print0 | xargs -0r grep -h '"usage"' 2>/dev/null \
+    | jq -c 'select(.type == "assistant" and .message.usage) | .message.usage as $u | {
+        agent: "claude", id: (.message.id // .uuid), session: .sessionId, model: (.message.model // "unknown"),
+        t: (.timestamp | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601),
+        tokens: (($u.input_tokens // 0) + ($u.output_tokens // 0) + ($u.cache_creation_input_tokens // 0)),
+        cache_read: ($u.cache_read_input_tokens // 0) }' 2>/dev/null || true
+}
+
+# Codex writes token_count events (with rate limits) into its session logs.
+# Not yet verified against a real Codex install.
+codex_records() {
+  local dir=$HOME/.codex/sessions file
+  [[ -d $dir ]] || return 0
+  while IFS= read -r -d '' file; do
+    jq -c -s --arg f "$file" '
+      (map(select(.type == "turn_context") | .payload.model) | first // "unknown") as $model
+      | .[] | select(.payload.type? == "token_count")
+      | (.timestamp | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601) as $t
+      | ( .payload.info.last_token_usage // empty
+          | { agent: "codex", id: ($f + ($t | tostring)), session: $f, model: $model, t: $t,
+              tokens: ((.input_tokens // 0) - (.cached_input_tokens // 0) + (.output_tokens // 0)),
+              cache_read: (.cached_input_tokens // 0) } ),
+        ( (.payload.rate_limits // {}) | to_entries[] | select(.value.used_percent? != null)
+          | { agent: "codex",
+              limit: { label: (if .key == "primary" then "Session" elif .key == "secondary" then "Week" else .key end),
+                       used_percent: .value.used_percent,
+                       resets_at: (.value.resets_at // (if .value.resets_in_seconds then $t + .value.resets_in_seconds else null end)) } } )
+    ' "$file" 2>/dev/null || true
+  done < <(find "$dir" -name '*.jsonl' -mtime -8 -print0)
+}
+
+usage_json() {
+  { claude_records; codex_records; } | jq -n --argjson days 7 --argjson now "$(date +%s)" -f "$DISTRO_LIB/agent-usage.jq"
+}
+
 case ${1:-} in
+  usage)
+    if [[ ${2:-} == --json ]]; then usage_json
+    else
+      usage_json | jq -r '.agents[] | "\(.name): today \(.today.tokens) tokens, \(.today.messages) messages, \(.today.sessions) sessions",
+        (.limits[] | "  \(.label): \(.used_percent)% used"),
+        (.days[] | "  \(.date)  \(.tokens)"),
+        (.models[] | "  \(.model): \(.tokens)")'
+    fi ;;
   list)
     cur=$(current)
     for r in "${known[@]}"; do

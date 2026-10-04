@@ -19,6 +19,7 @@ copy_tree "$root/config" "$MNT/etc/skel/.config"
 lib=$MNT/usr/lib/$DISTRO_ID
 install -Dm755 "$root/bin/cli" "$MNT/usr/bin/$DISTRO_ID"
 install -Dm644 "$root/bin/lib.sh" "$lib/lib.sh"
+install -Dm644 "$root/bin/agent-usage.jq" "$lib/agent-usage.jq"
 install -Dm644 "$root/distro.conf" "$lib/distro.conf"
 for cmd in "$root"/bin/commands/*; do install -Dm755 "$cmd" "$lib/commands/${cmd##*/}"; done
 

@@ -1,0 +1,20 @@
+id = "@DISTRO_ID@/agents"
+name = "AI usage"
+version = "0.1.0"
+plugin_api = 28
+author = "@DISTRO_ID@"
+license = "GPL-3.0-or-later"
+icon = "sparkles"
+description = "AI coding agent usage: today's tokens in the bar; limits, tokens by day and by model in a panel."
+tags = ["ai"]
+
+[[widget]]
+id = "usage"
+entry = "widget.luau"
+
+[[panel]]
+id = "panel"
+entry = "panel.luau"
+width = 460
+height = 620
+placement = "attached"
