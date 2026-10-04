@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Snapshot helper for the build VMs.
+#   vm/snap take <vm> <name> [description]   shut the VM down first
+#   vm/snap list <vm>
+#   vm/snap restore <vm> <name>
+#   vm/snap delete <vm> <name>
+# Layer snapshots are named after git tags: l0-complete, l1-complete, ...
+#
+# Snapshots are taken with the VM shut off. Running snapshots would have to
+# save the 3D graphics state, which QEMU can't do for virgl. Snapshots cover
+# the disk only, not the UEFI variables, so installs must also put the
+# bootloader at the fallback path (EFI/BOOT/BOOTX64.EFI).
+set -euo pipefail
+export LIBVIRT_DEFAULT_URI=qemu:///system
+
+usage() { sed -n '2,6p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+[[ $# -ge 2 ]] || usage
+cmd=$1 vm=$2
+
+require_off() {
+  if [[ $(virsh domstate "$vm") != "shut off" ]]; then
+    echo "snap: $vm is running; shut it down first (virsh shutdown $vm)." >&2
+    exit 1
+  fi
+}
+
+case $cmd in
+  take)
+    [[ $# -ge 3 ]] || usage
+    require_off
+    virsh snapshot-create-as "$vm" "$3" --description "${4:-}"
+    ;;
+  list)
+    virsh snapshot-list "$vm" --tree
+    ;;
+  restore)
+    [[ $# -ge 3 ]] || usage
+    require_off
+    virsh snapshot-revert "$vm" "$3"
+    ;;
+  delete)
+    [[ $# -ge 3 ]] || usage
+    virsh snapshot-delete "$vm" "$3"
+    ;;
+  *) usage ;;
+esac
