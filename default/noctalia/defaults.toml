@@ -25,7 +25,7 @@ builtin_ids = ["ghostty", "alacritty", "kitty", "foot", "wezterm", "gtk3", "gtk4
 
 # Distro plugins ship read-only in /usr/share; Noctalia loads them from there.
 [plugins]
-enabled = ["@DISTRO_ID@/crashes"]
+enabled = ["@DISTRO_ID@/crashes", "@DISTRO_ID@/agents"]
 
 [[plugins.source]]
 name = "@DISTRO_ID@"
@@ -33,12 +33,15 @@ kind = "path"
 location = "/usr/share/@DISTRO_ID@/default/noctalia-plugins"
 enabled = true
 
-# The crash indicator sits before the notification bell (it hides itself when
-# there are no open crashes). Otherwise Noctalia's default bar.
+# AI usage and the crash indicator sit before the notification bell (each hides
+# itself when it has nothing to show). Otherwise Noctalia's default bar.
 [widget.crashes]
 type = "@DISTRO_ID@/crashes:indicator"
+
+[widget.ai-usage]
+type = "@DISTRO_ID@/agents:usage"
 
 [bar.default]
 start  = ["launcher", "wallpaper", "workspaces"]
 center = ["clock"]
-end    = ["media", "tray", "crashes", "notifications", "clipboard", "network", "bluetooth", "volume", "brightness", "battery", "control-center", "session"]
+end    = ["media", "tray", "ai-usage", "crashes", "notifications", "clipboard", "network", "bluetooth", "volume", "brightness", "battery", "control-center", "session"]
