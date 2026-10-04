@@ -55,11 +55,11 @@ local function crashRow(c)
     ui.row({ align = "center", gap = 8 }, {
       ui.glyph({ name = "bug", size = 16, color = "error" }),
       ui.label({ text = c.comm, fontWeight = "bold", flexGrow = 1 }),
-      ui.box({ width = offset, height = 1 }),
+      ui.box({ width = offset, height = 1, opacity = 0 }),
       ui.row({ fill = "error/0.22", radius = 8, paddingH = 7, align = "center" }, {
         ui.label({ text = "×" .. tostring(c.count), color = "error", fontWeight = "bold" }),
       }),
-      ui.box({ width = 3 - offset, height = 1 }),
+      ui.box({ width = 3 - offset, height = 1, opacity = 0 }),
     }),
     ui.label({
       text = c.signal .. " · " .. ago(c.last) .. " · " .. (statusText[c.status] or c.status),

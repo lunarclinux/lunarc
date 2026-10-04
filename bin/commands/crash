@@ -111,8 +111,9 @@ record() {
     local status; status=$(jq -r .status "$dir/info.json")
     update_info "$id" '.count += 1 | .last = $t | .updated = $now | .last_capture = $c' \
       --argjson t "$ts" --argjson now "$(now)" --arg c "$capture"
-    # A crash marked resolved that happens again is back in the inbox.
-    [[ $status == resolved ]] && set_status "$id" new
+    # A crash marked resolved that happens again is back in the inbox, and
+    # worth a fresh notification.
+    if [[ $status == resolved ]]; then set_status "$id" new; update_info "$id" '.notified = false'; fi
   else
     new=1
     jq -n --arg id "$id" --arg exe "$exe" --arg comm "$comm" --arg sig "$sig" --argjson t "$ts" --arg c "$capture" \

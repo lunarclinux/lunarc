@@ -14,12 +14,12 @@ local function render()
   if wiggleTicks > 0 then shift = (wiggleTicks % 2 == 0) and 3 or 0 end
   local container = barWidget.isVertical() and ui.column or ui.row
   barWidget.render(container({ gap = 4, align = "center" }, {
-    ui.box({ width = shift, height = 1 }),
+    ui.box({ width = shift, height = 1, opacity = 0 }),
     ui.glyph({ name = "bug", size = 15, color = "error" }),
     ui.row({ fill = "error/0.22", radius = 8, paddingH = 6, align = "center" }, {
       ui.label({ text = tostring(count), color = "error", fontWeight = "bold" }),
     }),
-    ui.box({ width = 3 - shift, height = 1 }),
+    ui.box({ width = 3 - shift, height = 1, opacity = 0 }),
   }))
   barWidget.setTooltip(count == 1 and "1 open crash" or (tostring(count) .. " open crashes"))
 end
