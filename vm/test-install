@@ -121,7 +121,7 @@ if "$here/ssh" "$vm" "$user" -- "test -x /usr/lib/$id/commands/migrate"; then
   check "new user: user migrations marked"        "$id migrate --user --list | grep -q '^applied' && ! $id migrate --user --list | grep -q pending"
   check "migration service ran at login"          "systemctl --user show -p Result $id-migrate.service | grep -q success"
   # Simulate an update that ships one new user and one new system migration.
-  "$here/ssh" "$vm" "$user" -- "echo '$password' | sudo -S -p '' sh -c 'echo \"touch \\\$HOME/user-migration-ran\" > /usr/share/$id/migrations/user/29990101-0000-test.sh; echo \"touch /var/lib/$id/system-migration-ran\" > /usr/share/$id/migrations/system/29990101-0000-test.sh'"
+  "$here/ssh" "$vm" "$user" -- "echo '$password' | sudo -S -p '' sh -c 'echo \"touch \\\$HOME/user-migration-ran\" > /usr/share/$id/migrations/user/29990101-0000-test.sh; echo \"touch /var/lib/$id/system-migration-ran\" > /usr/share/$id/migrations/system/29990101-0000-test.sh'" || true
   check "new user migration runs once"   "$id migrate --user >/dev/null && test -f ~/user-migration-ran && rm ~/user-migration-ran && $id migrate --user >/dev/null && ! test -f ~/user-migration-ran"
   check "new system migration runs"      "echo '$password' | sudo -S -p '' $id migrate --system >/dev/null && test -f /var/lib/$id/system-migration-ran"
   check "ghostty migration fixes an old config" "sed -i '/app-notifications/d; /announce it/d' ~/.config/ghostty/config && sed -i '/ghostty-quiet-reloads/d' ~/.local/state/$id/migrations-applied && $id migrate --user >/dev/null && grep -q '^app-notifications = no-config-reload' ~/.config/ghostty/config"
