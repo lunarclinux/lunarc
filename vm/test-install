@@ -3,7 +3,9 @@
 # with the live ISO), installs a git ref over SSH, reboots into the installed
 # system and runs checks.
 #
-#   vm/test-install [--vm distro-clean] [--from l0-complete] [--ref HEAD] [--keep] [--iso VOLUME]
+#   vm/test-install [--vm distro-clean] [--from l0-complete] [--ref HEAD] [--keep] [--iso VOLUME] [--encrypt]
+#
+# --encrypt installs onto LUKS and types the passphrase at boot (virsh send-key).
 #
 # --iso boots the VM from an installer ISO in libvirt's default pool (built by
 # iso/build) and runs the installer bundled in it, instead of copying a git ref.
@@ -12,12 +14,13 @@
 set -euo pipefail
 export LIBVIRT_DEFAULT_URI=qemu:///system
 here=$(cd "$(dirname "$0")" && pwd); repo=$(dirname "$here")
-vm=distro-clean from=l0-complete ref=HEAD keep=0 iso=""
+vm=distro-clean from=l0-complete ref=HEAD keep=0 iso="" encrypt=0
 while [[ $# -gt 0 ]]; do
   case $1 in
     --vm) vm=$2; shift 2 ;; --from) from=$2; shift 2 ;;
     --ref) ref=$2; shift 2 ;; --keep) keep=1; shift ;;
     --iso) iso=$2; shift 2 ;;
+    --encrypt) encrypt=1; shift ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -70,16 +73,40 @@ password=$(head -c 12 /dev/urandom | base64 | tr -dc 'A-Za-z0-9')
 (umask 077; printf '%s\n' "$password" > ~/.local/share/arch-distro-vm/$vm.password)
 "$here/ssh" "$vm" -- "umask 077; printf '%s' '$password' > /root/pw"
 
+# Lowercase letters only, so it can be typed with virsh send-key.
+passphrase=correcthorsebattery
+crypt_args=""
+if (( encrypt )); then
+  "$here/ssh" "$vm" -- "umask 077; printf '%s' '$passphrase' > /root/luks"
+  crypt_args="--encrypt /root/luks"
+fi
+
 log "installing"
 started=$SECONDS
 "$here/ssh" "$vm" -- "$installer --disk /dev/vda --user $user \
-  --password-file /root/pw --ssh-key /root/tester.pub --timezone America/Chicago --autologin --yes" \
+  --password-file /root/pw --ssh-key /root/tester.pub --timezone America/Chicago --autologin $crypt_args --yes" \
   || { log "INSTALL FAILED"; exit 1; }
 log "install took $((SECONDS - started))s; rebooting into the installed system"
 
 "$here/ssh" "$vm" -- 'umount -R /mnt; poweroff' || true
 for _ in $(seq 60); do [[ $(virsh domstate "$vm") == "shut off" ]] && break; sleep 2; done
 virsh start "$vm" >/dev/null
+if (( encrypt )); then
+  # Type the passphrase at the unlock prompt. Wait well past the boot menu
+  # first (letters typed there would edit entries), and retry at most three times.
+  type_passphrase() {
+    local c; for c in $(grep -o . <<<"$passphrase"); do virsh send-key "$vm" "KEY_${c^^}" >/dev/null; done
+    virsh send-key "$vm" KEY_ENTER >/dev/null
+  }
+  unlocked=0
+  for attempt in 1 2 3; do
+    sleep 25
+    "$here/ssh" "$vm" "$user" -- true 2>/dev/null && { unlocked=1; break; }
+    log "typing the disk passphrase (attempt $attempt)"
+    type_passphrase
+  done
+  (( unlocked )) || wait_ssh "$user" 120
+fi
 wait_ssh "$user" 300
 
 log "checks"
@@ -125,6 +152,10 @@ if "$here/ssh" "$vm" "$user" -- "test -x /usr/lib/$id/commands/migrate"; then
   check "new user migration runs once"   "$id migrate --user >/dev/null && test -f ~/user-migration-ran && rm ~/user-migration-ran && $id migrate --user >/dev/null && ! test -f ~/user-migration-ran"
   check "new system migration runs"      "echo '$password' | sudo -S -p '' $id migrate --system >/dev/null && test -f /var/lib/$id/system-migration-ran"
   check "ghostty migration fixes an old config" "sed -i '/app-notifications/d; /announce it/d' ~/.config/ghostty/config && sed -i '/ghostty-quiet-reloads/d' ~/.local/state/$id/migrations-applied && $id migrate --user >/dev/null && grep -q '^app-notifications = no-config-reload' ~/.config/ghostty/config"
+fi
+if (( encrypt )); then
+  check "root filesystem is on LUKS"   "lsblk -no TYPE,NAME | grep -q '^crypt *system'"
+  check "LUKS2 with a passphrase slot" "echo '$password' | sudo -S -p '' cryptsetup luksDump \$(lsblk -no PKNAME /dev/mapper/system | sed 's|^|/dev/|') | grep -q 'Version:.*2'"
 fi
 check "hostname from distro.conf"      "test \"\$(cat /etc/hostname)\" = \"$(. "$repo/distro.conf"; echo "$DISTRO_ID")\""
 

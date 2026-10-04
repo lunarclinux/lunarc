@@ -6,6 +6,7 @@ sof-firmware
 amd-ucode
 intel-ucode
 btrfs-progs
+cryptsetup
 dosfstools
 limine
 efibootmgr

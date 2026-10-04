@@ -11,6 +11,7 @@
 #   --hostname NAME       default: the distro ID from distro.conf
 #   --timezone ZONE       default: UTC (e.g. America/Chicago)
 #   --autologin           log the user straight into the desktop at boot
+#   --encrypt FILE        encrypt the disk (LUKS2) with the passphrase in FILE
 #   --ssh-key FILE        authorise this public key for the user and enable sshd
 #                         (used by the VM tests)
 #   --yes                 don't ask before erasing the disk
@@ -22,7 +23,7 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 source "$root/distro.conf"
 source "$root/install/lib.sh"
 
-DISK='' USERNAME='' PASSWORD_FILE='' SSH_KEY='' ASSUME_YES=0 AUTOLOGIN=0
+DISK='' USERNAME='' PASSWORD_FILE='' SSH_KEY='' ASSUME_YES=0 AUTOLOGIN=0 ENCRYPT_FILE='' ENCRYPT=0
 HOSTNAME_NEW=$DISTRO_ID TIMEZONE=UTC
 
 while [[ $# -gt 0 ]]; do
@@ -34,8 +35,9 @@ while [[ $# -gt 0 ]]; do
     --timezone) TIMEZONE=$2; shift 2 ;;
     --ssh-key) SSH_KEY=$2; shift 2 ;;
     --autologin) AUTOLOGIN=1; shift ;;
+    --encrypt) ENCRYPT=1; ENCRYPT_FILE=$2; shift 2 ;;
     --yes) ASSUME_YES=1; shift ;;
-    -h|--help) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) die "unknown option: $1" ;;
   esac
 done
@@ -50,6 +52,7 @@ fi
 [[ -f /usr/share/zoneinfo/$TIMEZONE ]] || die "unknown timezone: $TIMEZONE"
 [[ -d /sys/firmware/efi ]] || die "not booted in UEFI mode"
 [[ -z $SSH_KEY || -f $SSH_KEY ]] || die "ssh key not found: $SSH_KEY"
+(( ! ENCRYPT )) || [[ -s $ENCRYPT_FILE ]] || die "encryption passphrase file is missing or empty"
 
 if [[ -n $PASSWORD_FILE ]]; then
   PASSWORD=$(<"$PASSWORD_FILE")
@@ -73,7 +76,7 @@ if systemctl cat pacman-init.service >/dev/null 2>&1; then
   systemctl start pacman-init.service
 fi
 
-export root DISK USERNAME PASSWORD SSH_KEY HOSTNAME_NEW TIMEZONE AUTOLOGIN MNT=/mnt
+export root DISK USERNAME PASSWORD SSH_KEY HOSTNAME_NEW TIMEZONE AUTOLOGIN ENCRYPT ENCRYPT_FILE MNT=/mnt
 for step in "$root"/install/steps/*.sh; do
   step "${step##*/}"
   source "$step"
