@@ -1,0 +1,20 @@
+# System configuration in /etc: sudo for wheel, compressed swap, the login
+# screen's config (with a greetd drop-in pointing at it).
+source "${DISTRO_SRC:?build with pkg/build}/distro.conf"
+
+pkgname=$DISTRO_ID-settings
+pkgver=${PKGVER:-0.0.0}
+pkgrel=1
+pkgdesc="$DISTRO_NAME system settings"
+arch=(any)
+license=(GPL-3.0-or-later)
+depends=(sudo zram-generator greetd greetd-tuigreet)
+backup=(
+  "etc/greetd/$DISTRO_ID.toml"
+  "etc/systemd/zram-generator.conf"
+  "etc/sudoers.d/10-$DISTRO_ID-wheel"
+)
+
+package() {
+  bash "$DISTRO_SRC/pkg/files.sh" settings "$DISTRO_SRC" "$pkgdir"
+}
