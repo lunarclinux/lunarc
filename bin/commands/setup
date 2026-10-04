@@ -8,7 +8,10 @@ case ${1:-} in
     done_file=$STATE_DIR/first-login-done
     [[ -f $done_file ]] && exit 0
     "/usr/bin/$DISTRO_ID" theme set "$(setting theme ember)"
-    mkdir -p "$STATE_DIR"; date -Is > "$done_file" ;;
+    mkdir -p "$STATE_DIR"; date -Is > "$done_file"
+    notify-send -a "$DISTRO_NAME" "Welcome to $DISTRO_NAME" \
+      "SUPER+Space: apps. SUPER+Return: terminal. SUPER+S: quick settings. SUPER+comma: settings. SUPER+W: close a window. SUPER+Escape: lock.
+Run '$DISTRO_ID help' in a terminal for the command-line tools." 2>/dev/null || true ;;
   -h|--help|"") echo "Usage: $DISTRO_ID setup first-login" ;;
   *) die "unknown setup step: $1" ;;
 esac
