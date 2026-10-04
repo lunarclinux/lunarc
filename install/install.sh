@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Installs the distro onto a disk, from the official Arch live ISO.
 #
+#   install/install.sh                                 ask for everything
 #   install/install.sh --disk /dev/vda --user NAME [options]
 #
 # Options:
@@ -34,10 +35,15 @@ while [[ $# -gt 0 ]]; do
     --ssh-key) SSH_KEY=$2; shift 2 ;;
     --autologin) AUTOLOGIN=1; shift ;;
     --yes) ASSUME_YES=1; shift ;;
-    -h|--help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) die "unknown option: $1" ;;
   esac
 done
+
+# With no disk or user given on a terminal, ask.
+if [[ ( -z $DISK || -z $USERNAME ) && -t 0 ]]; then
+  source "$root/install/interactive.sh"
+fi
 
 [[ -b $DISK ]] || die "--disk must be a block device (got '${DISK}')"
 [[ $USERNAME =~ ^[a-z_][a-z0-9_-]*$ ]] || die "--user must be a valid lowercase user name"
