@@ -4,7 +4,10 @@
 vm=$1; shift; user=root
 if [[ ${1:-} != "--" && $# -gt 0 ]]; then user=$1; shift; fi
 [[ ${1:-} == "--" ]] && shift
-ip=$(virsh -c qemu:///system domifaddr "$vm" 2>/dev/null | awk '/ipv4/{split($4,a,"/");print a[1]; exit}')
+# Newest DHCP lease for the VM's MAC: reinstalls leave stale leases behind.
+mac=$(virsh -c qemu:///system domiflist "$vm" 2>/dev/null | awk '/network/{print $5; exit}')
+ip=$(virsh -c qemu:///system net-dhcp-leases default --mac "$mac" 2>/dev/null \
+  | awk '/ipv4/{print $1" "$2" "$5}' | sort | tail -1 | awk '{split($3,a,"/"); print a[1]}')
 [[ -n $ip ]] || { echo "vmssh: no IP for $vm" >&2; exit 1; }
 exec ssh -i ~/.local/share/arch-distro-vm/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=no \
   -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=5 "$user@$ip" "$@"
