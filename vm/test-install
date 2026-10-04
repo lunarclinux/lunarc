@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# Proves a layer is reproducible: restores a VM to a snapshot (an empty disk
+# with the live ISO), installs a git ref over SSH, reboots into the installed
+# system and runs checks.
+#
+#   vm/test-install [--vm distro-clean] [--from l0-complete] [--ref HEAD] [--keep]
+#
+# --keep leaves the VM running afterwards. Needs vm/make-seed to have been run.
+# Log in as 'tester'; the password is in ~/.local/share/arch-distro-vm/<vm>.password.
+set -euo pipefail
+export LIBVIRT_DEFAULT_URI=qemu:///system
+here=$(cd "$(dirname "$0")" && pwd); repo=$(dirname "$here")
+vm=distro-clean from=l0-complete ref=HEAD keep=0
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --vm) vm=$2; shift 2 ;; --from) from=$2; shift 2 ;;
+    --ref) ref=$2; shift 2 ;; --keep) keep=1; shift ;;
+    *) echo "unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+key=~/.local/share/arch-distro-vm/id_ed25519
+user=tester
+log() { printf '\033[1m[test-install]\033[0m %s\n' "$*"; }
+
+wait_ssh() { # wait_ssh <user> <timeout-seconds>
+  local deadline=$((SECONDS + $2))
+  until "$here/ssh" "$vm" "$1" -- true 2>/dev/null; do
+    (( SECONDS < deadline )) || { log "timed out waiting for SSH as $1"; exit 1; }
+    sleep 5
+  done
+}
+
+[[ $(virsh domstate "$vm") == "shut off" ]] || virsh destroy "$vm" >/dev/null
+log "restoring $vm to $from"
+virsh snapshot-revert "$vm" "$from"
+virsh start "$vm" >/dev/null
+wait_ssh root 300
+log "live ISO reachable"
+
+tarball=$(mktemp); trap 'rm -f "$tarball"' EXIT
+git -C "$repo" archive --format=tar.gz -o "$tarball" "$ref"
+log "copying $(git -C "$repo" rev-parse --short "$ref") ($ref)"
+"$here/ssh" "$vm" -- 'rm -rf /root/src && mkdir -p /root/src' 
+"$here/ssh" "$vm" -- 'tar -xzf - -C /root/src' < "$tarball"
+"$here/ssh" "$vm" -- 'cat > /root/tester.pub' < "$key.pub"
+
+# A throwaway password, saved outside the repo so the VM's console login works.
+password=$(head -c 12 /dev/urandom | base64 | tr -dc 'A-Za-z0-9')
+(umask 077; printf '%s\n' "$password" > ~/.local/share/arch-distro-vm/$vm.password)
+"$here/ssh" "$vm" -- "umask 077; printf '%s' '$password' > /root/pw"
+
+log "installing"
+started=$SECONDS
+"$here/ssh" "$vm" -- "cd /root/src && install/install.sh --disk /dev/vda --user $user \
+  --password-file /root/pw --ssh-key /root/tester.pub --timezone America/Chicago --yes" \
+  || { log "INSTALL FAILED"; exit 1; }
+log "install took $((SECONDS - started))s; rebooting into the installed system"
+
+"$here/ssh" "$vm" -- 'umount -R /mnt; poweroff' || true
+for _ in $(seq 60); do [[ $(virsh domstate "$vm") == "shut off" ]] && break; sleep 2; done
+virsh start "$vm" >/dev/null
+wait_ssh "$user" 300
+
+log "checks"
+fail=0
+check() { # check <description> <command run in the VM as the user>
+  if out=$("$here/ssh" "$vm" "$user" -- "$2" 2>&1); then
+    printf '  \033[32mok\033[0m   %s\n' "$1"
+  else
+    printf '  \033[31mFAIL\033[0m %s\n%s\n' "$1" "$(sed 's/^/         /' <<<"$out")"; fail=1
+  fi
+}
+check "system state is running"        'state=$(systemctl is-system-running); echo $state; [ "$state" = running ]'
+check "root is btrfs subvolume @"      'findmnt -no FSTYPE,OPTIONS / | grep -qE "btrfs.*subvol=/@(,|$)"'
+check "separate subvolumes mounted"    'for m in /home /var/log /var/cache/pacman/pkg /.snapshots; do findmnt -n $m >/dev/null || exit 1; done'
+check "booted by Limine (fallback path)" "echo '$password' | sudo -S -p '' sh -c 'test -f /boot/EFI/BOOT/BOOTX64.EFI && tr -d \\\\000 < /sys/firmware/efi/efivars/LoaderInfo-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f | grep -q Limine'"
+check "zram swap active"               'swapon --show=NAME --noheadings | grep -q zram'
+check "NetworkManager connected"       'nmcli -t -f STATE general | grep -q "^connected"'
+check "internet reachable"             'curl -sfI https://archlinux.org -o /dev/null'
+check "time synchronised service on"   'systemctl is-active --quiet systemd-timesyncd'
+check "sudo works for $user"           "echo '$password' | sudo -S -p '' true"
+check "root account locked"            "echo '$password' | sudo -S -p '' passwd -S root | grep -q ' L '"
+check "/boot is root-only"           'test "$(stat -c %a /boot)" = 700'
+check "hostname from distro.conf"      "test \"\$(cat /etc/hostname)\" = \"$(. "$repo/distro.conf"; echo "$DISTRO_ID")\""
+
+if (( keep )); then log "leaving $vm running"; else "$here/ssh" "$vm" "$user" -- "echo '$password' | sudo -S -p '' poweroff" || true; fi
+(( fail )) && { log "FAILED"; exit 1; }
+log "all checks passed"

@@ -1,0 +1,11 @@
+# Limine is installed at the UEFI fallback path; refresh it when the package updates.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = limine
+
+[Action]
+Description = Updating Limine at the UEFI fallback path...
+When = PostTransaction
+Exec = /usr/bin/install -m644 /usr/share/limine/BOOTX64.EFI /boot/EFI/BOOT/BOOTX64.EFI

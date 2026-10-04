@@ -1,0 +1,18 @@
+# Layer 1: minimal bootable system. One package per line; comments allowed.
+base
+linux
+linux-firmware
+amd-ucode
+intel-ucode
+btrfs-progs
+dosfstools
+limine
+efibootmgr
+networkmanager
+sudo
+zram-generator
+openssh
+man-db
+man-pages
+less
+nano
