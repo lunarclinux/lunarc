@@ -167,7 +167,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     check "resolved crash returns and notifies" "$id crash test >/dev/null; for i in \$(seq 20); do $id crash list --json | jq -e '.[0].count == 3 and .[0].status == \"new\" and .[0].notified == true' >/dev/null && exit 0; sleep 1; done; exit 1"
     # AI usage: seed a week of Claude Code records and one Codex session, then read them back.
     "$here/ssh" "$vm" "$user" -- 'mkdir -p ~/.claude/projects/demo ~/.codex/sessions/demo; now=$(date +%s); : > ~/.claude/projects/demo/s.jsonl
-      for d in 0 1 2 3 4 5 6; do for n in 1 2 3; do t=$(date -u -d "@$((now - d*86400 - n*60))" +%Y-%m-%dT%H:%M:%S.000Z)
+      for d in 0 1 2 3 4 5 6; do for n in 1 2 3; do t=$(date -u -d "@$((now - d*86400 - n))" +%Y-%m-%dT%H:%M:%S.000Z)
         printf "{\"type\":\"assistant\",\"timestamp\":\"%s\",\"sessionId\":\"s%s\",\"message\":{\"id\":\"m%s-%s\",\"model\":\"%s\",\"usage\":{\"input_tokens\":%s,\"output_tokens\":2000,\"cache_creation_input_tokens\":5000,\"cache_read_input_tokens\":90000}}}\n" "$t" "$d" "$d" "$n" "$( [ $n = 3 ] && echo claude-haiku-4-5 || echo claude-opus-5-5 )" "$(( (7-d) * 40000 ))" >> ~/.claude/projects/demo/s.jsonl; done; done
       t=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
       printf "%s\n" "{\"timestamp\":\"$t\",\"type\":\"turn_context\",\"payload\":{\"model\":\"gpt-5-codex\"}}" "{\"timestamp\":\"$t\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":{\"last_token_usage\":{\"input_tokens\":52000,\"cached_input_tokens\":12000,\"output_tokens\":8000}},\"rate_limits\":{\"primary\":{\"used_percent\":38,\"resets_in_seconds\":7400},\"secondary\":{\"used_percent\":91,\"resets_in_seconds\":300000}}}}" > ~/.codex/sessions/demo/rollout.jsonl'
