@@ -4,3 +4,9 @@ noctalia
 upower
 power-profiles-daemon
 libnotify
+
+# CLI and crash inbox
+jq
+pacman-contrib
+gdb
+debuginfod

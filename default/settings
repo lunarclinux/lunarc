@@ -2,3 +2,7 @@
 theme = ember
 theme.mode = dark
 terminal = ghostty
+agent = claude
+crash.notify = first
+crash.diagnose_all = terminal
+crash.keep_resolved = system

@@ -1,0 +1,212 @@
+#!/usr/bin/env bash
+# summary: Crash inbox: keeps crashes listed until handled; AI diagnosis
+set -euo pipefail
+source "$DISTRO_LIB/lib.sh"
+
+store=$STATE_DIR/crashes
+# systemd-coredump's journal message for "process dumped core".
+COREDUMP_MESSAGE_ID=fc2e22bc6ee647b6b90729ab34a250b1
+
+usage() {
+  cat <<USAGE
+Usage: $DISTRO_ID crash <command>
+
+  list [--all] [--json]   open crashes (new, diagnosing, diagnosed); --all includes handled ones
+  show <id>               details, latest capture and any diagnosis
+  diagnose <id>           open the AI agent on one crash, in a terminal
+  diagnose --all          all open crashes in one go (crash.diagnose_all: terminal or background)
+  resolve <id>            mark as fixed; removed after the system's core-dump retention
+  ignore <id>             stop notifying about it
+  reopen <id>             back to new
+  prune                   remove handled crashes past retention
+  test                    crash a throwaway process, to try this out
+  watch                   follow new crashes (run by the crash-watch user service)
+
+Settings (in ~/.config/$DISTRO_ID/settings):
+  crash.notify = first | always | never      notify on a crash's first occurrence (default), every time, or never
+  crash.diagnose_all = terminal | background
+  crash.keep_resolved = system | <days>      default: same as core dumps (systemd-tmpfiles)
+USAGE
+}
+
+now() { date +%s; }
+info_file() { printf '%s/%s/info.json' "$store" "$1"; }
+exists() { [[ -n ${1:-} && -f $(info_file "$1") ]] || die "no crash with id '${1:-}'; see '$DISTRO_ID crash list --all'"; }
+update_info() { # update_info <id> <jq filter> [jq args...]
+  local f; f=$(info_file "$1"); local filter=$2; shift 2
+  jq "$@" "$filter" "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+}
+set_status() { update_info "$1" '.status = $s | .updated = $t' --arg s "$2" --argjson t "$(now)"; }
+refresh_ui() {
+  local entry
+  for entry in indicator viewer; do
+    noctalia msg plugin "$DISTRO_ID/crashes:$entry" all refresh >/dev/null 2>&1 || true
+  done
+}
+
+# How long handled crashes are kept: the age systemd-tmpfiles gives core dumps.
+retention_seconds() {
+  local keep; keep=$(setting crash.keep_resolved system)
+  if [[ $keep =~ ^[0-9]+$ ]]; then echo $((keep * 86400)); return; fi
+  local age=2w f line
+  for f in /etc/tmpfiles.d/systemd.conf /usr/lib/tmpfiles.d/systemd.conf; do
+    [[ -f $f ]] || continue
+    line=$(awk '$2 == "/var/lib/systemd/coredump" { print $NF; exit }' "$f")
+    [[ -n $line ]] && { age=$line; break; }
+  done
+  local n=${age%[smhdw]} unit=${age##*[0-9]}
+  case $unit in s) echo "$n" ;; m) echo $((n * 60)) ;; h) echo $((n * 3600)) ;; d) echo $((n * 86400)) ;; w) echo $((n * 604800)) ;; *) echo $((n)) ;; esac
+}
+
+prune() {
+  [[ -d $store ]] || return 0
+  local cutoff=$(( $(now) - $(retention_seconds) )) dir
+  for dir in "$store"/*/; do
+    [[ -f $dir/info.json ]] || continue
+    jq -e --argjson c "$cutoff" '(.status == "resolved" or .status == "ignored") and .updated < $c' "$dir/info.json" >/dev/null \
+      && rm -rf "$dir"
+  done
+}
+
+list_json() { # list_json [all]
+  mkdir -p "$store"
+  local filter='map(select(.status == "new" or .status == "diagnosing" or .status == "diagnosed"))'
+  [[ ${1:-} == all ]] && filter='.'
+  find "$store" -mindepth 2 -maxdepth 2 -name info.json -print0 | xargs -0r cat \
+    | jq -s "$filter | sort_by(-.last)"
+}
+
+# Record one coredump journal entry (JSON) into the store, and notify.
+record() {
+  local entry=$1 exe comm sig pid ts id dir capture new=0
+  exe=$(jq -r '.COREDUMP_EXE // .COREDUMP_COMM // "unknown"' <<<"$entry")
+  comm=$(jq -r '.COREDUMP_COMM // "unknown"' <<<"$entry")
+  sig=$(jq -r '.COREDUMP_SIGNAL_NAME // ("signal " + (.COREDUMP_SIGNAL // "?"))' <<<"$entry")
+  pid=$(jq -r '.COREDUMP_PID // ""' <<<"$entry")
+  ts=$(jq -r '((.COREDUMP_TIMESTAMP // .__REALTIME_TIMESTAMP) | tonumber / 1000000 | floor)' <<<"$entry")
+  id=$(printf '%s|%s' "$exe" "$sig" | sha1sum | cut -c1-10)
+  dir=$store/$id; mkdir -p "$dir/captures"
+
+  # Capture now: old core dumps get deleted, and a diagnosis may come days later.
+  capture=$dir/captures/$(date -d "@$ts" +%Y%m%d-%H%M%S).txt
+  {
+    echo "# $comm ($exe) crashed with $sig at $(date -d "@$ts")"
+    echo; echo "## systemd-coredump report"
+    jq -r '.MESSAGE // ""' <<<"$entry"
+    echo; echo "## coredumpctl info"
+    [[ -n $pid ]] && coredumpctl info "$pid" --no-pager 2>&1 | head -150
+    echo; echo "## Journal around the crash (this user)"
+    journalctl --user --no-pager -o short-iso --since "@$((ts - 60))" --until "@$((ts + 5))" 2>/dev/null | tail -60
+    echo; echo "## Recent package changes"
+    grep -E '\[ALPM\] (upgraded|installed|removed|downgraded)' /var/log/pacman.log 2>/dev/null | tail -25
+  } > "$capture"
+  # Keep the five newest captures per crash.
+  ls -1t "$dir/captures"/*.txt | tail -n +6 | xargs -r rm -f
+
+  if [[ -f $dir/info.json ]]; then
+    local status; status=$(jq -r .status "$dir/info.json")
+    update_info "$id" '.count += 1 | .last = $t | .updated = $now | .last_capture = $c' \
+      --argjson t "$ts" --argjson now "$(now)" --arg c "$capture"
+    # A crash marked resolved that happens again is back in the inbox.
+    [[ $status == resolved ]] && set_status "$id" new
+  else
+    new=1
+    jq -n --arg id "$id" --arg exe "$exe" --arg comm "$comm" --arg sig "$sig" --argjson t "$ts" --arg c "$capture" \
+      '{id: $id, exe: $exe, comm: $comm, signal: $sig, first: $t, last: $t, count: 1, status: "new",
+        updated: $t, last_capture: $c, notified: false}' > "$dir/info.json"
+  fi
+
+  local mode status notify=0; mode=$(setting crash.notify first); status=$(jq -r .status "$dir/info.json")
+  [[ $status == ignored ]] && mode=never
+  case $mode in always) notify=1 ;; first) jq -e '.notified | not' "$dir/info.json" >/dev/null && notify=1 ;; esac
+  refresh_ui
+  if (( notify )); then
+    update_info "$id" '.notified = true'
+    notify_crash "$id" "$comm" "$sig" "$exe" &
+  fi
+}
+
+notify_crash() {
+  local action
+  action=$(notify-send -a "$DISTRO_NAME" -i dialog-error -A diagnose=Diagnose -A view="Show crashes" \
+    "$2 crashed" "$3 in $4. It stays in the crash list until you resolve it." 2>/dev/null) || true
+  case $action in
+    diagnose) "/usr/bin/$DISTRO_ID" crash diagnose "$1" ;;
+    view) noctalia msg panel-toggle "$DISTRO_ID/crashes:viewer" >/dev/null 2>&1 ;;
+  esac
+}
+
+prompt_for() { # prompt_for <id>...
+  local guide=$SHARE/default/agents/crash-diagnosis.md id
+  echo "One or more programs crashed on this machine ($DISTRO_NAME, an Arch Linux based distribution)."
+  echo "Follow the guide in $guide."
+  echo
+  for id in "$@"; do
+    local f; f=$(info_file "$id")
+    jq -r '"- \(.comm) (\(.exe)): \(.signal), \(.count) time(s), crash id \(.id). Latest capture: \(.last_capture)"' "$f"
+  done
+  echo
+  echo "Read the capture files, find the most likely cause, and suggest a fix. If several crashes share a cause, say so."
+}
+
+diagnose() { # diagnose <mode> <id>...
+  local mode=$1; shift
+  (( $# )) || { info "no open crashes"; return; }
+  local id; for id in "$@"; do set_status "$id" diagnosing; done
+  refresh_ui
+  local prompt; prompt=$(prompt_for "$@")
+  if [[ $mode == background ]]; then
+    for id in "$@"; do
+      local out=$store/$id/diagnosis.md
+      if "/usr/bin/$DISTRO_ID" agent run --headless --cwd "$store/$id" -- "$(prompt_for "$id")" > "$out.tmp" 2>&1; then
+        mv "$out.tmp" "$out"; set_status "$id" diagnosed
+      else
+        mv "$out.tmp" "$out"; set_status "$id" new
+      fi
+    done
+    refresh_ui
+    notify-send -a "$DISTRO_NAME" "Crash diagnosis ready" "Open the crash list to read it." 2>/dev/null || true
+  else
+    local cwd=$store; (( $# == 1 )) && cwd=$store/$1
+    "/usr/bin/$DISTRO_ID" terminal launch -- "/usr/bin/$DISTRO_ID" agent run --cwd "$cwd" -- "$prompt"
+  fi
+}
+
+case ${1:-} in
+  list)
+    shift; all="" json=0
+    for a in "$@"; do case $a in --all) all=all ;; --json) json=1 ;; esac; done
+    prune
+    if (( json )); then list_json "$all"
+    else
+      list_json "$all" | jq -r '.[] | [.id, .status, (.count|tostring) + "x", .comm, .signal, (.last|strflocaltime("%Y-%m-%d %H:%M"))] | @tsv' \
+        | column -t -s $'\t' || true
+    fi ;;
+  show)
+    exists "${2:-}"; f=$(info_file "$2")
+    jq -r '"\(.comm) (\(.exe))\n\(.signal), \(.count) time(s), status \(.status)\nfirst \(.first|strflocaltime("%c")), last \(.last|strflocaltime("%c"))"' "$f"
+    echo; cat "$(jq -r .last_capture "$f")"
+    [[ -f $store/$2/diagnosis.md ]] && { echo; echo "## Diagnosis"; cat "$store/$2/diagnosis.md"; } ;;
+  diagnose)
+    if [[ ${2:-} == --all ]]; then
+      mapfile -t ids < <(list_json | jq -r '.[] | select(.status != "diagnosing") | .id')
+      diagnose "$(setting crash.diagnose_all terminal)" "${ids[@]}"
+    else
+      exists "${2:-}"; diagnose "${3:-terminal}" "$2"
+    fi ;;
+  resolve) exists "${2:-}"; set_status "$2" resolved; refresh_ui ;;
+  ignore)  exists "${2:-}"; set_status "$2" ignored; refresh_ui ;;
+  reopen)  exists "${2:-}"; set_status "$2" new; update_info "$2" '.notified = false'; refresh_ui ;;
+  prune) prune ;;
+  test)
+    # A sleep killed with SIGSEGV dumps core like a real crash.
+    bash -c 'ulimit -c unlimited; sleep 30 & p=$!; kill -SEGV "$p"; wait "$p"' 2>/dev/null || true
+    info "crashed a test process; it should appear in '$DISTRO_ID crash list' shortly" ;;
+  watch)
+    prune
+    journalctl -f -n 0 -o json "MESSAGE_ID=$COREDUMP_MESSAGE_ID" "COREDUMP_UID=$(id -u)" | while IFS= read -r entry; do
+      record "$entry" || echo "crash: failed to record an entry" >&2
+    done ;;
+  -h|--help|"") usage ;;
+  *) die "unknown crash command: $1" ;;
+esac

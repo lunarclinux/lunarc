@@ -1,2 +1,5 @@
 # Environment for the desktop session (read by uwsm before Hyprland starts).
 export QT_QPA_PLATFORMTHEME=qt6ct
+
+# Per-user commands (e.g. Claude Code) for apps started from the desktop.
+export PATH="$HOME/.local/bin:$PATH"

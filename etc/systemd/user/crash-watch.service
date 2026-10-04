@@ -1,0 +1,14 @@
+# Follows systemd-coredump's reports for this user and files each crash in the
+# crash list (see `@DISTRO_ID@ crash --help`).
+[Unit]
+Description=Crash watcher
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=/usr/bin/@DISTRO_ID@ crash watch
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target

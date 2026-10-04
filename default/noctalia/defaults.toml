@@ -22,3 +22,23 @@ enabled = true
 [theme.templates]
 enable_builtin_templates = true
 builtin_ids = ["ghostty", "alacritty", "kitty", "foot", "wezterm", "gtk3", "gtk4", "qt", "hyprland", "btop"]
+
+# Distro plugins ship read-only in /usr/share; Noctalia loads them from there.
+[plugins]
+enabled = ["@DISTRO_ID@/crashes"]
+
+[[plugins.source]]
+name = "@DISTRO_ID@"
+kind = "path"
+location = "/usr/share/@DISTRO_ID@/default/noctalia-plugins"
+enabled = true
+
+# The crash indicator sits before the notification bell (it hides itself when
+# there are no open crashes). Otherwise Noctalia's default bar.
+[widget.crashes]
+type = "@DISTRO_ID@/crashes:indicator"
+
+[bar.default]
+start  = ["launcher", "wallpaper", "workspaces"]
+center = ["clock"]
+end    = ["media", "tray", "crashes", "notifications", "clipboard", "network", "bluetooth", "volume", "brightness", "battery", "control-center", "session"]
