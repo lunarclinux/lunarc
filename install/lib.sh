@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Shared helpers for install scripts. Sourced, not run.
 step() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 info() { printf '    %s\n' "$*"; }

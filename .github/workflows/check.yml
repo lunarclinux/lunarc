@@ -1,0 +1,37 @@
+# Lint and package build on every push and pull request. The VM install test
+# (vm/test-install) needs KVM and runs locally.
+name: check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shellcheck
+        run: sudo apt-get update -q && sudo apt-get install -y -q shellcheck
+      - name: Lint
+        run: tools/lint
+
+  packages:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install build tools
+        run: pacman -Syu --noconfirm --needed base-devel git
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # pkg/build versions packages from the layer tags
+      - name: Build packages
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          useradd -m builder
+          chown -R builder .
+          su builder -c 'pkg/build'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: pkg/out/repo/

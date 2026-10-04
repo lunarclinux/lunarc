@@ -55,7 +55,7 @@ retention_seconds() {
   for f in /etc/tmpfiles.d/systemd.conf /usr/lib/tmpfiles.d/systemd.conf; do
     [[ -f $f ]] || continue
     line=$(awk '$2 == "/var/lib/systemd/coredump" { print $NF; exit }' "$f")
-    [[ -n $line ]] && { age=$line; break; }
+    if [[ -n $line ]]; then age=$line; break; fi
   done
   local n=${age%[smhdw]} unit=${age##*[0-9]}
   case $unit in s) echo "$n" ;; m) echo $((n * 60)) ;; h) echo $((n * 3600)) ;; d) echo $((n * 86400)) ;; w) echo $((n * 604800)) ;; *) echo $((n)) ;; esac

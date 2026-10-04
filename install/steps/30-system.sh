@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Time, locale, hostname, services. Sourced by install.sh.
 ln -sf "/usr/share/zoneinfo/$TIMEZONE" "$MNT/etc/localtime"
 in_target hwclock --systohc

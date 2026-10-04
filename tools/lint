@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Checks the repository: shell syntax, shellcheck (if installed), the name and
+# clean-room rules on every tracked file, and one pattern that has caused bugs.
+#
+#   tools/lint
+set -uo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd); cd "$root" || exit
+source distro.conf
+fail=0
+problem() { printf '\033[31m%s\033[0m %s\n' "lint:" "$*"; fail=1; }
+
+# Shell scripts: anything tracked with a bash shebang, plus the sourced step files.
+mapfile -t scripts < <(git ls-files | while read -r f; do
+  [[ -f $f ]] || continue
+  case $f in install/steps/*.sh|install/*.sh|bin/lib.sh|migrations/*/*.sh) echo "$f"; continue ;; esac
+  head -1 "$f" | grep -qE '^#!.*bash' && echo "$f"
+done)
+
+for f in "${scripts[@]}"; do bash -n "$f" || problem "syntax error in $f"; done
+
+if command -v shellcheck >/dev/null; then
+  shellcheck -x -S warning -e SC1090,SC1091,SC2034,SC2154 "${scripts[@]}" || problem "shellcheck found issues"
+else
+  echo "lint: shellcheck not installed; skipped"
+fi
+
+# `[[ test ]] && cmd` as the last statement of a function, loop or case branch
+# returns failure when the test is false, which stops `set -e` scripts. (This
+# broke `crash list`, `crash show` and GPU detection.) Use an if instead.
+for f in "${scripts[@]}"; do
+  awk -v file="$f" '
+    prev ~ /^[[:space:]]*\[\[.*\]\][[:space:]]*&&[^|]*$/ && $0 ~ /^[[:space:]]*(done|\}|;;|fi|esac)([[:space:];]|$)/ {
+      printf "%s:%d: [[ … ]] && … right before \"%s\": use if/then instead\n", file, NR - 1, $1
+      bad = 1
+    }
+    { prev = $0 }
+    END { exit bad }' "$f" || problem "last-statement && pattern in $f"
+done
+
+# The name lives only in distro.conf; the reference distro is never named
+# outside docs/ (decision records 0001 and 0003).
+names="\\b(${DISTRO_ID}|${DISTRO_REPO}|${DISTRO_NAME})\\b"
+blocked=''
+while read -r f; do
+  case $f in distro.conf|docs/*|.githooks/*|tools/lint) continue ;; esac
+  [[ -f $f ]] || continue
+  grep -qE "$names" <<<"$f" && problem "file name contains the distro name: $f"
+  grep -IqE "$names" "$f" && problem "$f writes the distro name literally"
+  grep -IqiE "$blocked" "$f" && problem "$f mentions a blocked reference"
+done < <(git ls-files)
+
+(( fail )) && exit 1
+echo "lint: ok (${#scripts[@]} shell scripts)"

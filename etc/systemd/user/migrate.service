@@ -1,0 +1,13 @@
+# Runs pending user migrations at login (see `@DISTRO_ID@ migrate --help`).
+[Unit]
+Description=Apply desktop config migrations
+After=graphical-session.target
+PartOf=graphical-session.target
+Before=@DISTRO_ID@-first-login.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/@DISTRO_ID@ migrate --user
+
+[Install]
+WantedBy=graphical-session.target

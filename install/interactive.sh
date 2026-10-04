@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Questions for an install started without options. Sourced by install.sh;
 # sets DISK, USERNAME, PASSWORD, HOSTNAME_NEW, TIMEZONE, AUTOLOGIN.
 printf '\n\033[1m%s installer\033[0m\n\n' "$DISTRO_NAME"

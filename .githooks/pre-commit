@@ -16,7 +16,7 @@ names="\\b(${DISTRO_ID}|${DISTRO_REPO}|${DISTRO_NAME})\\b"
 fail=0
 while IFS= read -r -d '' file; do
   case "$file" in
-    distro.conf|docs/*|.githooks/*) continue ;;
+    distro.conf|docs/*|.githooks/*|tools/lint) continue ;;
   esac
   added=$(git diff --cached -U0 -- "$file" | grep -E '^\+[^+]' || true)
   checks=("$file" "$added")

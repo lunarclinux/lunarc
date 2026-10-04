@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Partition, format and mount. Sourced by install.sh.
 umount -R "$MNT" 2>/dev/null || true
 wipefs -af "$DISK" >/dev/null
