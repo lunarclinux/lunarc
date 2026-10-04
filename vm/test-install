@@ -154,8 +154,8 @@ if "$here/ssh" "$vm" "$user" -- "test -x /usr/lib/$id/commands/migrate"; then
   check "ghostty migration fixes an old config" "sed -i '/app-notifications/d; /announce it/d' ~/.config/ghostty/config && sed -i '/ghostty-quiet-reloads/d' ~/.local/state/$id/migrations-applied && $id migrate --user >/dev/null && grep -q '^app-notifications = no-config-reload' ~/.config/ghostty/config"
 fi
 if (( encrypt )); then
-  check "root filesystem is on LUKS"   "lsblk -no TYPE,NAME | grep -q '^crypt *system'"
-  check "LUKS2 with a passphrase slot" "echo '$password' | sudo -S -p '' cryptsetup luksDump \$(lsblk -no PKNAME /dev/mapper/system | sed 's|^|/dev/|') | grep -q 'Version:.*2'"
+  check "root filesystem is on LUKS"   "lsblk -lno TYPE,NAME | grep -qE '^crypt +system$'"
+  check "LUKS2 unlocked at boot"       "echo '$password' | sudo -S -p '' cryptsetup status system | grep -qE 'type: +LUKS2'"
 fi
 check "hostname from distro.conf"      "test \"\$(cat /etc/hostname)\" = \"$(. "$repo/distro.conf"; echo "$DISTRO_ID")\""
 
