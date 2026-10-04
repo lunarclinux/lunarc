@@ -77,6 +77,7 @@ check "internet reachable"             'curl -sfI https://archlinux.org -o /dev/
 check "time synchronised service on"   'systemctl is-active --quiet systemd-timesyncd'
 check "sudo works for $user"           "echo '$password' | sudo -S -p '' true"
 check "root account locked"            "echo '$password' | sudo -S -p '' passwd -S root | grep -q ' L '"
+check "/boot is root-only"           'test "$(stat -c %a /boot)" = 700'
 check "hostname from distro.conf"      "test \"\$(cat /etc/hostname)\" = \"$(. "$repo/distro.conf"; echo "$DISTRO_ID")\""
 
 if (( keep )); then log "leaving $vm running"; else "$here/ssh" "$vm" "$user" -- "echo '$password' | sudo -S -p '' poweroff" || true; fi

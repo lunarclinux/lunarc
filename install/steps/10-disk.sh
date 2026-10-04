@@ -24,5 +24,5 @@ mount -o "$opts,subvol=@home" "$SYSTEM" "$MNT/home"
 mount -o "$opts,subvol=@log" "$SYSTEM" "$MNT/var/log"
 mount -o "$opts,subvol=@pkg" "$SYSTEM" "$MNT/var/cache/pacman/pkg"
 mount -o "$opts,subvol=@snapshots" "$SYSTEM" "$MNT/.snapshots"
-mount -o umask=0077 "$ESP" "$MNT/boot"
+mount "$ESP" "$MNT/boot"
 export ESP SYSTEM
