@@ -3,18 +3,21 @@
 # with the live ISO), installs a git ref over SSH, reboots into the installed
 # system and runs checks.
 #
-#   vm/test-install [--vm distro-clean] [--from l0-complete] [--ref HEAD] [--keep]
+#   vm/test-install [--vm distro-clean] [--from l0-complete] [--ref HEAD] [--keep] [--iso VOLUME]
 #
+# --iso boots the VM from an installer ISO in libvirt's default pool (built by
+# iso/build) and runs the installer bundled in it, instead of copying a git ref.
 # --keep leaves the VM running afterwards. Needs vm/make-seed to have been run.
 # Log in as 'tester'; the password is in ~/.local/share/arch-distro-vm/<vm>.password.
 set -euo pipefail
 export LIBVIRT_DEFAULT_URI=qemu:///system
 here=$(cd "$(dirname "$0")" && pwd); repo=$(dirname "$here")
-vm=distro-clean from=l0-complete ref=HEAD keep=0
+vm=distro-clean from=l0-complete ref=HEAD keep=0 iso=""
 while [[ $# -gt 0 ]]; do
   case $1 in
     --vm) vm=$2; shift 2 ;; --from) from=$2; shift 2 ;;
     --ref) ref=$2; shift 2 ;; --keep) keep=1; shift ;;
+    --iso) iso=$2; shift 2 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -33,22 +36,34 @@ wait_ssh() { # wait_ssh <user> <timeout-seconds>
 [[ $(virsh domstate "$vm") == "shut off" ]] || virsh destroy "$vm" >/dev/null
 log "restoring $vm to $from"
 virsh snapshot-revert "$vm" "$from"
+if [[ -n $iso ]]; then
+  virsh change-media "$vm" sda "/var/lib/libvirt/images/$iso" --config >/dev/null
+  log "booting $iso"
+fi
 virsh start "$vm" >/dev/null
 wait_ssh root 300
 log "live ISO reachable"
 
-tarball=$(mktemp); trap 'rm -f "$tarball"' EXIT
-git -C "$repo" archive --format=tar.gz -o "$tarball" "$ref"
-log "copying $(git -C "$repo" rev-parse --short "$ref") ($ref)"
-"$here/ssh" "$vm" -- 'rm -rf /root/src && mkdir -p /root/src'
-"$here/ssh" "$vm" -- 'tar -xzf - -C /root/src' < "$tarball"
-# Layer 6 and later install from distro packages, built here and copied along.
-if [[ -x $repo/pkg/build ]] && git -C "$repo" cat-file -e "$ref:pkg/build" 2>/dev/null; then
-  log "building packages"
-  "$repo/pkg/build" "$ref" >/dev/null
-  tar -C "$repo" -czf - pkg/out/repo | "$here/ssh" "$vm" -- 'tar -xzf - -C /root/src'
+id=$(. "$repo/distro.conf"; echo "$DISTRO_ID")
+if [[ -z $iso ]]; then
+  tarball=$(mktemp); trap 'rm -f "$tarball"' EXIT
+  git -C "$repo" archive --format=tar.gz -o "$tarball" "$ref"
+  log "copying $(git -C "$repo" rev-parse --short "$ref") ($ref)"
+  "$here/ssh" "$vm" -- 'rm -rf /root/src && mkdir -p /root/src'
+  "$here/ssh" "$vm" -- 'tar -xzf - -C /root/src' < "$tarball"
+  # Layer 6 and later install from distro packages, built here and copied along.
+  if [[ -x $repo/pkg/build ]] && git -C "$repo" cat-file -e "$ref:pkg/build" 2>/dev/null; then
+    log "building packages"
+    "$repo/pkg/build" "$ref" >/dev/null
+    tar -C "$repo" -czf - pkg/out/repo | "$here/ssh" "$vm" -- 'tar -xzf - -C /root/src'
+  fi
+  "$here/ssh" "$vm" -- 'cat > /root/tester.pub' < "$key.pub"
+
+  installer="cd /root/src && install/install.sh"
+else
+  "$here/ssh" "$vm" -- 'cat > /root/tester.pub' < "$key.pub"
+  installer="install-$id"
 fi
-"$here/ssh" "$vm" -- 'cat > /root/tester.pub' < "$key.pub"
 
 # A throwaway password, saved outside the repo so the VM's console login works.
 password=$(head -c 12 /dev/urandom | base64 | tr -dc 'A-Za-z0-9')
@@ -57,7 +72,7 @@ password=$(head -c 12 /dev/urandom | base64 | tr -dc 'A-Za-z0-9')
 
 log "installing"
 started=$SECONDS
-"$here/ssh" "$vm" -- "cd /root/src && install/install.sh --disk /dev/vda --user $user \
+"$here/ssh" "$vm" -- "$installer --disk /dev/vda --user $user \
   --password-file /root/pw --ssh-key /root/tester.pub --timezone America/Chicago --autologin --yes" \
   || { log "INSTALL FAILED"; exit 1; }
 log "install took $((SECONDS - started))s; rebooting into the installed system"
@@ -67,7 +82,6 @@ for _ in $(seq 60); do [[ $(virsh domstate "$vm") == "shut off" ]] && break; sle
 virsh start "$vm" >/dev/null
 wait_ssh "$user" 300
 
-id=$(. "$repo/distro.conf"; echo "$DISTRO_ID")
 log "checks"
 fail=0
 check() { # check <description> <command run in the VM as the user>
@@ -93,6 +107,9 @@ if "$here/ssh" "$vm" "$user" -- "pacman -Q $id >/dev/null 2>&1"; then
   check "package files intact"          "pacman -Qkk $id 2>&1 | grep -q ', 0 altered files'"
   check "login screen uses distro config" "systemctl cat greetd | grep -q -- '--config /etc/greetd/$id.toml'"
   check "hidden apps dir in XDG_DATA_DIRS" "systemctl --user show-environment | grep -q '^XDG_DATA_DIRS=/usr/share/$id/xdg'"
+fi
+if [[ -n $iso ]]; then
+  check "installed from the ISO's installer" "pacman -Q $id | grep -q ."
 fi
 check "hostname from distro.conf"      "test \"\$(cat /etc/hostname)\" = \"$(. "$repo/distro.conf"; echo "$DISTRO_ID")\""
 
