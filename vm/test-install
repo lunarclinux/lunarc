@@ -92,7 +92,8 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
   check "Hyprland running for $user"    'pgrep -u "$USER" -x Hyprland >/dev/null'
   check "Hyprland answers hyprctl"      "$hypr hyprctl monitors | grep -q '^Monitor'"
   check "session config loaded cleanly" "$hypr"' out=$(hyprctl configerrors); echo "$out"; [ -z "$(printf %s "$out" | tr -d "[:space:]")" ] || printf %s "$out" | grep -qi "no errors"'
-  check "audio services running"        'systemctl --user is-active --quiet pipewire pipewire-pulse wireplumber'
+  # pipewire-pulse starts on demand, so its socket is what should be listening.
+  check "audio services running"        'systemctl --user is-active --quiet pipewire wireplumber pipewire-pulse.socket && wpctl status >/dev/null'
   check "polkit agent running"          'systemctl --user is-active --quiet hyprpolkitagent'
   check "terminal opens a window"       "$hypr hyprctl dispatch 'hl.dsp.exec_cmd(\"uwsm app -- wezterm\")' >/dev/null; for i in \$(seq 20); do hyprctl clients | grep -qi wezterm && exit 0; sleep 1; done; exit 1"
   shots=~/.local/share/arch-distro-vm/screenshots; mkdir -p "$shots"
