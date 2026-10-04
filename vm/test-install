@@ -6,6 +6,7 @@
 #   vm/test-install [--vm distro-clean] [--from l0-complete] [--ref HEAD] [--keep]
 #
 # --keep leaves the VM running afterwards. Needs vm/make-seed to have been run.
+# Log in as 'tester'; the password is in ~/.local/share/arch-distro-vm/<vm>.password.
 set -euo pipefail
 export LIBVIRT_DEFAULT_URI=qemu:///system
 here=$(cd "$(dirname "$0")" && pwd); repo=$(dirname "$here")
@@ -43,7 +44,9 @@ log "copying $(git -C "$repo" rev-parse --short "$ref") ($ref)"
 "$here/ssh" "$vm" -- 'tar -xzf - -C /root/src' < "$tarball"
 "$here/ssh" "$vm" -- 'cat > /root/tester.pub' < "$key.pub"
 
+# A throwaway password, saved outside the repo so the VM's console login works.
 password=$(head -c 12 /dev/urandom | base64 | tr -dc 'A-Za-z0-9')
+(umask 077; printf '%s\n' "$password" > ~/.local/share/arch-distro-vm/$vm.password)
 "$here/ssh" "$vm" -- "umask 077; printf '%s' '$password' > /root/pw"
 
 log "installing"
