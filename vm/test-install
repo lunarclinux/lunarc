@@ -40,8 +40,14 @@ log "live ISO reachable"
 tarball=$(mktemp); trap 'rm -f "$tarball"' EXIT
 git -C "$repo" archive --format=tar.gz -o "$tarball" "$ref"
 log "copying $(git -C "$repo" rev-parse --short "$ref") ($ref)"
-"$here/ssh" "$vm" -- 'rm -rf /root/src && mkdir -p /root/src' 
+"$here/ssh" "$vm" -- 'rm -rf /root/src && mkdir -p /root/src'
 "$here/ssh" "$vm" -- 'tar -xzf - -C /root/src' < "$tarball"
+# Layer 6 and later install from distro packages, built here and copied along.
+if [[ -x $repo/pkg/build ]] && git -C "$repo" cat-file -e "$ref:pkg/build" 2>/dev/null; then
+  log "building packages"
+  "$repo/pkg/build" "$ref" >/dev/null
+  tar -C "$repo" -czf - pkg/out/repo | "$here/ssh" "$vm" -- 'tar -xzf - -C /root/src'
+fi
 "$here/ssh" "$vm" -- 'cat > /root/tester.pub' < "$key.pub"
 
 # A throwaway password, saved outside the repo so the VM's console login works.
@@ -82,6 +88,12 @@ check "time synchronised service on"   'systemctl is-active --quiet systemd-time
 check "sudo works for $user"           "echo '$password' | sudo -S -p '' true"
 check "root account locked"            "echo '$password' | sudo -S -p '' passwd -S root | grep -q ' L '"
 check "/boot is root-only"           'test "$(stat -c %a /boot)" = 700'
+if "$here/ssh" "$vm" "$user" -- "pacman -Q $id >/dev/null 2>&1"; then
+  check "distro packages installed"     "pacman -Q $id $id-settings"
+  check "package files intact"          "pacman -Qkk $id 2>&1 | grep -q ', 0 altered files'"
+  check "login screen uses distro config" "systemctl cat greetd | grep -q -- '--config /etc/greetd/$id.toml'"
+  check "hidden apps dir in XDG_DATA_DIRS" "systemctl --user show-environment | grep -q '^XDG_DATA_DIRS=/usr/share/$id/xdg'"
+fi
 check "hostname from distro.conf"      "test \"\$(cat /etc/hostname)\" = \"$(. "$repo/distro.conf"; echo "$DISTRO_ID")\""
 
 # Layer 2 and later: the desktop session.
@@ -103,7 +115,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     check "shell answers its IPC"        "$hypr"' noctalia msg status >/dev/null'
     check "shell config has no errors"   "$hypr"' noctalia config validate 2>&1 | tail -3; noctalia config validate >/dev/null 2>&1'
     check "distro shell defaults applied" "$hypr"' noctalia config export | grep -qE "^polkit_agent *= *true"'
-    check "clutter hidden from launcher"  'grep -q "^NoDisplay=true" /usr/local/share/applications/avahi-discover.desktop'
+    check "clutter hidden from launcher"  "grep -q '^NoDisplay=true' /usr/local/share/applications/avahi-discover.desktop 2>/dev/null || grep -q '^NoDisplay=true' /usr/share/$id/xdg/applications/avahi-discover.desktop"
     check "launcher opens"               "$hypr"' noctalia msg panel-open launcher'
   else
     check "polkit agent running"         'systemctl --user is-active --quiet hyprpolkitagent'
@@ -155,7 +167,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     check "resolved crash returns and notifies" "$id crash test >/dev/null; for i in \$(seq 20); do $id crash list --json | jq -e '.[0].count == 3 and .[0].status == \"new\" and .[0].notified == true' >/dev/null && exit 0; sleep 1; done; exit 1"
     # AI usage: seed a week of Claude Code records and one Codex session, then read them back.
     "$here/ssh" "$vm" "$user" -- 'mkdir -p ~/.claude/projects/demo ~/.codex/sessions/demo; now=$(date +%s); : > ~/.claude/projects/demo/s.jsonl
-      for d in 0 1 2 3 4 5 6; do for n in 1 2 3; do t=$(date -u -d "@$((now - d*86400 - n*60))" +%Y-%m-%dT%H:%M:%S.000Z)
+      for d in 0 1 2 3 4 5 6; do for n in 1 2 3; do t=$(date -u -d "@$((now - d*86400 - n))" +%Y-%m-%dT%H:%M:%S.000Z)
         printf "{\"type\":\"assistant\",\"timestamp\":\"%s\",\"sessionId\":\"s%s\",\"message\":{\"id\":\"m%s-%s\",\"model\":\"%s\",\"usage\":{\"input_tokens\":%s,\"output_tokens\":2000,\"cache_creation_input_tokens\":5000,\"cache_read_input_tokens\":90000}}}\n" "$t" "$d" "$d" "$n" "$( [ $n = 3 ] && echo claude-haiku-4-5 || echo claude-opus-5-5 )" "$(( (7-d) * 40000 ))" >> ~/.claude/projects/demo/s.jsonl; done; done
       t=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
       printf "%s\n" "{\"timestamp\":\"$t\",\"type\":\"turn_context\",\"payload\":{\"model\":\"gpt-5-codex\"}}" "{\"timestamp\":\"$t\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":{\"last_token_usage\":{\"input_tokens\":52000,\"cached_input_tokens\":12000,\"output_tokens\":8000}},\"rate_limits\":{\"primary\":{\"used_percent\":38,\"resets_in_seconds\":7400},\"secondary\":{\"used_percent\":91,\"resets_in_seconds\":300000}}}}" > ~/.codex/sessions/demo/rollout.jsonl'

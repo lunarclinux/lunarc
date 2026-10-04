@@ -17,3 +17,6 @@ iso/out/
 *.asc
 *.key
 secring*
+
+# Package build output
+pkg/out/

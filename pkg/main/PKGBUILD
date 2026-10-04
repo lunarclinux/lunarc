@@ -1,0 +1,18 @@
+# The distro's main package: CLI, defaults, themes, Noctalia plugins, user
+# services and new users' configs. Depends on the whole desktop.
+# Built by pkg/build, which sets DISTRO_SRC (an unpacked copy of the repo at
+# the ref being built) and PKGVER.
+source "${DISTRO_SRC:?build with pkg/build}/distro.conf"
+
+pkgname=$DISTRO_ID
+pkgver=${PKGVER:-0.0.0}
+pkgrel=1
+pkgdesc="$DISTRO_NAME desktop: Hyprland, Noctalia, themes and tools"
+arch=(any)
+license=(GPL-3.0-or-later)
+mapfile -t depends < <(sed -e 's/#.*//' -e '/^[[:space:]]*$/d' "$DISTRO_SRC"/packages/{desktop,shell}.packages)
+depends+=("$DISTRO_ID-settings")
+
+package() {
+  bash "$DISTRO_SRC/pkg/files.sh" main "$DISTRO_SRC" "$pkgdir"
+}

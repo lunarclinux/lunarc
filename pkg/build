@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Builds the distro packages from a git ref into a local pacman repository:
+#
+#   pkg/build [ref]        default ref: HEAD; output: pkg/out/repo/
+#
+# The version comes from the last layer tag: l5-complete plus 3 commits -> 0.5.3.
+set -euo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd)
+ref=${1:-HEAD}
+out=$root/pkg/out
+rm -rf "$out"; mkdir -p "$out/repo" "$out/src"
+git -C "$root" archive "$ref" | tar -x -C "$out/src"
+source "$out/src/distro.conf"
+
+ver=$(git -C "$root" describe --tags --long --match 'l*-complete' "$ref" 2>/dev/null \
+  | sed -E 's/^l([0-9]+)-complete-([0-9]+)-g[0-9a-f]+$/0.\1.\2/')
+[[ $ver =~ ^0\.[0-9]+\.[0-9]+$ ]] || ver=0.0.0
+
+for part in settings main; do
+  build=$out/build-$part; mkdir -p "$build"
+  cp "$root/pkg/$part/PKGBUILD" "$build/"
+  # --nodeps: the desktop doesn't need to be installed on the build machine.
+  (cd "$build" && DISTRO_SRC=$out/src PKGVER=$ver PKGDEST=$out/repo makepkg -f --nodeps --noconfirm >/dev/null)
+done
+repo-add -q "$out/repo/$DISTRO_REPO.db.tar.gz" "$out"/repo/*.pkg.tar.zst
+ls -1 "$out/repo"
