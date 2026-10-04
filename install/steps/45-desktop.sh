@@ -26,4 +26,6 @@ TOML
   info "autologin for $USERNAME"
 fi
 in_target systemctl enable greetd.service >/dev/null 2>&1
-in_target systemctl --global enable hyprpolkitagent.service >/dev/null 2>&1
+install_etc systemd/user/noctalia.service
+in_target systemctl --global enable noctalia.service >/dev/null 2>&1
+in_target systemctl enable power-profiles-daemon.service >/dev/null 2>&1

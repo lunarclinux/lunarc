@@ -3,3 +3,4 @@
 local base = "/usr/share/@DISTRO_ID@/default/hypr/"
 dofile(base .. "settings.lua")
 dofile(base .. "binds.lua")
+dofile(base .. "shell.lua")

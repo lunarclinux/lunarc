@@ -5,7 +5,6 @@ greetd
 greetd-tuigreet
 xdg-desktop-portal-hyprland
 xdg-desktop-portal-gtk
-hyprpolkitagent
 qt5-wayland
 qt6-wayland
 
@@ -22,9 +21,7 @@ noto-fonts
 noto-fonts-emoji
 ttf-jetbrains-mono-nerd
 
-# Desktop utilities used by key bindings
+# Desktop utilities
 grim
-slurp
 wl-clipboard
-brightnessctl
 playerctl
