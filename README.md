@@ -43,6 +43,19 @@ Folders match where files end up when installed, so packaging later copies folde
 | `docs/log/` | Build log |
 | `docs/manual/` | User manual |
 
+## Using it
+
+See `docs/manual/getting-started.md` for installing, keys and commands.
+
+## Building
+
+```sh
+pkg/build          # distro packages into pkg/out/repo
+vm/build-iso       # installer ISO (built in the dev VM)
+vm/test-install    # install into the clean VM and run the checks
+tools/lint         # what CI runs
+```
+
 ## Setup after cloning
 
 ```sh
