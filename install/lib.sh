@@ -9,8 +9,3 @@ package_list() { sed -e 's/#.*//' -e '/^[[:space:]]*$/d' "$@"; }
 # Run a command inside the new system.
 in_target() { arch-chroot "$MNT" "$@"; }
 
-# Copy a file from the repo's etc/ into the target's /etc with a given mode.
-install_etc() {
-  local rel=$1 mode=${2:-644}
-  install -Dm"$mode" "$root/etc/$rel" "$MNT/etc/$rel"
-}
