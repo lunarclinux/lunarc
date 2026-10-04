@@ -70,7 +70,7 @@ check() { # check <description> <command run in the VM as the user>
 check "system state is running"        'state=$(systemctl is-system-running); echo $state; [ "$state" = running ]'
 check "root is btrfs subvolume @"      'findmnt -no FSTYPE,OPTIONS / | grep -qE "btrfs.*subvol=/@(,|$)"'
 check "separate subvolumes mounted"    'for m in /home /var/log /var/cache/pacman/pkg /.snapshots; do findmnt -n $m >/dev/null || exit 1; done'
-check "booted via fallback Limine"     'test -f /boot/EFI/BOOT/BOOTX64.EFI && test -f /boot/limine.conf'
+check "booted by Limine (fallback path)" "echo '$password' | sudo -S -p '' sh -c 'test -f /boot/EFI/BOOT/BOOTX64.EFI && tr -d \\\\000 < /sys/firmware/efi/efivars/LoaderInfo-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f | grep -q Limine'"
 check "zram swap active"               'swapon --show=NAME --noheadings | grep -q zram'
 check "NetworkManager connected"       'nmcli -t -f STATE general | grep -q "^connected"'
 check "internet reachable"             'curl -sfI https://archlinux.org -o /dev/null'
