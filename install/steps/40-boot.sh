@@ -4,7 +4,7 @@ in_target mkinitcpio -P >/dev/null 2>&1
 install -Dm644 "$MNT/usr/share/limine/BOOTX64.EFI" "$MNT/boot/EFI/BOOT/BOOTX64.EFI"
 
 uuid=$(blkid -s UUID -o value "$SYSTEM")
-cmdline="root=UUID=$uuid rootflags=subvol=@ rw quiet"
+cmdline="root=UUID=$uuid rootflags=subvol=@ rw quiet${EXTRA_CMDLINE:+ $EXTRA_CMDLINE}"
 cat > "$MNT/boot/limine.conf" <<CONF
 timeout: 3
 

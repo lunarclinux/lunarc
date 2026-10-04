@@ -10,4 +10,4 @@ user = "$USERNAME"
 TOML
   info "autologin for $USERNAME"
 fi
-in_target systemctl enable greetd.service power-profiles-daemon.service >/dev/null 2>&1
+in_target systemctl enable greetd.service power-profiles-daemon.service bluetooth.service >/dev/null 2>&1
