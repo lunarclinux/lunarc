@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# The distro's command-line tool, installed as /usr/bin/<distro id>.
+# Subcommands are executables in /usr/lib/<distro id>/commands/; each starts
+# with a "# summary:" line that `help` lists.
+set -euo pipefail
+
+self=${0##*/}
+export DISTRO_LIB=${DISTRO_LIB:-/usr/lib/$self}
+# shellcheck source=/dev/null
+source "$DISTRO_LIB/distro.conf"
+export DISTRO_ID DISTRO_NAME DISTRO_REPO
+commands=$DISTRO_LIB/commands
+
+usage() {
+  echo "Usage: $self <command> [arguments]"
+  echo
+  echo "Commands:"
+  local cmd summary
+  for cmd in "$commands"/*; do
+    summary=$(sed -n 's/^# summary: //p' "$cmd" | head -1)
+    printf '  %-12s %s\n' "${cmd##*/}" "$summary"
+  done
+  echo
+  echo "Run '$self <command> --help' for a command's options."
+}
+
+case ${1:-help} in
+  help|-h|--help) usage ;;
+  *)
+    cmd=$commands/$1
+    [[ -x $cmd ]] || { echo "$self: unknown command '$1'" >&2; usage >&2; exit 2; }
+    shift
+    exec "$cmd" "$@"
+    ;;
+esac

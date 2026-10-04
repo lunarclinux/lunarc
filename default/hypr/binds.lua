@@ -1,6 +1,6 @@
 -- Key bindings. SUPER is the Windows/Command key.
 local mod = "SUPER"
-local terminal = "uwsm app -- wezterm"
+local terminal = "@DISTRO_ID@ terminal launch"
 local function run(cmd) return hl.dsp.exec_cmd(cmd) end
 
 hl.bind(mod .. " + Return", run(terminal))

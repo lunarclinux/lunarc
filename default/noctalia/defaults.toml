@@ -2,6 +2,7 @@
 # Don't edit: updates replace this file. Override in your own config.
 
 [shell]
+font_family = "Inter"
 polkit_agent = true          # Noctalia's own password prompt, themed like the rest
 telemetry_enabled = false
 
@@ -15,3 +16,9 @@ enabled = true
 timeout = 660
 action = "screen_off"
 enabled = true
+
+# Carry the theme's colours to other apps. Each template only touches apps
+# whose config file exists (starter configs ship for every terminal listed).
+[theme.templates]
+enable_builtin_templates = true
+builtin_ids = ["ghostty", "alacritty", "kitty", "foot", "wezterm", "gtk3", "gtk4", "qt", "hyprland", "btop"]

@@ -1,0 +1,11 @@
+# Alacritty. Colours come from the desktop theme.
+[general]
+import = ["themes/noctalia.toml"]
+
+[font]
+normal = { family = "JetBrainsMono Nerd Font" }
+size = 11
+
+[window]
+padding = { x = 10, y = 8 }
+decorations = "None"

@@ -1,0 +1,11 @@
+# Ghostty. Colours come from the desktop theme (Noctalia writes themes/noctalia).
+# Reference: https://ghostty.org/docs/config
+theme = noctalia
+font-family = JetBrainsMono Nerd Font
+font-size = 11
+window-padding-x = 10
+window-padding-y = 8
+window-decoration = none
+confirm-close-surface = false
+# Theme switches reload the config; don't announce it.
+app-notifications = no-config-reload

@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# summary: One-time setup steps (run automatically at first login)
+set -euo pipefail
+source "$DISTRO_LIB/lib.sh"
+
+case ${1:-} in
+  first-login)
+    done_file=$STATE_DIR/first-login-done
+    [[ -f $done_file ]] && exit 0
+    "/usr/bin/$DISTRO_ID" theme set "$(setting theme ember)"
+    mkdir -p "$STATE_DIR"; date -Is > "$done_file" ;;
+  -h|--help|"") echo "Usage: $DISTRO_ID setup first-login" ;;
+  *) die "unknown setup step: $1" ;;
+esac

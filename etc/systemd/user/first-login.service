@@ -1,0 +1,13 @@
+# Applies the default theme the first time a user logs in to the desktop.
+[Unit]
+Description=First-login desktop setup
+After=graphical-session.target noctalia.service
+PartOf=graphical-session.target
+ConditionPathExists=!%S/@DISTRO_ID@/first-login-done
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/@DISTRO_ID@ setup first-login
+
+[Install]
+WantedBy=graphical-session.target
