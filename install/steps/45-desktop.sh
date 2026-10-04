@@ -45,4 +45,11 @@ unit=$MNT/etc/systemd/user/$DISTRO_ID-first-login.service
 install -Dm644 "$root/etc/systemd/user/first-login.service" "$unit"
 sed -i "s/@DISTRO_ID@/$DISTRO_ID/g" "$unit"
 in_target systemctl --global enable "$DISTRO_ID-first-login.service" >/dev/null 2>&1
+unit=$MNT/etc/systemd/user/$DISTRO_ID-crash-watch.service
+install -Dm644 "$root/etc/systemd/user/crash-watch.service" "$unit"
+sed -i "s/@DISTRO_ID@/$DISTRO_ID/g" "$unit"
+in_target systemctl --global enable "$DISTRO_ID-crash-watch.service" >/dev/null 2>&1
+
+# Commands installed to ~/.local/bin (e.g. Claude Code) are on PATH in shells.
+install_etc profile.d/local-bin.sh
 in_target systemctl enable power-profiles-daemon.service >/dev/null 2>&1

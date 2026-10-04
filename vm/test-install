@@ -140,6 +140,21 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     screenshot tide
     check "switch to paper (light)"       "$hypr $id theme set paper >/dev/null && sleep 2 && noctalia msg theme-mode-get | grep -q light && [ \"\$(gsettings get org.gnome.desktop.interface icon-theme)\" = \"'Papirus-Light'\" ]"
     screenshot paper
+
+    # Layer 5: crash inbox, agents, updates.
+    "$here/ssh" "$vm" "$user" -- "$hypr $id theme set ember >/dev/null" || true
+    check "crash watcher running"         "systemctl --user is-active --quiet $id-crash-watch"
+    check "crash plugin enabled"          "$hypr noctalia msg plugins list 2>&1 | grep -E '$id/crashes' | grep -qiE 'enabled|on|yes|true'"
+    check "a crash is captured"           "$id crash test >/dev/null; for i in \$(seq 20); do [ \"\$($id crash list --json | jq length)\" = 1 ] && exit 0; sleep 1; done; exit 1"
+    check "capture has the coredump report" "f=\$($id crash list --json | jq -r '.[0].last_capture'); grep -q 'systemd-coredump report' \"\$f\" && grep -qi sleep \"\$f\""
+    check "repeat crash is grouped"       "$id crash test >/dev/null; for i in \$(seq 20); do c=\$($id crash list --json | jq '[length, .[0].count] | @csv' -r); [ \"\$c\" = '1,2' ] && exit 0; sleep 1; done; echo \$c; exit 1"
+    check "notified only once"            "$id crash list --json | jq -e '.[0].notified == true' >/dev/null"
+    "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg panel-close >/dev/null 2>&1; noctalia msg panel-toggle $id/crashes:viewer >/dev/null 2>&1" || true
+    screenshot crashes
+    check "resolve empties the inbox"     "$hypr $id crash resolve \$($id crash list --json | jq -r '.[0].id') && [ \"\$($id crash list --json | jq length)\" = 0 ]"
+    check "resolved crash returns and notifies" "$id crash test >/dev/null; for i in \$(seq 20); do $id crash list --json | jq -e '.[0].count == 3 and .[0].status == \"new\" and .[0].notified == true' >/dev/null && exit 0; sleep 1; done; exit 1"
+    check "agent list knows claude"       "$id agent list | grep -qE '^\\* claude'"
+    check "update check runs"             "$id update check >/dev/null"
   fi
 
   # Last: logging out of the autologin session should bring up the login screen.

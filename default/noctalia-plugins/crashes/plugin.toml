@@ -1,0 +1,20 @@
+id = "@DISTRO_ID@/crashes"
+name = "Crashes"
+version = "0.1.0"
+plugin_api = 28
+author = "@DISTRO_ID@"
+license = "GPL-3.0-or-later"
+icon = "bug"
+description = "Crash inbox: crashes stay listed until you resolve them, and an AI agent can diagnose them."
+tags = ["system"]
+
+[[widget]]
+id = "indicator"
+entry = "indicator.luau"
+
+[[panel]]
+id = "viewer"
+entry = "viewer.luau"
+width = 560
+height = 600
+placement = "attached"

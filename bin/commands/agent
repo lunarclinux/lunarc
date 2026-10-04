@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# summary: Choose, install and open an AI coding agent
+set -euo pipefail
+source "$DISTRO_LIB/lib.sh"
+
+# name | command | install (pkg:<package> or script:<url>) | interactive with prompt | one-shot, read-only
+# One-shot runs happen unattended (background crash diagnosis), so they must not
+# be able to change anything: "-" means the agent has no mode we trust for that.
+known=(
+  "claude|claude|script:https://claude.ai/install.sh|claude {}|claude -p --permission-mode plan {}"
+  "codex|codex|pkg:openai-codex|codex {}|codex exec --sandbox read-only {}"
+  "gemini|gemini|pkg:gemini-cli|gemini -i {}|gemini -p {}"
+  "opencode|opencode|pkg:opencode|opencode --prompt {}|-"
+)
+row() { local r; for r in "${known[@]}"; do [[ ${r%%|*} == "$1" ]] && { echo "$r"; return; }; done; return 1; }
+field() { cut -d'|' -f"$2" <<<"$(row "$1")"; }
+# Installers like Claude Code's put the command in ~/.local/bin.
+find_cmd() { command -v "$1" 2>/dev/null || { [[ -x $HOME/.local/bin/$1 ]] && echo "$HOME/.local/bin/$1"; }; }
+current() { setting agent claude; }
+
+usage() {
+  cat <<USAGE
+Usage: $DISTRO_ID agent <command>
+
+  list                    agents this distro knows about, and which are installed
+  current                 the default agent
+  set <name>              make <name> the default (installs it first if needed)
+  install <name>          install <name>
+  launch                  open the default agent in a terminal
+  prompt <text>           open the default agent in a terminal, starting with <text>
+  run [--headless] [--cwd DIR] -- <prompt>
+                          run the default agent here (headless prints the answer and exits)
+USAGE
+}
+
+install_agent() {
+  local how; how=$(field "$1" 3) || die "unknown agent: $1"
+  case $how in
+    pkg:*) install_packages "${how#pkg:}" ;;
+    script:*)
+      info "Installing $1 with its official installer (${how#script:})"
+      curl -fsSL "${how#script:}" | bash ;;
+  esac
+}
+
+case ${1:-} in
+  list)
+    cur=$(current)
+    for r in "${known[@]}"; do
+      name=${r%%|*}; mark=" "; [[ $name == "$cur" ]] && mark="*"
+      state="not installed"; [[ -n $(find_cmd "$(field "$name" 2)") ]] && state="installed"
+      printf '%s %-10s %s\n' "$mark" "$name" "$state"
+    done ;;
+  current) current ;;
+  install) [[ -n ${2:-} ]] || die "which agent? see '$DISTRO_ID agent list'"; install_agent "$2" ;;
+  set)
+    [[ -n ${2:-} ]] || die "which agent? see '$DISTRO_ID agent list'"
+    row "$2" >/dev/null || die "unknown agent: $2"
+    [[ -n $(find_cmd "$(field "$2" 2)") ]] || install_agent "$2"
+    set_setting agent "$2"; info "default agent: $2" ;;
+  launch) exec "/usr/bin/$DISTRO_ID" terminal launch -- "/usr/bin/$DISTRO_ID" agent run -- "" ;;
+  prompt) shift; exec "/usr/bin/$DISTRO_ID" terminal launch -- "/usr/bin/$DISTRO_ID" agent run -- "$*" ;;
+  run)
+    shift; headless=0 cwd=$HOME
+    while [[ $# -gt 0 ]]; do
+      case $1 in --headless) headless=1; shift ;; --cwd) cwd=$2; shift 2 ;; --) shift; break ;; *) break ;; esac
+    done
+    prompt=${*:-}
+    name=$(current); cmd=$(find_cmd "$(field "$name" 2)")
+    if [[ -z $cmd ]]; then
+      (( headless )) && die "$name is not installed; run '$DISTRO_ID agent install $name'"
+      read -rp "$name is not installed. Install it now? [Y/n] " yn
+      [[ ${yn,,} == n* ]] && exit 1
+      install_agent "$name"; cmd=$(find_cmd "$(field "$name" 2)") || die "install failed"
+    fi
+    template=$(field "$name" $(( headless ? 5 : 4 )))
+    [[ $template == "-" ]] && die "$name has no read-only one-shot mode; use crash.diagnose_all = terminal"
+    read -ra parts <<<"$template"
+    argv=("$cmd")
+    for p in "${parts[@]:1}"; do
+      if [[ $p == "{}" ]]; then [[ -n $prompt ]] && argv+=("$prompt"); else argv+=("$p"); fi
+    done
+    # An interactive agent opened with no prompt shouldn't get the prompt flag.
+    if [[ -z $prompt && $headless == 0 ]]; then argv=("$cmd"); fi
+    cd "$cwd"
+    exec "${argv[@]}" ;;
+  -h|--help|"") usage ;;
+  *) die "unknown agent command: $1" ;;
+esac

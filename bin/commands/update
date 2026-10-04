@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# summary: Update the system, or check what's waiting
+set -euo pipefail
+source "$DISTRO_LIB/lib.sh"
+
+usage() {
+  cat <<USAGE
+Usage: $DISTRO_ID update [check]
+
+  (no argument)   upgrade every package (sudo pacman -Syu)
+  check           list available updates without installing (uses checkupdates)
+USAGE
+}
+
+case ${1:-} in
+  "")
+    if [[ ! -t 0 ]]; then exec "/usr/bin/$DISTRO_ID" terminal launch -- "/usr/bin/$DISTRO_ID" update; fi
+    sudo pacman -Syu
+    info ""; read -rp "Done. Press Enter to close." _ ;;
+  check)
+    if out=$(checkupdates 2>/dev/null); then
+      printf '%s\n' "$out"; info "$(wc -l <<<"$out") update(s) available"
+    else
+      info "up to date"
+    fi ;;
+  -h|--help) usage ;;
+  *) die "unknown update command: $1" ;;
+esac
