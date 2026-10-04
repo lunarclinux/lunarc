@@ -15,6 +15,5 @@ cat > "$MNT/etc/hosts" <<HOSTS
 HOSTS
 
 sed -i 's/^#\?ParallelDownloads.*/ParallelDownloads = 8/' "$MNT/etc/pacman.conf"
-install_etc systemd/zram-generator.conf
 
 in_target systemctl enable NetworkManager.service systemd-timesyncd.service >/dev/null 2>&1

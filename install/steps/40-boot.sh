@@ -2,7 +2,6 @@
 in_target mkinitcpio -P >/dev/null 2>&1
 
 install -Dm644 "$MNT/usr/share/limine/BOOTX64.EFI" "$MNT/boot/EFI/BOOT/BOOTX64.EFI"
-install_etc pacman.d/hooks/limine-update.hook
 
 uuid=$(blkid -s UUID -o value "$SYSTEM")
 cmdline="root=UUID=$uuid rootflags=subvol=@ rw quiet"

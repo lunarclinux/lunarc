@@ -2,7 +2,6 @@
 in_target useradd -m -G wheel -s /bin/bash "$USERNAME"
 printf '%s:%s\n' "$USERNAME" "$PASSWORD" | in_target chpasswd
 in_target passwd -l root >/dev/null
-install_etc sudoers.d/10-wheel 440
 
 if [[ -n $SSH_KEY ]]; then
   home=$MNT/home/$USERNAME
