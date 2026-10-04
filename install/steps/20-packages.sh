@@ -15,7 +15,9 @@ if ! grep -q "^\[$DISTRO_REPO\]" /etc/pacman.conf; then
 fi
 pacman -Sy >/dev/null
 
-mapfile -t pkgs < <(package_list "$root/packages/base.packages")
+# Base system and default apps; apps aren't package dependencies, so they can
+# be removed freely later.
+mapfile -t pkgs < <(package_list "$root/packages/base.packages" "$root/packages/apps.packages")
 pkgs+=("$DISTRO_ID" "$DISTRO_ID-settings")
 info "${#pkgs[@]} packages and their dependencies"
 # pacstrap's output is long; keep it in a log and show only problems.

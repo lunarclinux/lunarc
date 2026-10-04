@@ -111,6 +111,11 @@ fi
 if [[ -n $iso ]]; then
   check "installed from the ISO's installer" "pacman -Q $id | grep -q ."
 fi
+if "$here/ssh" "$vm" "$user" -- "pacman -Q firefox >/dev/null 2>&1"; then
+  check "default apps installed"        "pacman -Q firefox nautilus >/dev/null"
+  check "bluetooth service enabled"     "systemctl is-enabled --quiet bluetooth"
+  check "VM has no vendor GPU drivers"  "! pacman -Q vulkan-radeon nvidia-utils vulkan-intel 2>/dev/null | grep -q ."
+fi
 check "hostname from distro.conf"      "test \"\$(cat /etc/hostname)\" = \"$(. "$repo/distro.conf"; echo "$DISTRO_ID")\""
 
 # Layer 2 and later: the desktop session.

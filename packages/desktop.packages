@@ -8,6 +8,10 @@ xdg-desktop-portal-gtk
 qt5-wayland
 qt6-wayland
 
+# Bluetooth
+bluez
+bluez-utils
+
 # Audio
 pipewire
 pipewire-pulse

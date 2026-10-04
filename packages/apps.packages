@@ -1,0 +1,7 @@
+# Default apps. Installed by the installer but not required by the distro
+# package, so they can be removed or swapped freely.
+firefox
+nautilus
+gvfs
+xdg-user-dirs
+xdg-utils
