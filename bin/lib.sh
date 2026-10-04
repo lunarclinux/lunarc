@@ -16,7 +16,7 @@ setting() { # setting <key> [fallback]
   for file in "$SETTINGS" "$DEFAULT_SETTINGS"; do
     [[ -f $file ]] || continue
     value=$(awk -F' *= *' -v k="$key" '$1 == k { sub(/^[^=]*= */, ""); print; exit }' "$file")
-    [[ -n $value ]] && { printf '%s\n' "$value"; return; }
+    if [[ -n $value ]]; then printf '%s\n' "$value"; return; fi
   done
   printf '%s\n' "${2:-}"
 }
