@@ -9,6 +9,7 @@
 #   --password-file FILE  file holding the user's password; prompted for if omitted
 #   --hostname NAME       default: the distro ID from distro.conf
 #   --timezone ZONE       default: UTC (e.g. America/Chicago)
+#   --autologin           log the user straight into the desktop at boot
 #   --ssh-key FILE        authorise this public key for the user and enable sshd
 #                         (used by the VM tests)
 #   --yes                 don't ask before erasing the disk
@@ -20,7 +21,7 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 source "$root/distro.conf"
 source "$root/install/lib.sh"
 
-DISK= USERNAME= PASSWORD_FILE= SSH_KEY= ASSUME_YES=0
+DISK= USERNAME= PASSWORD_FILE= SSH_KEY= ASSUME_YES=0 AUTOLOGIN=0
 HOSTNAME_NEW=$DISTRO_ID TIMEZONE=UTC
 
 while [[ $# -gt 0 ]]; do
@@ -31,8 +32,9 @@ while [[ $# -gt 0 ]]; do
     --hostname) HOSTNAME_NEW=$2; shift 2 ;;
     --timezone) TIMEZONE=$2; shift 2 ;;
     --ssh-key) SSH_KEY=$2; shift 2 ;;
+    --autologin) AUTOLOGIN=1; shift ;;
     --yes) ASSUME_YES=1; shift ;;
-    -h|--help) sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) die "unknown option: $1" ;;
   esac
 done
@@ -65,7 +67,7 @@ if systemctl cat pacman-init.service >/dev/null 2>&1; then
   systemctl start pacman-init.service
 fi
 
-export root DISK USERNAME PASSWORD SSH_KEY HOSTNAME_NEW TIMEZONE MNT=/mnt
+export root DISK USERNAME PASSWORD SSH_KEY HOSTNAME_NEW TIMEZONE AUTOLOGIN MNT=/mnt
 for step in "$root"/install/steps/*.sh; do
   step "${step##*/}"
   source "$step"

@@ -1,0 +1,30 @@
+# Layer 2: graphical session.
+hyprland
+uwsm
+greetd
+greetd-tuigreet
+xdg-desktop-portal-hyprland
+xdg-desktop-portal-gtk
+hyprpolkitagent
+qt5-wayland
+qt6-wayland
+
+# Audio
+pipewire
+pipewire-pulse
+pipewire-alsa
+pipewire-jack
+wireplumber
+
+# Terminal and fonts
+wezterm
+noto-fonts
+noto-fonts-emoji
+ttf-jetbrains-mono-nerd
+
+# Desktop utilities used by key bindings
+grim
+slurp
+wl-clipboard
+brightnessctl
+playerctl
