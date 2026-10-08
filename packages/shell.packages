@@ -5,6 +5,9 @@ upower
 power-profiles-daemon
 libnotify
 
+# Screensaver (built into the distro's repository; not in Arch's)
+python-terminaltexteffects
+
 # CLI and crash inbox
 jq
 pacman-contrib

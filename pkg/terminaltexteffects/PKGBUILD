@@ -1,0 +1,30 @@
+# Terminal text effects (the screensaver's animation engine). Not in Arch's
+# official repositories, so the distro's repository carries it. Installs the
+# upstream pure-Python wheel from PyPI, checksum-pinned.
+pkgname=python-terminaltexteffects
+_name=terminaltexteffects
+pkgver=0.15.0
+pkgrel=1
+pkgdesc="Terminal visual effects engine (tte)"
+arch=(any)
+url="https://github.com/ChrisBuilds/terminaltexteffects"
+license=(MIT)
+depends=(python)
+source=("https://files.pythonhosted.org/packages/py3/${_name::1}/$_name/$_name-$pkgver-py3-none-any.whl")
+sha256sums=('5503250dacae9a3c17e22b0010b2f5fa10332124019f485d517e0c9ebc51aa47')
+noextract=("$_name-$pkgver-py3-none-any.whl")
+
+package() {
+  local site
+  site=$(/usr/bin/python3 -c 'import sysconfig; print(sysconfig.get_path("purelib"))')
+  install -d "$pkgdir$site"
+  bsdtar -xf "$srcdir/$_name-$pkgver-py3-none-any.whl" -C "$pkgdir$site"
+  /usr/bin/python3 -m compileall -q -d "$site" "$pkgdir$site/$_name"
+  install -Dm755 /dev/stdin "$pkgdir/usr/bin/tte" <<'SCRIPT'
+#!/usr/bin/python3
+import sys
+from terminaltexteffects.__main__ import main
+sys.exit(main())
+SCRIPT
+  install -Dm644 "$pkgdir$site/$_name-$pkgver.dist-info/licenses/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# summary: The screensaver: text effects over the wordmark while idle
+set -euo pipefail
+source "$DISTRO_LIB/lib.sh"
+
+class=$DISTRO_ID.screensaver
+art=$SHARE/default/screensaver/wordmark.txt
+
+usage() {
+  cat <<USAGE
+Usage: $DISTRO_ID screensaver <command>
+
+  start    open the screensaver (Noctalia runs this when the session goes idle)
+  stop     close it (Noctalia runs this on any input)
+  run      the animation itself, inside the screensaver's terminal
+
+Idle timing is in Noctalia's idle settings ([idle.behavior.screensaver]).
+USAGE
+}
+
+running() { pgrep -f -- "--class=$class" >/dev/null; }
+
+case ${1:-} in
+  start)
+    running && exit 0
+    command -v ghostty >/dev/null || die "the screensaver needs Ghostty"
+    launch_app ghostty --class="$class" --font-size=13 --window-padding-x=0 --window-padding-y=0 \
+      --cursor-style-blink=false --confirm-close-surface=false --background-opacity=1 \
+      -e "/usr/bin/$DISTRO_ID" screensaver run ;;
+  stop)
+    pkill -f -- "--class=$class" 2>/dev/null || true ;;
+  run)
+    printf '\e[?25l'                       # hide the cursor
+    trap 'printf "\e[?25h"' EXIT
+    # A new random effect each round, centred; any key ends it.
+    ( while :; do
+        clear
+        tte -i "$art" --random-effect --canvas-width 0 --canvas-height 0 \
+          --anchor-canvas c --anchor-text c --frame-rate 60 2>/dev/null || sleep 1
+        sleep 2
+      done ) &
+    anim=$!
+    read -rsn1 || true
+    kill "$anim" 2>/dev/null || true ;;
+  -h|--help|"") usage ;;
+  *) die "unknown screensaver command: $1" ;;
+esac
