@@ -23,6 +23,14 @@ hl.bind("XF86AudioMicMute", shell("mic-mute"), held)
 hl.bind("XF86MonBrightnessUp", shell("brightness-up"), held)
 hl.bind("XF86MonBrightnessDown", shell("brightness-down"), held)
 
+-- The screensaver covers the whole screen, without open/close animation.
+hl.window_rule({
+    name = "screensaver",
+    match = { class = "^@DISTRO_ID@\\.screensaver$" },
+    fullscreen = true,
+    no_anim = true,
+})
+
 -- Noctalia's settings window floats; its surfaces get blur and keep their own animations.
 hl.window_rule({
     name = "noctalia-settings",

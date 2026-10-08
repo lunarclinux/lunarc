@@ -242,6 +242,15 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     screenshot ai-usage
     "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg plugin $id/agents:panel all select codex >/dev/null 2>&1" || true
     screenshot ai-usage-codex
+    # Screensaver: opens fullscreen over everything, closes on stop.
+    if "$here/ssh" "$vm" "$user" -- "test -x /usr/lib/$id/commands/screensaver"; then
+      check "screensaver engine installed" "command -v tte >/dev/null"
+      check "screensaver opens fullscreen" "$hypr $id screensaver start; for i in \$(seq 20); do hyprctl clients -j | jq -e '.[] | select(.class == \"$id.screensaver\") | .fullscreen > 0' >/dev/null && exit 0; sleep 1; done; hyprctl clients -j | jq -c '.[] | {class, fullscreen}'; exit 1"
+      "$here/ssh" "$vm" "$user" -- "sleep 3" || true
+      screenshot screensaver
+      check "screensaver closes on stop"   "$hypr $id screensaver stop; sleep 2; ! hyprctl clients | grep -q 'class: $id.screensaver'"
+      check "idle runs the screensaver"    "$hypr noctalia config export | grep -A4 'idle.behavior.screensaver' | grep -q 'screensaver start'"
+    fi
     check "agent list knows claude"       "$id agent list | grep -qE '^\\* claude'"
     check "update check runs"             "$id update check >/dev/null"
   fi

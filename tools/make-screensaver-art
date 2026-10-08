@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Regenerates the screensaver's wordmark from DISTRO_NAME in distro.conf
+# (run after renaming). Needs uv (uvx) for pyfiglet; ANSI Shadow font.
+#
+#   tools/make-screensaver-art
+set -euo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd)
+source "$root/distro.conf"
+out=$root/default/screensaver/wordmark.txt
+mkdir -p "$(dirname "$out")"
+# Strip trailing spaces and the blank line figlet adds at the bottom.
+uvx -q pyfiglet -f ansi_shadow -w 200 "$DISTRO_NAME" | sed -e 's/[[:space:]]*$//' -e '/^$/d' > "$out"
+cat "$out"

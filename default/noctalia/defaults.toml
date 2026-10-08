@@ -6,7 +6,17 @@ font_family = "Inter"
 polkit_agent = true          # Noctalia's own password prompt, themed like the rest
 telemetry_enabled = false
 
-# Lock after 10 minutes idle, screens off a minute later.
+# Screensaver after 5 minutes idle, lock at 10, screens off a minute later.
+[idle]
+behavior_order = ["screensaver", "lock", "screen-off"]
+
+[idle.behavior.screensaver]
+timeout = 300
+action = "command"
+command = "@DISTRO_ID@ screensaver start"
+resume_command = "@DISTRO_ID@ screensaver stop"
+enabled = true
+
 [idle.behavior.lock]
 timeout = 600
 action = "lock"
