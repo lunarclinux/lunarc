@@ -18,7 +18,9 @@ Idle timing is in Noctalia's idle settings ([idle.behavior.screensaver]).
 USAGE
 }
 
-running() { pgrep -f -- "--class=$class" >/dev/null; }
+# Only the screensaver's own Ghostty, not any command line that mentions it.
+match="^(/usr/bin/)?ghostty --class=$class( |\$)"
+running() { pgrep -f -- "$match" >/dev/null; }
 
 case ${1:-} in
   start)
@@ -28,9 +30,24 @@ case ${1:-} in
     setsid -f bash -c 'source "$DISTRO_LIB/lib.sh"; launch_app "$@"' _ \
       ghostty --class="$class" --font-size=13 --window-padding-x=0 --window-padding-y=0 \
       --cursor-style-blink=false --confirm-close-surface=false --background-opacity=1 --scrollbar=never \
-      -e "/usr/bin/$DISTRO_ID" screensaver run >/dev/null 2>&1 ;;
+      -e "/usr/bin/$DISTRO_ID" screensaver run >/dev/null 2>&1
+    # The window rule normally makes it fullscreen; in some sessions it opens
+    # tiled instead, so check once it appears and fullscreen it if needed.
+    setsid -f bash -c '
+      class=$1
+      for _ in $(seq 25); do
+        state=$(hyprctl clients -j 2>/dev/null | jq -r --arg c "$class" ".[] | select(.class == \$c) | .fullscreen" | head -1)
+        if [[ -n $state ]]; then
+          if [[ $state == 0 ]]; then
+            hyprctl dispatch "hl.dsp.focus({ window = \"class:^$class\$\" })" >/dev/null
+            hyprctl dispatch "hl.dsp.window.fullscreen()" >/dev/null
+          fi
+          exit 0
+        fi
+        sleep 0.2
+      done' _ "$class" >/dev/null 2>&1 ;;
   stop)
-    pkill -f -- "--class=$class" 2>/dev/null || true ;;
+    pkill -f -- "$match" 2>/dev/null || true ;;
   run)
     printf '\e[?25l'                       # hide the cursor
     trap 'printf "\e[?25h"' EXIT
