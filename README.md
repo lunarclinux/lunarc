@@ -1,8 +1,8 @@
-# Arch distro (name not chosen yet)
+# Arch distro
 
 A personal Arch Linux based distribution, built from scratch in layers.
 
-The working name is set in `distro.conf`. Nothing else in the repo writes the name out, so it can be changed in one place.
+The working name is set in `distro.conf` (history in `docs/decisions/`). Nothing else in the repo writes the name out, so it can be changed in one place.
 
 ## Layers
 
