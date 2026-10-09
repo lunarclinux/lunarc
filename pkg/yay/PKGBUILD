@@ -10,6 +10,7 @@ url="https://github.com/Jguer/yay"
 license=(GPL-3.0-or-later)
 depends=('pacman>6.1' git)
 optdepends=('sudo: privilege elevation')
+options=(!debug !strip)  # prebuilt binary: nothing to split out or strip
 source=("$url/releases/download/v$pkgver/${pkgname}_${pkgver}_x86_64.tar.gz"
         "LICENSE-$pkgver::https://raw.githubusercontent.com/Jguer/yay/v$pkgver/LICENSE")
 sha256sums=('1fdfcb5f7f387bc858d3a5754bdf4e4575bfbddac9560535a716d0ed7189c057'
