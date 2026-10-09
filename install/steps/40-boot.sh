@@ -16,9 +16,15 @@ if [[ -n $LUKS_UUID ]]; then
 else
   root_args="root=UUID=$(blkid -s UUID -o value "$SYSTEM")"
 fi
-cmdline="$root_args rootflags=subvol=@ rw quiet${EXTRA_CMDLINE:+ $EXTRA_CMDLINE}"
+# The theme's colours for the text console (where the login screen runs) and
+# the boot menu's look; both ship in the distro package.
+boot_share=$MNT/usr/share/$DISTRO_ID/default/boot
+console_palette=$(cat "$boot_share/console-palette")
+install -Dm644 "$boot_share/wallpaper.png" "$MNT/boot/$DISTRO_ID/wallpaper.png"
+cmdline="$root_args rootflags=subvol=@ rw quiet $console_palette${EXTRA_CMDLINE:+ $EXTRA_CMDLINE}"
 cat > "$MNT/boot/limine.conf" <<CONF
 timeout: 3
+$(cat "$boot_share/limine-branding.conf")
 
 /$DISTRO_NAME
     protocol: linux

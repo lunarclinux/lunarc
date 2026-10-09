@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+  <!-- The distro icon: the crescent c (the last letter of the wordmark) on a night-blue tile. -->
+  <rect width="200" height="200" rx="46" fill="#1D2742"/>
+  <path fill="#EBC77A" transform="translate(100 100) scale(1.2) translate(-100 -100)"
+        d="M 136 50 A 60 60 0 1 0 136 150 A 52.2 52.2 0 1 1 136 50 Z"/>
+  <path fill="#E6E2D6" d="M 156 88 Q 156 100 168 100 Q 156 100 156 112 Q 156 100 144 100 Q 156 100 156 88 Z"/>
+</svg>
