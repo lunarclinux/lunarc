@@ -28,6 +28,11 @@ hl.config({
         follow_mouse = 1,
         touchpad = { natural_scroll = true },
     },
+    -- Hide the pointer after 3 idle seconds and while typing; it returns on movement.
+    cursor = {
+        inactive_timeout = 3,
+        hide_on_key_press = true,
+    },
     ecosystem = {
         no_update_news = true,
         no_donation_nag = true,

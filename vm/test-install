@@ -149,7 +149,6 @@ fi
 if "$here/ssh" "$vm" "$user" -- "pacman -Q firefox >/dev/null 2>&1"; then
   check "default apps installed"        "pacman -Q firefox nautilus gnome-text-editor papers loupe showtime decibels gnome-calculator btop >/dev/null"
   check "app catalog lists apps"        "$id app list | grep -q steam && $id app search claude | grep -q claude-desktop"
-  check "pointer hides when idle"       "grep -q 'inactive_timeout' /usr/share/$id/default/hypr/settings.lua"
   check "bluetooth service enabled"     "systemctl is-enabled --quiet bluetooth"
   check "VM has no vendor GPU drivers"  "! pacman -Q vulkan-radeon nvidia-utils vulkan-intel 2>/dev/null | grep -q ."
 fi
@@ -177,6 +176,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
   check "login screen service active"   'systemctl is-active --quiet greetd'
   check "Hyprland running for $user"    'pgrep -u "$USER" -x Hyprland >/dev/null'
   check "Hyprland answers hyprctl"      "$hypr hyprctl monitors | grep -q '^Monitor'"
+  check "pointer hides when idle"       "$hypr"' hyprctl getoption cursor:inactive_timeout | grep -qE "(float|int): 3"'
   check "session config loaded cleanly" "$hypr"' out=$(hyprctl configerrors); echo "$out"; [ -z "$(printf %s "$out" | tr -d "[:space:]")" ] || printf %s "$out" | grep -qi "no errors"'
   # pipewire-pulse starts on demand, so its socket is what should be listening.
   check "audio services running"        'systemctl --user is-active --quiet pipewire wireplumber pipewire-pulse.socket && wpctl status >/dev/null'
