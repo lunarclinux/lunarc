@@ -11,15 +11,29 @@ rm -rf "$local_repo"; install -d -m755 "$local_repo"
 cp -L "$repo"/* "$local_repo"/; chmod 644 "$local_repo"/*
 repo=$local_repo
 sed -i 's/^#\?ParallelDownloads.*/ParallelDownloads = 8/' /etc/pacman.conf
+
+# Signed packages (the normal case): trust the distro's key on the live system,
+# since pacstrap checks signatures with the live keyring, and require
+# signatures. A development build without the key installs with a warning.
+fingerprint=$(<"$root/pkg/keyring/fingerprint")
+if [[ -f $repo/$DISTRO_REPO.db.sig ]]; then
+  pacman-key --add "$root/pkg/keyring/signing-key.asc" >/dev/null 2>&1 || die "could not add the signing key"
+  pacman-key --lsign-key "$fingerprint" >/dev/null 2>&1 || die "could not trust the signing key"
+  siglevel=Required
+else
+  info "WARNING: these packages are NOT signed (built without the signing key); installing them unverified"
+  siglevel="Optional TrustAll"
+fi
 if ! grep -q "^\[$DISTRO_REPO\]" /etc/pacman.conf; then
-  printf '\n[%s]\nSigLevel = Optional TrustAll\nServer = file://%s\n' "$DISTRO_REPO" "$repo" >> /etc/pacman.conf
+  printf '\n[%s]\nSigLevel = %s\nServer = file://%s\n' "$DISTRO_REPO" "$siglevel" "$repo" >> /etc/pacman.conf
 fi
 pacman -Sy >/dev/null
 
 # Base system and default apps; apps aren't package dependencies, so they can
 # be removed freely later.
 mapfile -t pkgs < <(package_list "$root/packages/base.packages" "$root/packages/apps.packages")
-pkgs+=("$DISTRO_ID" "$DISTRO_ID-settings")
+# The keyring package makes the installed system trust the distro's key.
+pkgs+=("$DISTRO_ID" "$DISTRO_ID-settings" "$DISTRO_ID-keyring")
 # Name the providers for virtual dependencies some apps have, so pacman doesn't
 # pick its defaults (jack2 would conflict with PipeWire's JACK).
 pkgs+=(pipewire-jack noto-fonts)
@@ -33,6 +47,12 @@ genfstab -U "$MNT" >> "$MNT/etc/fstab"
 # warn that /boot's permissions differ from the filesystem package's.
 sed -i '/[[:space:]]\/boot[[:space:]]*vfat/ s/\(vfat[[:space:]]*\)\([^[:space:]]*\)/\1\2,fmask=0077,dmask=0077/' "$MNT/etc/fstab"
 
-# The distro's package repository will be hosted at layer 7; until then the
-# installed system has the section commented out.
-printf '\n#[%s]\n#Server = (not hosted yet)\n' "$DISTRO_REPO" >> "$MNT/etc/pacman.conf"
+# The installed system's source for the distro's packages (repo.conf). Until
+# the repository is hosted the section is left commented out.
+REPO_URL=""
+source "$root/repo.conf"
+if [[ -n $REPO_URL ]]; then
+  printf '\n[%s]\nSigLevel = Required\nServer = %s\n' "$DISTRO_REPO" "$REPO_URL" >> "$MNT/etc/pacman.conf"
+else
+  printf '\n#[%s]\n#SigLevel = Required\n#Server = (not hosted yet; see repo.conf)\n' "$DISTRO_REPO" >> "$MNT/etc/pacman.conf"
+fi

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Blocks commits that
 #   1. write the distro name anywhere except distro.conf, or
-#   2. mention the reference distro or its makers (clean-room rule, ADR 0001).
+#   2. mention the reference distro or its makers (clean-room rule, ADR 0001), or
+#   3. contain a private key block.
 # docs/ is exempt from both: decision records and the build log need to name
 # things. Run `git config core.hooksPath .githooks` once after cloning.
 set -euo pipefail
@@ -23,6 +24,11 @@ while IFS= read -r -d '' file; do
   for text in "${checks[@]}"; do
     if grep -qiE "$blocked" <<<"$text"; then
       echo "pre-commit: $file mentions a blocked reference (clean-room rule)." >&2
+      fail=1
+      break
+    fi
+    if grep -q "PRIVATE KEY BLOCK" <<<"$text"; then
+      echo "pre-commit: $file contains a private key; keys never go in the repo." >&2
       fail=1
       break
     fi

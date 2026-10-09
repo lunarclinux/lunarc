@@ -135,6 +135,7 @@ if "$here/ssh" "$vm" "$user" -- "pacman -Q $id >/dev/null 2>&1"; then
   check "login screen uses distro config" "systemctl cat greetd | grep -q -- '--config /etc/greetd/$id.toml'"
   check "hidden apps dir in XDG_DATA_DIRS" "systemctl --user show-environment | grep -q '^XDG_DATA_DIRS=/usr/share/$id/xdg'"
   check "system names itself (os-release)" ". /etc/os-release; [ \"\$ID\" = $id ] && [ \"\$ID_LIKE\" = arch ] && [ -n \"\$NAME\" ]"
+  check "signing key trusted"            "pacman -Q $id-keyring >/dev/null && echo '$password' | sudo -S -p '' pacman-key --list-keys $(cat "$repo/pkg/keyring/fingerprint") >/dev/null"
 fi
 if [[ -n $iso ]]; then
   check "installed from the ISO's installer" "pacman -Q $id | grep -q ."

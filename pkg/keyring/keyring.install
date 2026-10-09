@@ -1,0 +1,12 @@
+# Adds the distro's key to pacman's keyring. pkg/build fills in @DISTRO_ID@.
+# Skipped while the keyring isn't set up yet; pacman-key --init followed by
+# pacman-key --populate picks the key up then.
+post_install() {
+  if usr/bin/pacman-key -l >/dev/null 2>&1; then
+    usr/bin/pacman-key --populate @DISTRO_ID@
+  fi
+}
+
+post_upgrade() {
+  post_install
+}

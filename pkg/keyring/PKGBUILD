@@ -1,0 +1,19 @@
+# The public key the distro's packages are signed with, in the layout
+# pacman-key --populate reads. Built by pkg/build, which sets DISTRO_SRC (an
+# unpacked copy of the repo at the ref being built) and PKGVER.
+source "${DISTRO_SRC:?build with pkg/build}/distro.conf"
+
+pkgname=$DISTRO_ID-keyring
+pkgver=${PKGVER:-0.0.0}
+pkgrel=1
+pkgdesc="$DISTRO_NAME package signing key"
+arch=(any)
+license=(GPL-3.0-or-later)
+install=$pkgname.install
+
+package() {
+  local keyrings=$pkgdir/usr/share/pacman/keyrings
+  install -Dm644 "$DISTRO_SRC/pkg/keyring/signing-key.asc" "$keyrings/$DISTRO_ID.gpg"
+  printf '%s:4:\n' "$(<"$DISTRO_SRC/pkg/keyring/fingerprint")" > "$keyrings/$DISTRO_ID-trusted"
+  : > "$keyrings/$DISTRO_ID-revoked"
+}

@@ -4,6 +4,10 @@
 #   pkg/build [ref]        default ref: HEAD; output: pkg/out/repo/
 #
 # The version comes from the last layer tag: l5-complete plus 3 commits -> 0.5.3.
+#
+# Packages and the repository database are signed when the signing key is on
+# this machine (SIGNING_GNUPGHOME, default ~/.local/share/<id>-signing/gnupg).
+# Without it (CI, other machines) everything is built unsigned.
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 ref=${1:-HEAD}
@@ -16,22 +20,41 @@ ver=$(git -C "$root" describe --tags --long --match 'l*-complete' "$ref" 2>/dev/
   | sed -E 's/^l([0-9]+)-complete-([0-9]+)-g[0-9a-f]+$/0.\1.\2/')
 [[ $ver =~ ^0\.[0-9]+\.[0-9]+$ ]] || ver=0.0.0
 
+# Signing: makepkg and repo-add call gpg, which reads GNUPGHOME.
+fpr=$(<"$out/src/pkg/keyring/fingerprint")
+signing_home=${SIGNING_GNUPGHOME:-$HOME/.local/share/$DISTRO_ID-signing/gnupg}
+sign=()
+if [[ -d $signing_home ]] && GNUPGHOME=$signing_home gpg --batch --list-secret-keys "$fpr" >/dev/null 2>&1; then
+  export GNUPGHOME=$signing_home
+  sign=(--sign --key "$fpr")
+  echo "pkg/build: signing with $fpr"
+else
+  echo "pkg/build: no signing key in $signing_home; building UNSIGNED packages" >&2
+fi
+
 # Third-party packages the distro's repository carries (not in Arch's): every
-# folder under pkg/ with a PKGBUILD, other than the distro's own two.
+# folder under pkg/ with a PKGBUILD, other than the distro's own.
 for vendored in "$root"/pkg/*/; do
   vendored=${vendored%/}
-  case ${vendored##*/} in main|settings|out) continue ;; esac
+  case ${vendored##*/} in main|settings|keyring|out) continue ;; esac
   [[ -f $vendored/PKGBUILD ]] || continue
   build=$out/build-${vendored##*/}; mkdir -p "$build"
   cp "$vendored/PKGBUILD" "$build/"
-  (cd "$build" && PKGDEST=$out/repo makepkg -f --nodeps --noconfirm >/dev/null)
+  (cd "$build" && PKGDEST=$out/repo makepkg -f --nodeps --noconfirm "${sign[@]}" >/dev/null)
 done
 
-for part in settings main; do
+# The distro's own packages.
+for part in keyring settings main; do
   build=$out/build-$part; mkdir -p "$build"
-  cp "$root/pkg/$part/PKGBUILD" "$build/"
+  cp "$out/src/pkg/$part/PKGBUILD" "$build/"
+  # An install script is named after its package; fill in the name.
+  for script in "$out/src/pkg/$part"/*.install; do
+    if [[ -f $script ]]; then sed "s/@DISTRO_ID@/$DISTRO_ID/g" "$script" > "$build/$DISTRO_ID-$part.install"; fi
+  done
   # --nodeps: the desktop doesn't need to be installed on the build machine.
-  (cd "$build" && DISTRO_SRC=$out/src PKGVER=$ver PKGDEST=$out/repo makepkg -f --nodeps --noconfirm >/dev/null)
+  (cd "$build" && DISTRO_SRC=$out/src PKGVER=$ver PKGDEST=$out/repo makepkg -f --nodeps --noconfirm "${sign[@]}" >/dev/null)
 done
-repo-add -q "$out/repo/$DISTRO_REPO.db.tar.gz" "$out"/repo/*.pkg.tar.zst
+
+db=$out/repo/$DISTRO_REPO.db.tar.gz
+repo-add -q "${sign[@]}" "$db" "$out"/repo/*.pkg.tar.zst
 ls -1 "$out/repo"
