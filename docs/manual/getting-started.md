@@ -42,6 +42,7 @@ SUPER is the Windows key.
 | `lunarc agent launch` / `prompt "<text>"` | Open the agent in a terminal |
 | `lunarc agent usage` | Tokens per day and model; also in the bar (✦) |
 | `lunarc crash list` / `show` / `diagnose` / `resolve` | The crash list; also the bug icon in the bar |
+| `lunarc app list` / `search <word>` / `install <app>` | Browse and install apps: browsers, editors, AI (Claude, ChatGPT, Ollama, Hermes), games (Steam, Lutris, Heroic), chat and more |
 | `lunarc update` / `update check` | Update everything / see what's waiting |
 | `lunarc migrate --list --user` | See which config migrations have run |
 | `lunarc screensaver effects` / `preview [effect]` | List the screensaver's effects / play one now (any key closes it) |

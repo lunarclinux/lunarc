@@ -1,7 +1,17 @@
 # Default apps. Installed by the installer but not required by the distro
 # package, so they can be removed or swapped freely.
+# One app per everyday need, chosen to follow the theme: GTK 4 / libadwaita
+# apps take Noctalia's colours, btop has its own Noctalia template.
+# More choices: `<id> app list`.
 firefox
 nautilus
+gnome-text-editor
+papers
+loupe
+showtime
+decibels
+gnome-calculator
+btop
 gvfs
 xdg-user-dirs
 xdg-utils

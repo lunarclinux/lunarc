@@ -1,0 +1,173 @@
+#!/usr/bin/env bash
+# summary: Find and install apps: browsers, editors, AI, games and more
+set -euo pipefail
+source "$DISTRO_LIB/lib.sh"
+
+catalog=$SHARE/default/apps/catalog
+webapps=${XDG_DATA_HOME:-$HOME/.local/share}/applications
+
+usage() {
+  cat <<USAGE
+Usage: $DISTRO_ID app <command>
+
+  list [category]       apps this distro knows about, by category (* = installed)
+  search <word>         find apps by name or category
+  install <app>...      install apps (Arch repos, the AUR, web apps, coding agents)
+  remove <app>...       remove apps
+
+Categories: $(categories | tr '\n' ' ')
+USAGE
+}
+
+trim() { local s=$1; s=${s#"${s%%[![:space:]]*}"}; printf '%s' "${s%"${s##*[![:space:]]}"}"; }
+
+# Catalog rows as "id|category|name|source|target|note", whitespace trimmed.
+rows() {
+  local line id cat name src target note
+  while IFS='|' read -r id cat name src target note; do
+    id=$(trim "$id")
+    [[ -z $id || $id == \#* ]] && continue
+    printf '%s|%s|%s|%s|%s|%s\n' "$id" "$(trim "$cat")" "$(trim "$name")" "$(trim "$src")" "$(trim "$target")" "$(trim "${note:-}")"
+  done < "$catalog"
+}
+categories() { rows | cut -d'|' -f2 | awk '!seen[$0]++'; }
+row() { rows | awk -F'|' -v id="$1" '$1 == id' | head -1; }
+
+gpu_vendor() {
+  local dev vendor
+  for dev in /sys/bus/pci/devices/*; do
+    [[ $(cat "$dev/class" 2>/dev/null) == 0x03* ]] || continue
+    vendor=$(cat "$dev/vendor")
+    case $vendor in
+      0x1002) echo amd; return ;;
+      0x10de) echo nvidia; return ;;
+      0x8086) echo intel; return ;;
+    esac
+  done
+  echo other
+}
+
+# The Arch packages a row installs (empty for web apps and agents).
+packages_for() { # packages_for <source> <target>
+  local entry vendor
+  case $1 in
+    repo|multilib|aur) printf '%s\n' "$2" ;;
+    gpu)
+      vendor=$(gpu_vendor)
+      for entry in $2; do
+        if [[ ${entry%%:*} == "$vendor" ]]; then printf '%s\n' "${entry#*:}"; return; fi
+      done
+      for entry in $2; do
+        if [[ ${entry%%:*} == other ]]; then printf '%s\n' "${entry#*:}"; fi
+      done ;;
+  esac
+}
+
+is_installed() { # is_installed <id> <source> <target>
+  local pkgs
+  case $2 in
+    web) [[ -f $webapps/$DISTRO_ID-web-$1.desktop ]] ;;
+    agent) command -v "$3" >/dev/null ;;
+    *) pkgs=$(packages_for "$2" "$3"); [[ -n $pkgs ]] && pacman -Q "${pkgs%% *}" >/dev/null 2>&1 ;;
+  esac
+}
+
+as_root() { if [[ -t 0 ]]; then sudo "$@"; else pkexec "$@"; fi; }
+
+enable_multilib() {
+  grep -q '^\[multilib\]' /etc/pacman.conf && return 0
+  info "enabling the [multilib] repository (32-bit libraries for games)"
+  as_root sed -i '/^#\[multilib\]/,/^#Include/ s/^#//' /etc/pacman.conf
+  as_root pacman -Sy
+}
+
+lib32_driver() {
+  case $(gpu_vendor) in
+    amd) echo lib32-vulkan-radeon ;;
+    nvidia) echo lib32-nvidia-utils ;;
+    intel) echo lib32-vulkan-intel ;;
+    *) echo lib32-mesa ;;
+  esac
+}
+
+aur_install() {
+  if ! command -v yay >/dev/null; then install_packages yay; fi
+  info "building from the AUR (community packages; review what you install)"
+  yay -S --needed "$@"
+}
+
+web_install() { # web_install <id> <name> <url>
+  local file=$webapps/$DISTRO_ID-web-$1.desktop
+  if ! command -v chromium >/dev/null; then install_packages chromium; fi
+  mkdir -p "$webapps"
+  cat > "$file" <<DESKTOP
+[Desktop Entry]
+Type=Application
+Name=$2
+Comment=$2 in its own window
+Exec=chromium --app=$3 --class=$DISTRO_ID-web-$1 --user-data-dir=${XDG_CONFIG_HOME:-$HOME/.config}/$DISTRO_ID/webapps/$1
+Icon=applications-internet
+StartupWMClass=$DISTRO_ID-web-$1
+Categories=Network;
+DESKTOP
+  info "added $2 to the launcher"
+}
+
+install_one() {
+  local r id cat name src target note pkgs
+  r=$(row "$1") || true
+  [[ -n $r ]] || die "unknown app: $1 (see: $DISTRO_ID app search <word>)"
+  IFS='|' read -r id cat name src target note <<<"$r"
+  if is_installed "$id" "$src" "$target"; then info "$name is already installed"; return; fi
+  info "installing $name"
+  case $src in
+    repo|gpu) read -ra pkgs <<<"$(packages_for "$src" "$target")"; install_packages "${pkgs[@]}" ;;
+    multilib) enable_multilib; read -ra pkgs <<<"$target"; install_packages "${pkgs[@]}" "$(lib32_driver)" ;;
+    aur) read -ra pkgs <<<"$target"; aur_install "${pkgs[@]}" ;;
+    web) web_install "$id" "$name" "$target" ;;
+    agent) "/usr/bin/$DISTRO_ID" agent install "$target" ;;
+    *) die "catalog: $id has an unknown source '$src'" ;;
+  esac
+}
+
+remove_one() {
+  local r id cat name src target note pkgs
+  r=$(row "$1") || true
+  [[ -n $r ]] || die "unknown app: $1"
+  IFS='|' read -r id cat name src target note <<<"$r"
+  case $src in
+    web) rm -f "$webapps/$DISTRO_ID-web-$id.desktop"; info "removed $name from the launcher" ;;
+    agent) die "coding agents are managed with: $DISTRO_ID agent" ;;
+    *)
+      read -ra pkgs <<<"$(packages_for "$src" "$target")"
+      if [[ -t 0 ]]; then sudo pacman -Rns "${pkgs[@]}"; else pkexec pacman -Rns --noconfirm "${pkgs[@]}"; fi ;;
+  esac
+}
+
+print_rows() { # stdin: rows
+  local id cat name src target note last="" mark extra
+  while IFS='|' read -r id cat name src target note; do
+    if [[ $cat != "$last" ]]; then printf '\n%s\n' "$cat"; last=$cat; fi
+    mark=" "; if is_installed "$id" "$src" "$target"; then mark="*"; fi
+    extra=""
+    if [[ -n $note ]]; then extra=" ($note)"; fi
+    printf '  %s %-16s %s%s\n' "$mark" "$id" "$name" "$extra"
+  done
+}
+
+case ${1:-} in
+  list)
+    if [[ -n ${2:-} ]]; then rows | awk -F'|' -v c="$2" '$2 == c' | print_rows
+    else rows | print_rows; fi ;;
+  search)
+    [[ -n ${2:-} ]] || die "search for what?"
+    rows | grep -i -- "$2" | print_rows ;;
+  install)
+    shift; [[ $# -gt 0 ]] || die "install which app? see: $DISTRO_ID app list"
+    for app in "$@"; do install_one "$app"; done ;;
+  remove)
+    shift; [[ $# -gt 0 ]] || die "remove which app?"
+    for app in "$@"; do remove_one "$app"; done ;;
+  -h|--help|"") usage ;;
+  *) die "unknown app command: $1" ;;
+esac

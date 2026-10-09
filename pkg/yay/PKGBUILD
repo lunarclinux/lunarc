@@ -1,0 +1,29 @@
+# AUR helper, so `<id> app install` can reach apps that are only in the AUR.
+# Not in Arch's official repositories, so the distro's repository carries it.
+# Installs the upstream release binary, checksum-pinned.
+pkgname=yay
+pkgver=13.0.1
+pkgrel=1
+pkgdesc="Yet another yogurt: pacman wrapper and AUR helper"
+arch=(x86_64)
+url="https://github.com/Jguer/yay"
+license=(GPL-3.0-or-later)
+depends=('pacman>6.1' git)
+optdepends=('sudo: privilege elevation')
+source=("$url/releases/download/v$pkgver/${pkgname}_${pkgver}_x86_64.tar.gz"
+        "LICENSE-$pkgver::https://raw.githubusercontent.com/Jguer/yay/v$pkgver/LICENSE")
+sha256sums=('1fdfcb5f7f387bc858d3a5754bdf4e4575bfbddac9560535a716d0ed7189c057'
+            '589ed823e9a84c56feb95ac58e7cf384626b9cbf4fda2a907bc36e103de1bad2')
+
+package() {
+  local dir=$srcdir/${pkgname}_${pkgver}_x86_64 mo
+  install -Dm755 "$dir/yay" "$pkgdir/usr/bin/yay"
+  install -Dm644 "$dir/yay.8" "$pkgdir/usr/share/man/man8/yay.8"
+  install -Dm644 "$dir/bash" "$pkgdir/usr/share/bash-completion/completions/yay"
+  install -Dm644 "$dir/zsh" "$pkgdir/usr/share/zsh/site-functions/_yay"
+  install -Dm644 "$dir/fish" "$pkgdir/usr/share/fish/vendor_completions.d/yay.fish"
+  for mo in "$dir"/*.mo; do
+    install -Dm644 "$mo" "$pkgdir/usr/share/locale/$(basename "$mo" .mo)/LC_MESSAGES/yay.mo"
+  done
+  install -Dm644 "$srcdir/LICENSE-$pkgver" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
