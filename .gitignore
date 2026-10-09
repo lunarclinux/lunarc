@@ -17,6 +17,8 @@ iso/out/
 *.asc
 *.key
 secring*
+# ...except the public package-signing key (pkg/keyring)
+!pkg/keyring/signing-key.asc
 
 # Package build output
 pkg/out/
