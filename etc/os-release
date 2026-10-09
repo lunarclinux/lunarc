@@ -1,0 +1,9 @@
+# The distro's identity, written to /usr/lib/os-release by a pacman hook
+# (Arch's filesystem package owns that file and resets it on upgrades).
+# ID_LIKE=arch tells tools that check for Arch to treat this as Arch.
+NAME="@DISTRO_NAME@"
+PRETTY_NAME="@DISTRO_NAME@"
+ID=@DISTRO_ID@
+ID_LIKE=arch
+BUILD_ID=rolling
+ANSI_COLOR="38;2;235;199;122"

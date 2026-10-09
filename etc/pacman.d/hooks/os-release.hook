@@ -1,0 +1,13 @@
+# Arch's filesystem package owns /usr/lib/os-release (and /etc/os-release links
+# to it); put the distro's identity back whenever either package changes it.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = filesystem
+Target = @DISTRO_ID@
+
+[Action]
+Description = Writing the distro's os-release...
+When = PostTransaction
+Exec = /usr/bin/install -m644 /usr/share/@DISTRO_ID@/os-release /usr/lib/os-release

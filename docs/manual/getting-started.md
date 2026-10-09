@@ -44,6 +44,7 @@ SUPER is the Windows key.
 | `lunarc crash list` / `show` / `diagnose` / `resolve` | The crash list; also the bug icon in the bar |
 | `lunarc update` / `update check` | Update everything / see what's waiting |
 | `lunarc migrate --list --user` | See which config migrations have run |
+| `lunarc screensaver effects` / `preview [effect]` | List the screensaver's effects / play one now (any key closes it) |
 
 Settings for these live in `~/.config/lunarc/settings` (`key = value`); defaults are in `/usr/share/lunarc/default/settings`.
 
@@ -52,3 +53,5 @@ Settings for these live in `~/.config/lunarc/settings` (`key = value`); defaults
 - Your Hyprland config: `~/.config/hypr/hyprland.lua` (loads the distro defaults from `/usr/share/lunarc/default/hypr/`, then your changes).
 - Your Noctalia config: `~/.config/noctalia/config.toml`; changes made in the Settings window go to `~/.local/state/noctalia/settings.toml`.
 - Crash captures and AI diagnoses: `~/.local/state/lunarc/crashes/`.
+- Screensaver effects: the distro's in `/usr/share/lunarc/default/screensaver/effects/`; add your own as `~/.config/terminaltexteffects/effects/<name>.py` and they join the rotation.
+- The system's name: `/etc/os-release` (`ID=lunarc`, `ID_LIKE=arch`), rewritten by a pacman hook whenever Arch's `filesystem` package updates.
