@@ -14,3 +14,6 @@ fastfetch
 pacman-contrib
 gdb
 debuginfod
+
+# AUR helper for `<id> app install` (community apps such as Claude Desktop, Zen, Heroic).
+yay
