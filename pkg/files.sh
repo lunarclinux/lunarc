@@ -17,10 +17,10 @@ copy_tree() { # copy_tree <from> <to> [mode]
     sed -i "s/@DISTRO_ID@/$id/g" "$to/$rel"
   done < <(find "$from" -type f ! -name .gitkeep -print0)
 }
-# Install one file, replacing @DISTRO_ID@.
+# Install one file, replacing @DISTRO_ID@ and @DISTRO_NAME@.
 put() { # put <from> <to> [mode]
   install -Dm"${3:-644}" "$1" "$2"
-  sed -i "s/@DISTRO_ID@/$id/g" "$2"
+  sed -i "s/@DISTRO_ID@/$id/g; s/@DISTRO_NAME@/$DISTRO_NAME/g" "$2"
 }
 
 case $part in
@@ -61,6 +61,9 @@ case $part in
     # pacman hook keeping Limine current at the UEFI fallback path.
     put "$src/etc/pacman.d/hooks/limine-update.hook" "$dest/usr/share/libalpm/hooks/$id-limine-update.hook"
     put "$src/etc/pacman.d/hooks/migrate.hook" "$dest/usr/share/libalpm/hooks/$id-migrate.hook"
+    # The system's name (os-release), kept in place by a hook.
+    put "$src/etc/os-release" "$dest/usr/share/$id/os-release"
+    put "$src/etc/pacman.d/hooks/os-release.hook" "$dest/usr/share/libalpm/hooks/$id-os-release.hook"
     # ~/.local/bin on PATH for shells.
     put "$src/etc/profile.d/local-bin.sh" "$dest/etc/profile.d/$id-local-bin.sh"
     ;;

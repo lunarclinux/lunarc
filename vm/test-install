@@ -134,6 +134,7 @@ if "$here/ssh" "$vm" "$user" -- "pacman -Q $id >/dev/null 2>&1"; then
   check "package files intact"          "pacman -Qkk $id 2>&1 | grep -q ', 0 altered files'"
   check "login screen uses distro config" "systemctl cat greetd | grep -q -- '--config /etc/greetd/$id.toml'"
   check "hidden apps dir in XDG_DATA_DIRS" "systemctl --user show-environment | grep -q '^XDG_DATA_DIRS=/usr/share/$id/xdg'"
+  check "system names itself (os-release)" ". /etc/os-release; [ \"\$ID\" = $id ] && [ \"\$ID_LIKE\" = arch ] && [ -n \"\$NAME\" ]"
 fi
 if [[ -n $iso ]]; then
   check "installed from the ISO's installer" "pacman -Q $id | grep -q ."
@@ -245,6 +246,8 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     # Screensaver: opens fullscreen over everything, closes on stop.
     if "$here/ssh" "$vm" "$user" -- "test -x /usr/lib/$id/commands/screensaver"; then
       check "screensaver engine installed" "command -v tte >/dev/null"
+      check "screensaver has the distro effects" "$id screensaver effects | grep -qx moonarc && $id screensaver effects | grep -qx eclipse && $id screensaver effects | grep -qx moonrise"
+      check "screensaver effects run"       "for e in moonarc eclipse moonrise; do XDG_CONFIG_HOME=\${XDG_RUNTIME_DIR}/$id-screensaver script -qc \"stty cols 160 rows 45; tte -i /usr/share/$id/default/screensaver/wordmark.txt --frame-rate 0 \$e --final-gradient-stops e6e2d6 ebc77a --final-gradient-direction horizontal\" /dev/null >/dev/null || exit 1; done"
       check "screensaver opens fullscreen" "$hypr $id screensaver start; for i in \$(seq 20); do hyprctl clients -j | jq -e '.[] | select(.class == \"$id.screensaver\") | .fullscreen > 0' >/dev/null && exit 0; sleep 1; done; hyprctl clients -j | jq -c '.[] | {class, fullscreen}'; exit 1"
       "$here/ssh" "$vm" "$user" -- "sleep 3" || true
       screenshot screensaver
