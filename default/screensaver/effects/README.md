@@ -5,8 +5,8 @@ plugin API (version 0.15). They join tte's own effects in the random rotation.
 
 | File | Command | What it does |
 |---|---|---|
-| `moonarc.py` | `moonarc` | A moon crosses the sky on an arc and lights the text as it passes. About 9 s. |
-| `eclipse.py` | `eclipse` | A dark disc slides across the lit text, leaving a gold corona on its rim. About 9 s. |
+| `moonarc.py` | `moonarc` | A big moon waxes and wanes across the sky and sweeps the text into place out of stardust. About 11 s. |
+| `eclipse.py` | `eclipse` | A total eclipse of the word: dimming, Baily's beads, diamond rings and a streaming corona. About 13 s. |
 | `moonrise.py` | `moonrise` | The text rises from behind a horizon, warming from dark gold. About 8.5 s. |
 
 ## How tte finds them
