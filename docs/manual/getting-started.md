@@ -1,12 +1,12 @@
 # Getting started
 
-Working name: Sollune (see decision record 0014); the command is `sollune`.
+Working name: Selidor (see decision record 0015); the command is `selidor`.
 
 ## Installing
 
-1. Put the ISO (`sollune-YYYY.MM.DD-x86_64.iso`) on a USB stick, e.g. with Ventoy, and boot it. UEFI only; turn off Secure Boot.
+1. Put the ISO (`selidor-YYYY.MM.DD-x86_64.iso`) on a USB stick, e.g. with Ventoy, and boot it. UEFI only; turn off Secure Boot.
 2. Connect to the internet: Ethernet works on its own; for Wi-Fi run `iwctl`.
-3. Run `install-sollune` and answer the questions: disk (erased), user name and password, computer name, time zone, disk encryption (recommended), automatic login.
+3. Run `install-selidor` and answer the questions: disk (erased), user name and password, computer name, time zone, disk encryption (recommended), automatic login.
 4. Reboot and remove the stick.
 
 Graphics drivers are picked from the hardware: AMD, Intel and NVIDIA (GTX 16xx / RTX 20xx and newer).
@@ -32,23 +32,23 @@ SUPER is the Windows key.
 | Print | Screenshot; SHIFT+Print: area; SUPER+Print: annotate |
 | SUPER+SHIFT+Escape | Log out |
 
-## The `sollune` command
+## The `selidor` command
 
 | Command | Does |
 |---|---|
-| `sollune theme list` / `set <name> [dark\|light]` | Switch the desktop theme (colours, wallpaper, terminal, apps) |
-| `sollune terminal set ghostty\|alacritty\|kitty\|wezterm\|foot` | Change the terminal (installs it if needed) |
-| `sollune agent set claude\|codex\|gemini\|opencode` | Choose the AI coding agent |
-| `sollune agent launch` / `prompt "<text>"` | Open the agent in a terminal |
-| `sollune agent usage` | Tokens per day and model; also in the bar (✦) |
-| `sollune crash list` / `show` / `diagnose` / `resolve` | The crash list; also the bug icon in the bar |
-| `sollune update` / `update check` | Update everything / see what's waiting |
-| `sollune migrate --list --user` | See which config migrations have run |
+| `selidor theme list` / `set <name> [dark\|light]` | Switch the desktop theme (colours, wallpaper, terminal, apps) |
+| `selidor terminal set ghostty\|alacritty\|kitty\|wezterm\|foot` | Change the terminal (installs it if needed) |
+| `selidor agent set claude\|codex\|gemini\|opencode` | Choose the AI coding agent |
+| `selidor agent launch` / `prompt "<text>"` | Open the agent in a terminal |
+| `selidor agent usage` | Tokens per day and model; also in the bar (✦) |
+| `selidor crash list` / `show` / `diagnose` / `resolve` | The crash list; also the bug icon in the bar |
+| `selidor update` / `update check` | Update everything / see what's waiting |
+| `selidor migrate --list --user` | See which config migrations have run |
 
-Settings for these live in `~/.config/sollune/settings` (`key = value`); defaults are in `/usr/share/sollune/default/settings`.
+Settings for these live in `~/.config/selidor/settings` (`key = value`); defaults are in `/usr/share/selidor/default/settings`.
 
 ## Where things are
 
-- Your Hyprland config: `~/.config/hypr/hyprland.lua` (loads the distro defaults from `/usr/share/sollune/default/hypr/`, then your changes).
+- Your Hyprland config: `~/.config/hypr/hyprland.lua` (loads the distro defaults from `/usr/share/selidor/default/hypr/`, then your changes).
 - Your Noctalia config: `~/.config/noctalia/config.toml`; changes made in the Settings window go to `~/.local/state/noctalia/settings.toml`.
-- Crash captures and AI diagnoses: `~/.local/state/sollune/crashes/`.
+- Crash captures and AI diagnoses: `~/.local/state/selidor/crashes/`.
