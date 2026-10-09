@@ -28,9 +28,11 @@ match="^(/usr/bin/)?ghostty --class=$class( |\$)"
 running() { pgrep -f -- "$match" >/dev/null; }
 
 # tte loads extra effects from $XDG_CONFIG_HOME/terminaltexteffects/effects.
-# Point it at a folder holding the distro's effects and the user's own.
+# Point it at a folder holding the distro's effects and the user's own. tte
+# runs every .py in it, so the folder must be the user's own: the private
+# runtime dir, else ~/.cache (never a shared path like /tmp).
 effects_home() {
-  local home=${XDG_RUNTIME_DIR:-/tmp}/$DISTRO_ID-screensaver
+  local home=${XDG_RUNTIME_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}}/$DISTRO_ID-screensaver
   local dir=$home/terminaltexteffects/effects file
   mkdir -p "$dir"
   for file in "$SHARE"/default/screensaver/effects/*.py \
