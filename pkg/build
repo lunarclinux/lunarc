@@ -16,8 +16,12 @@ ver=$(git -C "$root" describe --tags --long --match 'l*-complete' "$ref" 2>/dev/
   | sed -E 's/^l([0-9]+)-complete-([0-9]+)-g[0-9a-f]+$/0.\1.\2/')
 [[ $ver =~ ^0\.[0-9]+\.[0-9]+$ ]] || ver=0.0.0
 
-# Third-party packages the distro's repository carries (not in Arch's).
-for vendored in "$root"/pkg/terminaltexteffects; do
+# Third-party packages the distro's repository carries (not in Arch's): every
+# folder under pkg/ with a PKGBUILD, other than the distro's own two.
+for vendored in "$root"/pkg/*/; do
+  vendored=${vendored%/}
+  case ${vendored##*/} in main|settings|out) continue ;; esac
+  [[ -f $vendored/PKGBUILD ]] || continue
   build=$out/build-${vendored##*/}; mkdir -p "$build"
   cp "$vendored/PKGBUILD" "$build/"
   (cd "$build" && PKGDEST=$out/repo makepkg -f --nodeps --noconfirm >/dev/null)
