@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Uploads the built repository (pkg/out/repo) to the GitHub release named
+# "packages" in the repository set in repo.conf (REPO_GITHUB), which installed
+# systems download from (REPO_URL). Refuses unsigned builds.
+#
+#   pkg/build && tools/publish
+#
+# Needs the GitHub CLI (gh), logged in with write access to that repository.
+set -euo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd)
+source "$root/distro.conf"
+REPO_GITHUB=""
+source "$root/repo.conf"
+repo=$root/pkg/out/repo
+tag=packages
+
+[[ -n $REPO_GITHUB ]] || { echo "publish: set REPO_GITHUB in repo.conf first" >&2; exit 1; }
+[[ -f $repo/$DISTRO_REPO.db.tar.gz ]] || { echo "publish: nothing built; run pkg/build" >&2; exit 1; }
+command -v gh >/dev/null || { echo "publish: needs the GitHub CLI (gh)" >&2; exit 1; }
+
+# Every package and the database must carry a signature.
+unsigned=0
+for file in "$repo"/*.pkg.tar.zst "$repo/$DISTRO_REPO.db.tar.gz" "$repo/$DISTRO_REPO.files.tar.gz"; do
+  if [[ ! -f $file.sig ]]; then echo "publish: $(basename "$file") is not signed" >&2; unsigned=1; fi
+done
+(( unsigned == 0 )) || { echo "publish: refusing to publish unsigned packages (build on the machine with the signing key)" >&2; exit 1; }
+
+if ! gh release view "$tag" --repo "$REPO_GITHUB" >/dev/null 2>&1; then
+  gh release create "$tag" --repo "$REPO_GITHUB" --title "Packages" \
+    --notes "The $DISTRO_NAME package repository. Installed systems download from here; files are replaced on every publish."
+fi
+
+# pacman asks for <repo>.db and <repo>.files; repo-add makes those symlinks, and
+# release assets can't be links, so upload real copies under those names too.
+staging=$(mktemp -d); trap 'rm -rf "$staging"' EXIT
+cp -L "$repo"/* "$staging"/
+gh release upload "$tag" --repo "$REPO_GITHUB" --clobber "$staging"/*
+echo "publish: uploaded $(find "$staging" -type f | wc -l) files to $REPO_GITHUB ($tag)"
