@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="80" height="100" viewBox="0 0 80 100">
+  <!-- The crescent c on its own, for dark backgrounds. -->
+  <path fill="#EBC77A" d="M 75.4 11.7 A 46 46 0 1 0 75.4 88.3 A 40 40 0 1 1 75.4 11.7 Z"/>
+</svg>

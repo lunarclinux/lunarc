@@ -8,13 +8,14 @@ part=$1 src=$2 dest=$3
 source "$src/distro.conf"
 id=$DISTRO_ID
 
-# Copy a directory, replacing @DISTRO_ID@ in every file.
+# Copy a directory, replacing @DISTRO_ID@ and @DISTRO_NAME@ in every text file
+# (images are copied as they are).
 copy_tree() { # copy_tree <from> <to> [mode]
   local from=$1 to=$2 mode=${3:-644} file rel
   while IFS= read -r -d '' file; do
     rel=${file#"$from"/}
     install -Dm"$mode" "$file" "$to/$rel"
-    sed -i "s/@DISTRO_ID@/$id/g" "$to/$rel"
+    if grep -Iq . "$to/$rel"; then sed -i "s/@DISTRO_ID@/$id/g; s/@DISTRO_NAME@/$DISTRO_NAME/g" "$to/$rel"; fi
   done < <(find "$from" -type f ! -name .gitkeep -print0)
 }
 # Install one file, replacing @DISTRO_ID@ and @DISTRO_NAME@.
@@ -61,6 +62,12 @@ case $part in
     # pacman hook keeping Limine current at the UEFI fallback path.
     put "$src/etc/pacman.d/hooks/limine-update.hook" "$dest/usr/share/libalpm/hooks/$id-limine-update.hook"
     put "$src/etc/pacman.d/hooks/migrate.hook" "$dest/usr/share/libalpm/hooks/$id-migrate.hook"
+    # Branding: the crescent-c icon (full colour and symbolic) and the boot
+    # menu wallpaper, which a hook copies to /boot.
+    put "$src/default/branding/logo.svg" "$dest/usr/share/icons/hicolor/scalable/apps/$id-logo.svg"
+    put "$src/default/branding/logo-symbolic.svg" "$dest/usr/share/icons/hicolor/symbolic/apps/$id-logo-symbolic.svg"
+    put "$src/default/branding/logo.svg" "$dest/usr/share/pixmaps/$id-logo.svg"
+    put "$src/etc/pacman.d/hooks/boot-wallpaper.hook" "$dest/usr/share/libalpm/hooks/$id-boot-wallpaper.hook"
     # The system's name (os-release), kept in place by a hook.
     put "$src/etc/os-release" "$dest/usr/share/$id/os-release"
     put "$src/etc/pacman.d/hooks/os-release.hook" "$dest/usr/share/libalpm/hooks/$id-os-release.hook"
@@ -71,6 +78,8 @@ case $part in
     install -d -m750 "$dest/etc/sudoers.d"   # sudo's own package creates it 750
     put "$src/etc/sudoers.d/10-wheel" "$dest/etc/sudoers.d/10-$id-wheel" 440
     put "$src/etc/systemd/zram-generator.conf" "$dest/etc/systemd/zram-generator.conf"
+    # fastfetch's system-wide defaults (it reads $XDG_CONFIG_DIRS): the crescent logo, theme colours.
+    put "$src/default/branding/fastfetch.jsonc" "$dest/etc/xdg/fastfetch/config.jsonc"
     # greetd's own package owns /etc/greetd/config.toml, so ours lives beside it
     # and a drop-in points greetd at it.
     put "$src/etc/greetd/config.toml" "$dest/etc/greetd/$id.toml"

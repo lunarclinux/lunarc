@@ -135,6 +135,12 @@ if "$here/ssh" "$vm" "$user" -- "pacman -Q $id >/dev/null 2>&1"; then
   check "login screen uses distro config" "systemctl cat greetd | grep -q -- '--config /etc/greetd/$id.toml'"
   check "hidden apps dir in XDG_DATA_DIRS" "systemctl --user show-environment | grep -q '^XDG_DATA_DIRS=/usr/share/$id/xdg'"
   check "system names itself (os-release)" ". /etc/os-release; [ \"\$ID\" = $id ] && [ \"\$ID_LIKE\" = arch ] && [ -n \"\$NAME\" ]"
+  check "distro icon installed"         "test -f /usr/share/icons/hicolor/scalable/apps/$id-logo.svg && test -f /usr/share/icons/hicolor/symbolic/apps/$id-logo-symbolic.svg"
+  check "os-release names the icon"     "grep -qx 'LOGO=$id-logo' /etc/os-release"
+  check "fastfetch uses the distro logo" "grep -q '/usr/share/$id/default/branding/fastfetch-logo.txt' /etc/xdg/fastfetch/config.jsonc && fastfetch --pipe >/dev/null"
+  check "boot menu has the wallpaper"   "echo '$password' | sudo -S -p '' sh -c 'grep -q \"^wallpaper: boot():/$id/wallpaper.png\" /boot/limine.conf && test -s /boot/$id/wallpaper.png'"
+  check "console uses the theme palette" "grep -q 'vt.default_red=11,' /proc/cmdline"
+  check "login screen is themed"        "grep -q -- \"--theme 'border=yellow\" /etc/greetd/$id.toml"
 fi
 if [[ -n $iso ]]; then
   check "installed from the ISO's installer" "pacman -Q $id | grep -q ."

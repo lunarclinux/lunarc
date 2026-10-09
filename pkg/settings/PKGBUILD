@@ -12,6 +12,7 @@ depends=(sudo zram-generator greetd greetd-tuigreet)
 backup=(
   "etc/greetd/$DISTRO_ID.toml"
   "etc/systemd/zram-generator.conf"
+  "etc/xdg/fastfetch/config.jsonc"
   "etc/sudoers.d/10-$DISTRO_ID-wheel"
 )
 

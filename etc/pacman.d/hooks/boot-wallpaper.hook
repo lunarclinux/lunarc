@@ -1,0 +1,12 @@
+# The boot menu reads its wallpaper from the EFI partition (/boot); copy the
+# packaged one there whenever the distro package installs or upgrades.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = @DISTRO_ID@
+
+[Action]
+Description = Copying the boot menu wallpaper to /boot...
+When = PostTransaction
+Exec = /usr/bin/install -Dm644 /usr/share/@DISTRO_ID@/default/boot/wallpaper.png /boot/@DISTRO_ID@/wallpaper.png
