@@ -1,5 +1,5 @@
 # Distro defaults for the CLI. Override any line in ~/.config/<distro id>/settings.
-theme = ember
+theme = moonlit
 theme.mode = dark
 terminal = ghostty
 agent = claude

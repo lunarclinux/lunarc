@@ -209,9 +209,9 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     for _ in $(seq 20); do "$here/ssh" "$vm" "$user" -- "test -f ~/.local/state/$id/first-login-done" && break; sleep 2; done
     check "CLI lists its commands"        "$id help | grep -q theme"
     check "first-login setup ran"         "test -f ~/.local/state/$id/first-login-done"
-    check "default theme applied"         "$hypr $id theme current | grep -q '^ember (dark)'; noctalia msg color-scheme-get | grep -q 'custom $id-ember'"
+    check "default theme applied"         "$hypr $id theme current | grep -q '^moonlit (dark)'; noctalia msg color-scheme-get | grep -q 'custom $id-moonlit'"
     check "terminal theme generated"      'test -s ~/.config/ghostty/themes/noctalia'
-    check "Hyprland borders from theme"   "$hypr test -s ~/.config/hypr/noctalia.lua && grep -q 'e0a458' ~/.config/hypr/noctalia.lua"
+    check "Hyprland borders from theme"   "$hypr test -s ~/.config/hypr/noctalia.lua && grep -q 'ebc77a' ~/.config/hypr/noctalia.lua"
     check "GTK follows theme"             'test -s ~/.config/gtk-4.0/noctalia.css && [ "$(gsettings get org.gnome.desktop.interface icon-theme)" = "'"'"'Papirus-Dark'"'"'" ]'
     check "default terminal is ghostty"   "$id terminal list | grep -qE '^\* ghostty +installed'"
     check "switch theme to tide"          "$hypr $id theme set tide >/dev/null && sleep 2 && grep -q '6cb6d9' ~/.config/hypr/noctalia.lua && grep -qi '10161d' ~/.config/ghostty/themes/noctalia"
@@ -220,7 +220,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     screenshot paper
 
     # Layer 5: crash inbox, agents, updates.
-    "$here/ssh" "$vm" "$user" -- "$hypr $id theme set ember >/dev/null" || true
+    "$here/ssh" "$vm" "$user" -- "$hypr $id theme set moonlit >/dev/null" || true
     check "crash watcher running"         "systemctl --user is-active --quiet $id-crash-watch"
     check "crash plugin enabled"          "$hypr noctalia msg plugins list 2>&1 | grep -E '$id/crashes' | grep -qiE 'enabled|on|yes|true'"
     check "a crash is captured"           "$id crash test >/dev/null; for i in \$(seq 20); do [ \"\$($id crash list --json | jq length)\" = 1 ] && exit 0; sleep 1; done; exit 1"

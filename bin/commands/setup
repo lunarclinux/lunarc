@@ -7,7 +7,7 @@ case ${1:-} in
   first-login)
     done_file=$STATE_DIR/first-login-done
     [[ -f $done_file ]] && exit 0
-    "/usr/bin/$DISTRO_ID" theme set "$(setting theme ember)"
+    "/usr/bin/$DISTRO_ID" theme set "$(setting theme moonlit)"
     mkdir -p "$STATE_DIR"; date -Is > "$done_file"
     notify-send -a "$DISTRO_NAME" "Welcome to $DISTRO_NAME" \
       "SUPER+Space: apps. SUPER+Return: terminal. SUPER+S: quick settings. SUPER+comma: settings. SUPER+W: close a window. SUPER+Escape: lock.
