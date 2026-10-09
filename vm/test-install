@@ -140,7 +140,9 @@ if [[ -n $iso ]]; then
   check "installed from the ISO's installer" "pacman -Q $id | grep -q ."
 fi
 if "$here/ssh" "$vm" "$user" -- "pacman -Q firefox >/dev/null 2>&1"; then
-  check "default apps installed"        "pacman -Q firefox nautilus >/dev/null"
+  check "default apps installed"        "pacman -Q firefox nautilus gnome-text-editor papers loupe showtime decibels gnome-calculator btop >/dev/null"
+  check "app catalog lists apps"        "$id app list | grep -q steam && $id app search claude | grep -q claude-desktop"
+  check "pointer hides when idle"       "grep -q 'inactive_timeout' /usr/share/$id/default/hypr/settings.lua"
   check "bluetooth service enabled"     "systemctl is-enabled --quiet bluetooth"
   check "VM has no vendor GPU drivers"  "! pacman -Q vulkan-radeon nvidia-utils vulkan-intel 2>/dev/null | grep -q ."
 fi
@@ -181,7 +183,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     check "distro shell defaults applied" "$hypr"' noctalia config export | grep -qE "^polkit_agent *= *true"'
     check "clutter hidden from launcher"  "grep -q '^NoDisplay=true' /usr/local/share/applications/avahi-discover.desktop 2>/dev/null || grep -q '^NoDisplay=true' /usr/share/$id/xdg/applications/avahi-discover.desktop"
     # Every launcher entry must be one we mean to show; new dependency clutter fails here.
-    check "launcher shows only intended apps" "for f in /usr/share/applications/*.desktop; do n=\${f##*/}; grep -q '^NoDisplay=true' \"\$f\" && continue; [ -f /usr/share/$id/xdg/applications/\$n ] && continue; echo \$n; done | sort | tr '\\n' ' ' | tee /dev/stderr | grep -qxE '(com.mitchellh.ghostty.desktop |dev.noctalia.Noctalia.desktop |firefox.desktop |org.gnome.Nautilus.desktop |org.wezfurlong.wezterm.desktop )+'"
+    check "launcher shows only intended apps" "for f in /usr/share/applications/*.desktop; do n=\${f##*/}; grep -q '^NoDisplay=true' \"\$f\" && continue; [ -f /usr/share/$id/xdg/applications/\$n ] && continue; echo \$n; done | sort | tr '\\n' ' ' | tee /dev/stderr | grep -qxE '(btop.desktop |com.mitchellh.ghostty.desktop |dev.noctalia.Noctalia.desktop |firefox.desktop |org.gnome.Calculator.desktop |org.gnome.Decibels.desktop |org.gnome.Loupe.desktop |org.gnome.Nautilus.desktop |org.gnome.Papers.desktop |org.gnome.Showtime.desktop |org.gnome.TextEditor.desktop |org.wezfurlong.wezterm.desktop )+'"
     check "launcher opens"               "$hypr"' noctalia msg panel-open launcher'
   else
     check "polkit agent running"         'systemctl --user is-active --quiet hyprpolkitagent'

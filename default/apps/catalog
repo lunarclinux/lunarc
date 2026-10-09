@@ -1,0 +1,89 @@
+# Apps `<id> app` knows how to install. One per line:
+#   id | category | name | source | what to install | note
+# Sources:
+#   repo      Arch packages (space-separated)
+#   multilib  Arch packages from [multilib]; enables it first, adds the 32-bit GPU driver
+#   aur       AUR packages, built with yay
+#   gpu       one Arch package per GPU vendor: amd:<pkg> nvidia:<pkg> intel:<pkg> other:<pkg>
+#   web       a web app: opens the URL in its own Chromium window
+#   agent     a coding agent, installed by `<id> agent install`
+# Defaults (installed with the system) are in packages/apps.packages; they are
+# marked "default" in the note so `<id> app list` can show them.
+
+# Browsing
+firefox          | browser   | Firefox                | repo     | firefox                     | default
+chromium         | browser   | Chromium               | repo     | chromium                    |
+brave            | browser   | Brave                  | aur      | brave-bin                   |
+zen              | browser   | Zen Browser            | aur      | zen-browser-bin             |
+
+# Files and documents
+nautilus         | files     | Files (Nautilus)       | repo     | nautilus                    | default
+text-editor      | documents | Text Editor            | repo     | gnome-text-editor           | default
+papers           | documents | Papers (PDF viewer)    | repo     | papers                      | default
+libreoffice      | documents | LibreOffice            | repo     | libreoffice-fresh           |
+obsidian         | documents | Obsidian               | repo     | obsidian                    |
+xournalpp        | documents | Xournal++ (handwriting, PDF notes) | repo | xournalpp           |
+calculator       | utilities | Calculator             | repo     | gnome-calculator            | default
+
+# Code
+code             | code      | Code - OSS (VS Code)   | repo     | code                        |
+vscode           | code      | Visual Studio Code (Microsoft build) | aur | visual-studio-code-bin |
+zed              | code      | Zed                    | repo     | zed                         |
+neovim           | code      | Neovim                 | repo     | neovim                      |
+helix            | code      | Helix                  | repo     | helix                       |
+godot            | code      | Godot                  | repo     | godot                       |
+
+# Pictures, video, audio
+loupe            | media     | Image Viewer (Loupe)   | repo     | loupe                       | default
+showtime         | media     | Video Player (Showtime) | repo    | showtime                    | default
+decibels         | media     | Audio Player (Decibels) | repo    | decibels                    | default
+mpv              | media     | mpv                    | repo     | mpv                         |
+spotify          | media     | Spotify                | repo     | spotify-launcher            |
+pinta            | media     | Pinta                  | repo     | pinta                       |
+gimp             | media     | GIMP                   | repo     | gimp                        |
+krita            | media     | Krita                  | repo     | krita                       |
+inkscape         | media     | Inkscape               | repo     | inkscape                    |
+kdenlive         | media     | Kdenlive               | repo     | kdenlive                    |
+obs              | media     | OBS Studio             | repo     | obs-studio                  |
+audacity         | media     | Audacity               | repo     | audacity                    |
+
+# AI
+claude-code      | ai        | Claude Code (terminal) | agent    | claude                      |
+codex            | ai        | Codex CLI              | agent    | codex                       |
+gemini           | ai        | Gemini CLI             | agent    | gemini                      |
+opencode         | ai        | opencode               | agent    | opencode                    |
+claude-desktop   | ai        | Claude Desktop         | aur      | claude-desktop              | community package
+chatgpt-desktop  | ai        | ChatGPT Desktop        | aur      | chatgpt-desktop             | community package
+claude-web       | ai        | Claude (web app)       | web      | https://claude.ai           |
+chatgpt-web      | ai        | ChatGPT (web app)      | web      | https://chatgpt.com         |
+ollama           | ai        | Ollama (local models)  | gpu      | amd:ollama-rocm nvidia:ollama-cuda intel:ollama other:ollama |
+hermes           | ai        | Hermes Agent           | aur      | hermes-agent                | community package
+hermes-desktop   | ai        | Hermes Agent Desktop   | aur      | hermes-agent-desktop        | community package
+
+# Games
+steam            | games     | Steam                  | multilib | steam                       |
+lutris           | games     | Lutris                 | repo     | lutris                      |
+heroic           | games     | Heroic Games Launcher  | aur      | heroic-games-launcher-bin   |
+gamescope        | games     | Gamescope              | repo     | gamescope                   |
+umu             | games     | umu-launcher (Proton outside Steam) | multilib | umu-launcher       |
+moonlight        | games     | Moonlight (game streaming) | repo | moonlight-qt                |
+
+# Talking and sharing
+discord          | chat      | Discord                | repo     | discord                     |
+vesktop          | chat      | Vesktop (Discord client) | aur    | vesktop-bin                 |
+signal           | chat      | Signal                 | repo     | signal-desktop              |
+thunderbird      | chat      | Thunderbird            | repo     | thunderbird                 |
+localsend        | sharing   | LocalSend              | aur      | localsend-bin               |
+syncthing        | sharing   | Syncthing              | repo     | syncthing                   |
+qbittorrent      | sharing   | qBittorrent            | repo     | qbittorrent                 |
+
+# Passwords
+bitwarden        | passwords | Bitwarden              | repo     | bitwarden                   |
+keepassxc        | passwords | KeePassXC              | repo     | keepassxc                   |
+proton-pass      | passwords | Proton Pass            | aur      | proton-pass-bin             |
+
+# System
+btop             | system    | btop (system monitor)  | repo     | btop                        | default
+mission-center   | system    | Mission Center         | repo     | mission-center              |
+disks            | system    | Disks                  | repo     | gnome-disk-utility          |
+disk-usage       | system    | Disk Usage Analyzer    | repo     | baobab                      |
