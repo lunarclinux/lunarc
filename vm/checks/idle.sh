@@ -5,6 +5,9 @@
 export XDG_RUNTIME_DIR=/run/user/$(id -u) WAYLAND_DISPLAY=wayland-1
 export HYPRLAND_INSTANCE_SIGNATURE=$(ls "$XDG_RUNTIME_DIR/hypr" | head -1)
 export DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
+# An open keyring prompt (unencrypted autologin test installs get one at login)
+# holds idle off while it's open; it isn't what this checks, so close it.
+pkill -x gcr-prompter || true
 conf=~/.config/noctalia/config.toml
 cp "$conf" /tmp/idle-check.bak
 trap 'cp /tmp/idle-check.bak "$conf"; @ID@ screensaver stop' EXIT
