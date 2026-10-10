@@ -17,3 +17,8 @@ Deploy a new version (needs an API token with Workers Scripts edit):
       -F 'metadata={"main_module":"worker.js","compatibility_date":"2026-10-01"};type=application/json' \
       -F 'worker.js=@site/worker.js;filename=worker.js;type=application/javascript+module' \
       https://api.cloudflare.com/client/v4/accounts/<account id>/workers/scripts/lunarc-site
+
+Package repository (2026-10-10): `pkgs.lunarclinux.com` is a proxied AAAA
+`100::` record plus a Single Redirect rule (302) to
+`https://github.com/lunarclinux/lunarc-packages/releases/download/packages/<file>`.
+Publish with `pkg/build && tools/publish` on the machine holding the signing key.
