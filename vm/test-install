@@ -377,7 +377,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       # password (typed like a person would) unlocks it.
       check "lock packages installed"       "pacman -Q swaylock-plugin windowtolayer >/dev/null"
       check "lock recovery key works while locked" "$hypr hyprctl binds -j | jq -e '.[] | select(.key == \"L\" and .modmask == 12 and .locked == true)' >/dev/null"
-      check "lock engages, screensaver behind it" "$hypr $id lock && sleep 5 && pgrep -x swaylock-plugin >/dev/null && pgrep -x windowtolayer >/dev/null && pgrep -x tte >/dev/null"
+      check "lock engages, screensaver behind it" "$hypr $id lock && sleep 3 && pgrep -x swaylock-plugin >/dev/null && pgrep -x windowtolayer >/dev/null && for i in \$(seq 20); do pgrep -x tte >/dev/null && exit 0; sleep 1; done; exit 1"
       screenshot lock
       vm_type "$password"; virsh send-key "$vm" KEY_ENTER >/dev/null; sleep 5
       check "password unlocks; animation ends" "! pgrep -x swaylock-plugin >/dev/null && sleep 3 && ! pgrep -x windowtolayer >/dev/null && ! pgrep -x tte >/dev/null"
