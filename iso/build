@@ -26,7 +26,9 @@ cp -r /usr/share/archiso/configs/releng "$profile"
 airootfs=$profile/airootfs
 subst() { sed -i "s/@DISTRO_ID@/$DISTRO_ID/g; s/@DISTRO_NAME@/$DISTRO_NAME/g" "$@"; }
 
-# Identity and boot: UEFI only, like the installer.
+# Identity and boot: UEFI only, like the installer. The image is zstd rather
+# than releng's xz: it boots faster, and mksquashfs failed with xz on the
+# larger desktop image.
 date_stamp=$(date --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y%m)
 sed -i \
   -e "s|^iso_name=.*|iso_name=\"$DISTRO_ID\"|" \
@@ -34,6 +36,7 @@ sed -i \
   -e "s|^iso_publisher=.*|iso_publisher=\"$DISTRO_NAME\"|" \
   -e "s|^iso_application=.*|iso_application=\"$DISTRO_NAME live system\"|" \
   -e "/^bootmodes=/,/)/c\\bootmodes=('uefi.systemd-boot')" \
+  -e "/^airootfs_image_tool_options=/c\\airootfs_image_tool_options=('-comp' 'zstd' '-Xcompression-level' '19' '-b' '1M')" \
   "$profile/profiledef.sh"
 perms=""
 for path in "/usr/local/bin/install-$DISTRO_ID" /usr/local/bin/live-user-setup /usr/local/bin/live-install /usr/local/bin/live-welcome; do
