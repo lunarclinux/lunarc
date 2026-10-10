@@ -115,6 +115,19 @@ wait_ssh "$user" 300
 
 log "checks"
 fail=0
+# Types letters and digits into the VM's focused surface (the lock screen).
+vm_type() { # vm_type <text>
+  local i c
+  for ((i = 0; i < ${#1}; i++)); do
+    c=${1:i:1}
+    case $c in
+      [a-z]) virsh send-key "$vm" "KEY_${c^^}" >/dev/null ;;
+      [A-Z]) virsh send-key "$vm" KEY_LEFTSHIFT "KEY_$c" >/dev/null ;;
+      [0-9]) virsh send-key "$vm" "KEY_$c" >/dev/null ;;
+    esac
+  done
+}
+
 check() { # check <description> <command run in the VM as the user>
   if out=$("$here/ssh" "$vm" "$user" -- "$2" 2>&1); then
     printf '  \033[32mok\033[0m   %s\n' "$1"
@@ -285,7 +298,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       "$here/ssh" "$vm" "$user" -- "sleep 3" || true
       screenshot screensaver
       check "screensaver closes on stop"   "$hypr $id screensaver stop; sleep 2; ! hyprctl clients | grep -q 'class: $id.screensaver'"
-      check "idle runs the screensaver"    "$hypr noctalia config export | grep -A4 'idle.behavior.screensaver' | grep -q 'screensaver start'"
+      check "idle locks with the screensaver" "$hypr noctalia config export | grep -A4 'idle.behavior.screensaver' | grep -q 'lock --idle'"
     fi
     if "$here/ssh" "$vm" "$user" -- "test -x /usr/lib/$id/commands/menu"; then
       check "bar has the utility group"   "$hypr noctalia config export | grep -qE 'center *=.*stay-awake.*silence.*reminders.*recorder.*dictate.*clock'"
@@ -314,7 +327,20 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       check "keyboard layouts switch"      "$hypr $id keyboard add de >/dev/null && sleep 1 && hyprctl devices -j | jq -e '[.keyboards[] | select(.main)][0].layout == \"us,de\"' >/dev/null && $id keyboard next && sleep 1 && hyprctl devices -j | jq -r '.keyboards[] | select(.main) | .active_keymap' | grep -q German"
       screenshot keyboard-layout
       check "keyboard layout removed"      "$hypr $id keyboard remove de >/dev/null && sleep 1 && hyprctl devices -j | jq -e '[.keyboards[] | select(.main)][0].layout == \"us\"' >/dev/null"
-      check "idle: screensaver stays up; inhibitors respected" "$(sed "s/@ID@/$id/g" "$here/checks/idle.sh")"
+      check "idle: lock stays up; inhibitors respected" "$(sed "s/@ID@/$id/g" "$here/checks/idle.sh")"
+      # The lock: the screensaver plays behind a real session lock; the
+      # password (typed like a person would) unlocks it.
+      check "lock packages installed"       "pacman -Q swaylock-plugin windowtolayer >/dev/null"
+      check "lock recovery key works while locked" "$hypr hyprctl binds -j | jq -e '.[] | select(.key == \"L\" and .modmask == 12 and .locked == true)' >/dev/null"
+      check "lock engages, screensaver behind it" "$hypr $id lock && sleep 5 && pgrep -x swaylock-plugin >/dev/null && pgrep -x windowtolayer >/dev/null && pgrep -x tte >/dev/null"
+      screenshot lock
+      vm_type "$password"; virsh send-key "$vm" KEY_ENTER >/dev/null; sleep 5
+      check "password unlocks; animation ends" "! pgrep -x swaylock-plugin >/dev/null && sleep 3 && ! pgrep -x windowtolayer >/dev/null && ! pgrep -x tte >/dev/null"
+      # Fail closed: without the screensaver lock, Noctalia's lock takes over.
+      "$here/ssh" "$vm" "$user" -- "echo '$password' | sudo -S -p '' mv /usr/bin/swaylock-plugin /usr/bin/swaylock-plugin.off" || true
+      check "falls back to Noctalia's lock" "$hypr $id lock; sleep 3; noctalia msg status | jq -e '.. | objects | select(has(\"locked\")) | .locked == true' >/dev/null"
+      vm_type "$password"; virsh send-key "$vm" KEY_ENTER >/dev/null; sleep 4
+      "$here/ssh" "$vm" "$user" -- "echo '$password' | sudo -S -p '' mv /usr/bin/swaylock-plugin.off /usr/bin/swaylock-plugin" || true
     fi
     check "agent list knows claude"       "$id agent list | grep -qE '^\\* claude'"
     check "update check runs"             "$id update check >/dev/null"

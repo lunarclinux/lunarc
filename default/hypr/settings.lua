@@ -40,6 +40,9 @@ hl.config({
     misc = {
         force_default_wallpaper = 0,
         disable_hyprland_logo = true,
+        -- If the lock screen dies, the session stays locked and CTRL+ALT+L can
+        -- start a new one (instead of only a red "lock screen died" screen).
+        allow_session_lock_restore = true,
         background_color = 0x1d2021,
     },
 })

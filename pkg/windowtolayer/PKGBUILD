@@ -1,0 +1,32 @@
+# Turns an ordinary window (here: the screensaver's terminal) into a wallpaper
+# layer, which swaylock-plugin draws behind the lock. Not in Arch's official
+# repositories, so the distro's repository carries it. Built from the tagged
+# release, checksum-pinned; crates come from Cargo.lock (--locked).
+pkgname=windowtolayer
+pkgver=0.4.0
+pkgrel=1
+pkgdesc="Run an xdg-shell Wayland client as a layer-shell wallpaper"
+arch=(x86_64)
+url="https://gitlab.freedesktop.org/mstoeckl/windowtolayer"
+license=(GPL-3.0-or-later)
+depends=(gcc-libs glibc)
+makedepends=(rust cargo python)
+options=(!debug)
+source=("$pkgname-$pkgver.tar.gz::$url/-/archive/v$pkgver/$pkgname-v$pkgver.tar.gz")
+sha256sums=('cf96f432d746f7660d2bd819d93448a39361468f8abc686ffcda2e5b493a02a5')
+
+prepare() {
+  cd "$pkgname-v$pkgver"
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd "$pkgname-v$pkgver"
+  CARGO_INCREMENTAL=0 cargo build --release --locked --offline
+}
+
+package() {
+  cd "$pkgname-v$pkgver"
+  install -Dm755 target/release/windowtolayer "$pkgdir/usr/bin/windowtolayer"
+  install -Dm644 COPYING "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

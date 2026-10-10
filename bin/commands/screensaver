@@ -132,6 +132,10 @@ case ${1:-} in
   effects)
     effect_list ;;
   run)
+    # --lock: drawn behind the lock screen (see `lock`). Input goes to the lock,
+    # never to this terminal, so it just plays until the lock ends it.
+    lock=0
+    if [[ ${2:-} == --lock ]]; then lock=1; shift; fi
     only=${2:-}
     # The window opens tiled and then goes fullscreen; wait for its size to
     # settle so the first effect is centred on the whole screen.
@@ -170,6 +174,22 @@ case ${1:-} in
         sleep 2
       done ) &
     anim=$!
+    if (( lock )); then
+      # Behind the lock this terminal is a child of windowtolayer. If the lock
+      # screen goes away without closing it (a crash), stop, so no orphaned
+      # animation keeps running.
+      terminal=$PPID
+      while kill -0 "$anim" 2>/dev/null; do
+        holder=$(ps -o ppid= -p "$terminal" 2>/dev/null | tr -d ' ')
+        if [[ -z $holder || $(ps -o comm= -p "$holder" 2>/dev/null) != windowtolayer ]]; then
+          # The terminal stays alive without a display once windowtolayer is
+          # gone, so end it too.
+          pkill -P "$anim" 2>/dev/null; kill "$anim" 2>/dev/null; kill "$terminal" 2>/dev/null; exit 0
+        fi
+        sleep 2
+      done
+      exit 0
+    fi
     # Any key or mouse movement ends it. The terminal reports mouse motion once
     # asked to (\e[?1003h); ignore what arrives while the window settles.
     printf '\e[?1003h'

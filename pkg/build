@@ -28,6 +28,13 @@ ver=$(git -C "$root" describe --tags --long --match 'l*-complete' "$ref" 2>/dev/
   | sed -E 's/^l([0-9]+)-complete-([0-9]+)-g[0-9a-f]+$/0.\1.\2/')
 [[ $ver =~ ^0\.[0-9]+\.[0-9]+$ ]] || ver=0.0.0
 
+# windowtolayer needs cargo. On a machine whose cargo is a mise shim without a
+# version chosen, pick the newest installed Rust.
+if ! cargo --version >/dev/null 2>&1 && command -v mise >/dev/null; then
+  MISE_RUST_VERSION=$(mise ls --installed rust 2>/dev/null | awk '{print $2}' | sort -V | tail -1)
+  export MISE_RUST_VERSION
+fi
+
 # Signing: makepkg and repo-add call gpg, which reads GNUPGHOME.
 fpr=$(<"$work/src/pkg/keyring/fingerprint")
 signing_home=${SIGNING_GNUPGHOME:-$HOME/.local/share/$DISTRO_ID-signing/gnupg}

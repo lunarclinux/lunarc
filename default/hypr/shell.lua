@@ -10,8 +10,13 @@ end
 bind(mod .. " + Space", "Apps", shell("panel-toggle launcher"))
 bind(mod .. " + S", "Quick settings", shell("panel-toggle control-center"))
 bind(mod .. " + comma", "Shell settings", shell("settings-toggle"))
-bind(mod .. " + L", "Lock the screen", shell("session lock"))
-bind(mod .. " + Escape", "Lock the screen", shell("session lock"))
+-- The lock: the screensaver plays behind it (`@DISTRO_ID@ lock`); falls back to
+-- Noctalia's lock screen if it can't start. CTRL+ALT+L works while locked and
+-- locks again if the lock screen ever died or hung.
+local lock = hl.dsp.exec_cmd("@DISTRO_ID@ lock")
+bind(mod .. " + L", "Lock the screen", lock)
+bind(mod .. " + Escape", "Lock the screen", lock)
+bind("CTRL + ALT + L", "Restart the lock screen", hl.dsp.exec_cmd("pkill -x swaylock-plugin; sleep 0.5; @DISTRO_ID@ lock"), { locked = true })
 bind(mod .. " + N", "Open the latest notification", shell("notification-invoke-latest"))
 bind(mod .. " + V", "Clipboard history", shell("panel-toggle clipboard"))
 bind("ALT + Tab", "Switch windows", shell("window-switcher hold"))
