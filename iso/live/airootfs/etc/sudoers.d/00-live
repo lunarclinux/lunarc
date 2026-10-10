@@ -1,0 +1,2 @@
+# Live system only: the live user runs sudo without a password.
+live ALL=(ALL:ALL) NOPASSWD: ALL

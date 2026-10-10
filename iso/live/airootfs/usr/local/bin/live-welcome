@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Waits for the notification service (Noctalia), then shows the live notice.
+for _ in $(seq 60); do
+  busctl --user status org.freedesktop.Notifications >/dev/null 2>&1 && break
+  sleep 0.5
+done
+notify-send -a "@DISTRO_NAME@" -t 0 -i @DISTRO_ID@-logo "This is the live system." \
+  "Nothing is installed until you open Install @DISTRO_NAME@ from the launcher (SUPER+Space)."

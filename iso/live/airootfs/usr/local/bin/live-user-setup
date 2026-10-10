@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Creates the live user (no password, sudo without one) with the same starting
+# configs as a newly installed user, plus the live system's additions.
+set -euo pipefail
+user=live
+id -u "$user" >/dev/null 2>&1 && exit 0
+useradd -m -G wheel,video,audio,input -s /bin/bash -c "Live user" "$user"
+passwd -d "$user" >/dev/null
+home=/home/$user
+
+# Hyprland: the installer opens fullscreen.
+cat >> "$home/.config/hypr/hyprland.lua" <<'LUA'
+
+-- Live system additions.
+dofile("/usr/local/share/live/hyprland.lua")
+LUA
+
+# Noctalia: no lock screen on the live system (the user has no password).
+cat >> "$home/.config/noctalia/config.toml" <<'TOML'
+
+# Live system: never lock.
+[idle.behavior.lock]
+enabled = false
+TOML
+
+chown -R "$user:$user" "$home"
