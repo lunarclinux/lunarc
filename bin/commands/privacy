@@ -20,7 +20,7 @@ $SHARE/doc/privacy.md or the manual's "What $DISTRO_NAME connects to".
 USAGE
 }
 
-as_root() { if [[ -t 0 ]]; then sudo "$@"; else pkexec "$@"; fi; }
+as_root() { if (( EUID == 0 )); then "$@"; elif [[ -t 0 ]]; then sudo "$@"; else pkexec "$@"; fi; }
 
 noctalia_config=${XDG_CONFIG_HOME:-$HOME/.config}/noctalia/config.toml
 mark_start="# >>> $DISTRO_ID privacy: weather"

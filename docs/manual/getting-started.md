@@ -65,6 +65,9 @@ SUPER+ALT+Space (or `/m` in the launcher). Type part of a name and press Enter t
 | `lunarc dev docker` / `dev lang node` / `dev db add postgres` | Docker, language runtimes (mise) and local databases |
 | `lunarc app list` / `search <word>` / `install <app>` | Browse and install apps: browsers, editors, AI (Claude, ChatGPT, Ollama, Hermes), games (Steam, Lutris, Heroic), chat and more |
 | `lunarc update` / `update check` | Update everything safely / see what's waiting (see Updating) |
+| `lunarc update firmware` | Check for firmware updates (only when you run it) |
+| `lunarc privacy` | Privacy switches: weather lookup, encrypted DNS, network check (see "What Lunarc connects to", `privacy.md`) |
+| `lunarc firewall allow <app>` / `deny` | Let LocalSend, KDE Connect, Syncthing, SSH or a port through the firewall (closed by default) |
 | `lunarc capture screenshot\|record\|stop\|color\|text\|qr` | Screenshots (`~/Pictures/Screenshots`), recordings (`~/Videos/Recordings`), colour picker, copy text or a QR code from the screen |
 | `lunarc remind "stretch" in 20m` / `at 15:30` / `list` / `cancel <id>` | Reminders (also the alarm icon in the bar) |
 | `lunarc dictate toggle` / `setup` | Dictation; runs locally with whisper.cpp (first use downloads a ~150 MB model) |

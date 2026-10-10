@@ -59,6 +59,9 @@ Setup | Default terminal | The terminal SUPER+Return opens | menu: terminal | te
 Setup | Coding agent | The AI agent used for diagnosis and prompts | menu: agent | sparkles
 Setup | Dictation | Install the speech engine (once) | term: @DISTRO_ID@ dictate setup | microphone
 Setup | Shell settings | Bar, launcher, notifications and more | noctalia msg settings-open | adjustments
+Setup | Privacy | Weather lookup, encrypted DNS, network check | term: @DISTRO_ID@ privacy; echo; echo "Change: @DISTRO_ID@ privacy weather on|off, dns quad9|mullvad|cloudflare|off, connectivity on|off" | shield-lock
+Setup | Firewall | What may connect in (nothing, by default) | term: @DISTRO_ID@ firewall status; echo; @DISTRO_ID@ firewall apps; echo; echo "Allow one: @DISTRO_ID@ firewall allow <app or port>" | shield
+Setup | Firmware updates | Check for BIOS, SSD and device firmware | term: @DISTRO_ID@ update firmware | cpu
 
 Install | | Add apps, by category | menu: install
 Remove | | Remove apps you added | menu: remove

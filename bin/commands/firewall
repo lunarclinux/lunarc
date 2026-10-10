@@ -21,7 +21,7 @@ are never blocked.
 USAGE
 }
 
-as_root() { if [[ -t 0 ]]; then sudo "$@"; else pkexec "$@"; fi; }
+as_root() { if (( EUID == 0 )); then "$@"; elif [[ -t 0 ]]; then sudo "$@"; else pkexec "$@"; fi; }
 
 # name | firewalld services or ports | what it's for
 presets=(

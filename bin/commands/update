@@ -267,8 +267,10 @@ case ${1:-} in
     command -v fwupdmgr >/dev/null || die "fwupd isn't installed (sudo pacman -S fwupd)"
     # Downloads the firmware list from the Linux Vendor Firmware Service (LVFS)
     # now, at the user's request; nothing refreshes it in the background.
-    fwupdmgr refresh --force || true
-    if fwupdmgr get-updates; then fwupdmgr update; else info "no firmware updates"; fi ;;
+    # --no-unreported-check: never offer to upload update reports (if fwupd asks
+    # anyway, answering no keeps it on this computer).
+    fwupdmgr refresh --force --no-unreported-check || true
+    if fwupdmgr get-updates --no-unreported-check; then fwupdmgr update --no-unreported-check; else info "no firmware updates"; fi ;;
   snapshots) snapshots ;;
   rollback)
     case ${2:-} in
