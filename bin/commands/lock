@@ -84,7 +84,7 @@ locked_by_us() {
 # above them any more).
 clear_leftovers() {
   local pid parent
-  for pid in $(pgrep -f -- "--class=$DISTRO_ID[.]lockscreen"); do
+  for pid in $(pgrep -f -- "--class=${DISTRO_ID}[.]lockscreen"); do
     parent=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
     if [[ -n $parent && $(ps -o comm= -p "$parent" 2>/dev/null) != windowtolayer ]]; then
       kill "$pid" 2>/dev/null
