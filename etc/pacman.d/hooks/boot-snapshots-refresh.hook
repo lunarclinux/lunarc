@@ -1,0 +1,13 @@
+# After every transaction (and after snap-pac's post snapshot, which this hook
+# sorts after), rewrite the boot menu's snapshot entries.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Operation = Remove
+Type = Package
+Target = *
+
+[Action]
+Description = Updating the boot menu's snapshot entries...
+When = PostTransaction
+Exec = /usr/bin/@DISTRO_ID@ boot snapshots refresh

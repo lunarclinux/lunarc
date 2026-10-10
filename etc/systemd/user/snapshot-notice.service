@@ -1,0 +1,9 @@
+[Unit]
+Description=Say so when the system was started from a snapshot
+ConditionKernelCommandLine=@DISTRO_ID@.snapshot
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/@DISTRO_ID@ boot snapshots notice

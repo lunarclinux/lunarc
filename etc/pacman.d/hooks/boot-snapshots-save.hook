@@ -1,0 +1,15 @@
+# Before a kernel is replaced, keep a copy of it and its initramfs on the EFI
+# partition so the boot menu's snapshots from before this update can still
+# start with the kernel that matches them. Runs before mkinitcpio's own
+# PreTransaction hook (60-mkinitcpio-remove) deletes the old images.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Operation = Remove
+Type = Path
+Target = usr/lib/modules/*/vmlinuz
+
+[Action]
+Description = Keeping the current kernel for the boot menu's snapshots...
+When = PreTransaction
+Exec = /usr/bin/@DISTRO_ID@ boot snapshots save-kernels

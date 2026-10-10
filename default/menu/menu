@@ -71,6 +71,8 @@ Remove | | Remove apps you added | menu: remove
 Update | | Keep the system current |
 Update | Update everything | Packages and the distro | term: @DISTRO_ID@ update | refresh
 Update | Check for updates | See what's waiting | term: @DISTRO_ID@ update check | list-search
+Update | Snapshots | Undo an update: snapshots you can roll back to | term: @DISTRO_ID@ update snapshots | history
+Update | Keep this snapshot | Started from a snapshot? Make it the system | term: @DISTRO_ID@ boot snapshots keep | restore
 
 Power | | Lock, sleep, restart |
 Power | Lock | SUPER+L | @DISTRO_ID@ lock | lock
