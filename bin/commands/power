@@ -63,12 +63,14 @@ lid() { # lid close|open (Hyprland's lid-switch binds)
     close)
       # Docked: logind ignores the lid (HandleLidSwitchDocked=ignore), so
       # turn the closed screen off and keep the desktop on the external one.
-      if external_connected; then
-        hyprctl eval "hl.monitor({ output = \"$panel\", disabled = true })" >/dev/null
-      fi ;;
+      # The display command keeps it off across hotplug while the flag exists.
+      touch "${XDG_RUNTIME_DIR:-/tmp}/$DISTRO_ID-lid-closed"
+      if external_connected; then "/usr/bin/$DISTRO_ID" display apply >/dev/null 2>&1 || \
+        hyprctl eval "hl.monitor({ output = \"$panel\", disabled = true })" >/dev/null; fi ;;
     open)
-      # Back to the configured layout.
-      hyprctl reload >/dev/null ;;
+      # Back to the saved arrangement.
+      rm -f "${XDG_RUNTIME_DIR:-/tmp}/$DISTRO_ID-lid-closed"
+      "/usr/bin/$DISTRO_ID" display apply >/dev/null 2>&1 || hyprctl reload >/dev/null ;;
   esac
 }
 

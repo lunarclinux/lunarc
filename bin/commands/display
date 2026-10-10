@@ -71,11 +71,17 @@ set_key() { jq -r '[.[].id] | sort | join(" + ")' <<<"$1"; }
 lua_string() { local s=$1; s=${s//\\/\\\\}; s=${s//\"/\\\"}; printf '"%s"' "$s"; }
 
 # Hyprland monitor rules for the connected screens, from what's remembered.
+# The lid is closed (set by `power lid close`): the built-in screen stays off
+# while an external one is connected, whatever the saved arrangement says.
+lid_flag=${XDG_RUNTIME_DIR:-/tmp}/$DISTRO_ID-lid-closed
+
 rules() { # rules <monitors-json> <state-json>
-  local mons=$1 st=$2 key
+  local mons=$1 st=$2 key lid=0
   key=$(set_key "$mons")
-  jq -r --arg key "$key" --argjson st "$st" '
-    ($st.layouts[$key] // {}) as $layout
+  if [[ -e $lid_flag ]]; then lid=1; fi
+  jq -r --arg key "$key" --argjson st "$st" --arg lid "$lid" '
+    ([.[] | select(.builtin | not)] | length > 0) as $external
+    | ($st.layouts[$key] // {}) as $layout
     | (if ([.[] | select(($layout.off // {})[.id] != true)] | length) == 0 then {} else ($layout.off // {}) end) as $off
     | .[] | . as $m
     | ($st.monitors[$m.id] // {}) as $saved
@@ -84,7 +90,7 @@ rules() { # rules <monitors-json> <state-json>
        (($saved.scale // "auto") | tostring),
        (($layout.positions // {})[$m.id] // "auto"),
        (($saved.transform // 0) | tostring),
-       (if $off[$m.id] == true then "off" else "on" end)] | @tsv' <<<"$mons"
+       (if ($lid == "1" and $m.builtin and $external) or $off[$m.id] == true then "off" else "on" end)] | @tsv' <<<"$mons"
 }
 
 lua_rule() { # lua_rule <id> <mode> <scale> <position> <transform> <on|off>
