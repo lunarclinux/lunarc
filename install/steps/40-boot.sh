@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# title: Setting up the boot menu
 # initramfs and the Limine bootloader at the UEFI fallback path. Sourced by install.sh.
 if [[ -n $LUKS_UUID ]]; then
   # Arch's default hooks are systemd-based; sd-encrypt unlocks the disk at boot.

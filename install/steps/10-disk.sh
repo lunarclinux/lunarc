@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# title: Preparing the disk
 # Partition, format and mount. Sourced by install.sh.
 umount -R "$MNT" 2>/dev/null || true
 cryptsetup close system 2>/dev/null || true

@@ -25,6 +25,7 @@ profile=$work/profile
 cp -r /usr/share/archiso/configs/releng "$profile"
 airootfs=$profile/airootfs
 subst() { sed -i "s/@DISTRO_ID@/$DISTRO_ID/g; s/@DISTRO_NAME@/$DISTRO_NAME/g" "$@"; }
+sed -e 's/#.*//' -e '/^[[:space:]]*$/d' "$root/iso/installer.packages" >> "$profile/packages.x86_64"
 
 # Identity and boot: UEFI only, like the installer. The image is zstd rather
 # than releng's xz: it boots faster, and mksquashfs failed with xz on the
