@@ -25,6 +25,11 @@ timeout = 600
 action = "lock"
 enabled = false
 
+# Locking before sleep is the distro's lock-watch service (`@DISTRO_ID@ lock`),
+# so the screensaver plays behind the lock after waking too.
+[lockscreen]
+lock_before_suspend = false
+
 [idle.behavior.screen-off]
 timeout = 660
 action = "screen_off"
