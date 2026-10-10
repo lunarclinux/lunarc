@@ -1,5 +1,6 @@
 # Re-applies the battery charge limit set with `@DISTRO_ID@ power charge-limit`
-# (firmware forgets it at power-off on many laptops).
+# (firmware forgets it at power-off on many laptops). Started at boot by the
+# package's multi-user.target.wants link; it does nothing without a saved limit.
 [Unit]
 Description=Battery charge limit
 ConditionPathExists=/etc/@DISTRO_ID@/charge-limit
@@ -9,5 +10,3 @@ ConditionPathExistsGlob=/sys/class/power_supply/BAT*
 Type=oneshot
 ExecStart=/usr/lib/@DISTRO_ID@/power-helper charge-limit-apply
 
-[Install]
-WantedBy=multi-user.target
