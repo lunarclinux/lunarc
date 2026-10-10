@@ -67,9 +67,10 @@ case $part in
     put "$src/etc/systemd/user/setup-reminder.service" "$units/$id-setup-reminder.service"
     put "$src/etc/systemd/user/setup-reminder.timer" "$units/$id-setup-reminder.timer"
     put "$src/etc/systemd/user/battery-watch.service" "$units/$id-battery-watch.service"
+    put "$src/etc/systemd/user/idle-watch.service" "$units/$id-idle-watch.service"
     install -d "$units/graphical-session.target.wants"
     for unit in noctalia.service "$id-first-login.service" "$id-crash-watch.service" "$id-migrate.service" "$id-lock-watch.service" \
-      "$id-setup-reminder.timer" "$id-battery-watch.service"; do
+      "$id-setup-reminder.timer" "$id-battery-watch.service" "$id-idle-watch.service"; do
       ln -s "../$unit" "$units/graphical-session.target.wants/$unit"
     done
 

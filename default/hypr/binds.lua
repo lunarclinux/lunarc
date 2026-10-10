@@ -44,6 +44,12 @@ bind(mod .. " + CTRL + C", "Pick a colour from the screen", run("@DISTRO_ID@ cap
 bind(mod .. " + CTRL + D", "Dictate (speak to type)", run("@DISTRO_ID@ dictate toggle"))
 
 -- Media keys. Volume and brightness are bound in shell.lua.
+-- The lid: with an external monitor connected, closing it turns the laptop's
+-- screen off and keeps working (logind doesn't sleep while docked); opening
+-- it brings the screen back. With no external monitor, logind suspends.
+bind("switch:on:Lid Switch", "Lid closed: use the external monitor only", run("@DISTRO_ID@ power lid close"), { locked = true })
+bind("switch:off:Lid Switch", "Lid opened: the laptop's screen comes back", run("@DISTRO_ID@ power lid open"), { locked = true })
+
 bind("XF86AudioPlay", "Play or pause", run("playerctl play-pause"), { locked = true })
 bind("XF86AudioPause", "Play or pause", run("playerctl play-pause"), { locked = true })
 bind("XF86AudioNext", "Next track", run("playerctl next"), { locked = true })

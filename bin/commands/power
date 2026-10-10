@@ -64,7 +64,7 @@ lid() { # lid close|open (Hyprland's lid-switch binds)
       # Docked: logind ignores the lid (HandleLidSwitchDocked=ignore), so
       # turn the closed screen off and keep the desktop on the external one.
       if external_connected; then
-        hyprctl keyword monitor "$panel,disable" >/dev/null
+        hyprctl eval "hl.monitor({ output = \"$panel\", disabled = true })" >/dev/null
       fi ;;
     open)
       # Back to the configured layout.
@@ -105,6 +105,23 @@ battery_watch() {
   done
 }
 
+# Hyprland stops counting idle time when a window holds idle off (a
+# fullscreen video) and, after that window goes away, doesn't start again
+# until the next real input, so an untouched computer never locks. When the
+# last idle-holding window is gone, restart the count (the idle timer then
+# runs from that moment, as it would after a key press).
+idle_watch() {
+  local held=0 now
+  while sleep 10; do
+    now=$(hyprctl clients -j 2>/dev/null | jq '[.[] | select(.inhibitingIdle)] | length' 2>/dev/null) || continue
+    [[ $now =~ ^[0-9]+$ ]] || continue
+    if (( held > 0 && now == 0 )); then
+      hyprctl dispatch 'hl.dsp.force_idle(1)' >/dev/null 2>&1 || true
+    fi
+    held=$now
+  done
+}
+
 case ${1:-} in
   status)
     charge_limit_status
@@ -130,6 +147,7 @@ case ${1:-} in
     esac ;;
   lid) lid "${2:-}" ;;
   battery-watch) battery_watch ;;
+  idle-watch) idle_watch ;;
   -h|--help|"") usage ;;
   *) die "unknown power command: $1" ;;
 esac
