@@ -30,6 +30,7 @@ presets=(
   "syncthing|service:syncthing|Syncthing file sync"
   "ssh|service:ssh|log in to this computer remotely (needs sshd)"
   "steam-streaming|service:steam-streaming|Steam Remote Play / in-home streaming"
+  "mdns|service:mdns|find printers and devices by name (.local) on your network"
 )
 
 rules_for() { # rules_for <app|port/proto> -> "service:x" / "port:x" words
