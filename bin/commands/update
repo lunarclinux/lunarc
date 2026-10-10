@@ -1,31 +1,282 @@
 #!/usr/bin/env bash
-# summary: Update the system, or check what's waiting
+# summary: Update the system safely, see what's waiting, or roll back
 set -euo pipefail
 source "$DISTRO_LIB/lib.sh"
 
 usage() {
   cat <<USAGE
-Usage: $DISTRO_ID update [check]
+Usage: $DISTRO_ID update [--all] | check | snapshots | rollback <n> [--dry-run] | rollback --clean
 
-  (no argument)   upgrade every package (sudo pacman -Syu)
-  check           list available updates without installing (uses checkupdates)
+  (no argument)   update everything: keyrings first, then Arch and $DISTRO_NAME
+                  packages (a snapshot is taken before and after), then AUR
+                  apps, then Flatpak apps
+  --all           also take a Hyprland release newer than the one $DISTRO_NAME
+                  was tested with (normally held back until a distro update)
+  check           list waiting updates, by source, without installing
+  snapshots       list the snapshots taken before updates
+  rollback <n>    put the system back as it was in snapshot <n>, then restart;
+                  /home, logs and your files are not touched
+  rollback --clean
+                  delete the systems set aside by earlier rollbacks
 USAGE
 }
 
+tested_file=$SHARE/default/tested/hyprland
+hypr_family='^(hyprland|aquamarine|hypr[a-z-]*|xdg-desktop-portal-hyprland)$'
+
+step() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
+
+# "name repo" for every package in the sync databases.
+repo_of_all() { pacman -Sl 2>/dev/null | awk '{ print $2, $1 }'; }
+
+# The Hyprland release the distro was tested with (a version prefix, e.g. 0.56).
+tested_hyprland() {
+  [[ -f $tested_file ]] || return 0
+  grep -vE '^[[:space:]]*(#|$)' "$tested_file" | head -1 | tr -d '[:space:]'
+}
+
+# Waiting Arch/distro updates ("name old -> new"), from a private copy of the
+# databases, so the system's own are never half-synced.
+pending() { checkupdates 2>/dev/null || true; }
+
+# Packages to hold back: Hyprland and its own libraries, when the waiting
+# Hyprland is newer than the tested release.
+held_back() { # held_back <pending lines>
+  local tested new
+  tested=$(tested_hyprland)
+  [[ -n $tested ]] || return 0
+  new=$(awk '$1 == "hyprland" { print $4 }' <<<"$1")
+  [[ -n $new ]] || return 0
+  case $new in "$tested"|"$tested".*|"$tested"-*) return 0 ;; esac
+  awk '{ print $1 }' <<<"$1" | grep -E "$hypr_family" || true
+}
+
+latest_snapshot() { snapper -c root --csvout list --columns number 2>/dev/null | tail -1 | tr -cd '0-9'; }
+
+update_all() { # update_all [1 = take held-back Hyprland too]
+  local all=$1 before after pend changed others snap snap_before pre p
+  local held=() ignore=() keyrings=(archlinux-keyring) aur_failed=0 kernel=0
+  if [[ ! -t 0 ]]; then
+    exec "/usr/bin/$DISTRO_ID" terminal launch -- "/usr/bin/$DISTRO_ID" update ${all:+--all}
+  fi
+  sudo -v
+
+  step "Package keyrings"
+  # A system that hasn't updated in a while can fail signature checks until
+  # its keyrings are current, so they go first.
+  if pacman -Si "$DISTRO_ID-keyring" >/dev/null 2>&1; then keyrings+=("$DISTRO_ID-keyring"); fi
+  sudo pacman -Sy --needed --noconfirm "${keyrings[@]}" >/dev/null
+  info "up to date"
+
+  step "Arch and $DISTRO_NAME packages"
+  pend=$(pending)
+  if [[ -z $all ]]; then mapfile -t held < <(held_back "$pend"); fi
+  if (( ${#held[@]} )); then
+    info "Holding back Hyprland $(awk '$1 == "hyprland" { print $4 }' <<<"$pend") and its libraries."
+    info "$DISTRO_NAME's settings were tested with Hyprland $(tested_hyprland); a $DISTRO_NAME update"
+    info "takes the new release once it's tested. '$DISTRO_ID update --all' takes it now."
+    for p in "${held[@]}"; do ignore+=(--ignore "$p"); done
+  fi
+  before=$(pacman -Q)
+  snap_before=$(latest_snapshot)
+  if ! sudo pacman -Syu "${ignore[@]}"; then
+    if (( ${#held[@]} )); then
+      info "Holding back Hyprland may be blocking other updates; try: $DISTRO_ID update --all"
+    fi
+    die "the system update did not finish"
+  fi
+
+  if command -v yay >/dev/null && [[ -n $(pacman -Qqm) ]]; then
+    step "AUR apps"
+    # Separate from the system update, so a broken AUR package never blocks it.
+    yay -Sua || aur_failed=1
+  fi
+
+  if command -v flatpak >/dev/null && [[ -n $(flatpak list --app --columns=application 2>/dev/null) ]]; then
+    step "Flatpak apps"
+    flatpak update -y || info "The Flatpak update failed; run 'flatpak update' to see why."
+  fi
+
+  "/usr/bin/$DISTRO_ID" migrate --user
+
+  step "Summary"
+  after=$(pacman -Q)
+  changed=$(comm -13 <(sort <<<"$before") <(sort <<<"$after") | awk '{ print $1 }')
+  if [[ -z $changed ]]; then
+    info "Nothing new."
+  else
+    awk 'NR == FNR { want[$1] = 1; next } ($1 in want) { n[$2]++ }
+         END { for (r in n) printf "  %-10s %d package(s)\n", r, n[r] }' \
+      <(printf '%s\n' "$changed") <(repo_of_all)
+    others=$(comm -23 <(printf '%s\n' "$changed" | sort) <(repo_of_all | awk '{ print $1 }' | sort) | grep -c . || true)
+    if (( others )); then printf '  %-10s %d package(s)\n' AUR "$others"; fi
+    if grep -qE '^linux(-lts|-zen|-hardened)?$' <<<"$changed" || [[ ! -d /usr/lib/modules/$(uname -r) ]]; then kernel=1; fi
+  fi
+  snap=$(latest_snapshot)
+  if [[ -n $snap && $snap != "$snap_before" ]]; then
+    pre=$(snapper -c root --csvout list --columns number,type 2>/dev/null \
+      | awk -F, -v s="${snap_before:-0}" '$2 == "pre" && $1 + 0 > s + 0 { print $1; exit }')
+    info "Snapshot before this update: ${pre:-$snap}  (undo it with: $DISTRO_ID update rollback ${pre:-$snap})"
+  fi
+  if (( ${#held[@]} )); then info "Held back: ${held[*]}"; fi
+  if (( aur_failed )); then info "Some AUR apps didn't update; the rest of the system did. Run 'yay -Sua' to see why."; fi
+  if (( kernel )); then info "A new kernel was installed: restart to use it."; fi
+  info ""; read -rp "Done. Press Enter to close." _
+}
+
+check() {
+  local pend held aur="" n
+  pend=$(pending)
+  if [[ -n $pend ]]; then
+    awk 'NR == FNR { repo[$1] = $2; next } { r = ($1 in repo) ? repo[$1] : "?"; print r ": " $0 }' \
+      <(repo_of_all) <(printf '%s\n' "$pend") | sort
+  fi
+  held=$(held_back "$pend")
+  if [[ -n $held ]]; then
+    info "(held back until tested: $(tr '\n' ' ' <<<"$held")- '$DISTRO_ID update --all' takes them)"
+  fi
+  if command -v yay >/dev/null && [[ -n $(pacman -Qqm) ]]; then aur=$(yay -Qua 2>/dev/null || true); fi
+  if [[ -n $aur ]]; then sed 's/^/aur: /' <<<"$aur"; fi
+  n=$(( $(grep -c . <<<"$pend" || true) + $(grep -c . <<<"$aur" || true) ))
+  if (( n )); then info "$n update(s) available"; else info "up to date"; fi
+}
+
+snapshots() {
+  info "Snapshots taken around updates (the 'pre' one is the state before):"
+  sudo snapper -c root list
+  info ""
+  info "Undo an update: $DISTRO_ID update rollback <number>"
+}
+
+# --- Rolling back (runs as root) ----------------------------------------------
+# The system boots the subvolume named @ (rootflags=subvol=@ on the kernel
+# command line), so snapper's own rollback, which changes btrfs's default
+# subvolume, would have no effect here. Instead, from the running system: make a
+# writable copy of the snapshot, set the current @ aside as @old-<date>, and
+# give the copy the name @; the next boot starts the restored system. Kernels
+# live on the EFI partition, outside the snapshot, so if the snapshot's kernel
+# differs from the one in /boot, put it back and rebuild its initramfs.
+kernel_of() { # kernel_of <root> <pkgbase>: the modules version installed for it
+  local f
+  for f in "$1"/usr/lib/modules/*/pkgbase; do
+    if [[ -f $f && $(<"$f") == "$2" ]]; then basename "$(dirname "$f")"; return 0; fi
+  done
+}
+
+mount_top() { # mount_top: mounts the whole btrfs filesystem, prints where
+  local dev top
+  dev=$(findmnt -no SOURCE / | sed 's/\[.*\]$//')
+  top=$(mktemp -d /run/rollback.XXXXXX)
+  mount -o subvolid=5 "$dev" "$top"
+  printf '%s\n' "$top"
+}
+
+rollback_apply() { # rollback_apply <n> <dry-run 0|1>
+  local n=$1 dry=$2 top snap stamp new old sub b base ver desc date
+  [[ $EUID -eq 0 ]] || die "rolling back needs root"
+  [[ $(findmnt -no FSTYPE /) == btrfs ]] || die "the system isn't on btrfs"
+  [[ $(findmnt -no FSROOT /) == /@ ]] || die "the running system isn't the @ subvolume (already rolled back? restart first)"
+  top=$(mount_top)
+  # shellcheck disable=SC2064
+  trap "umount -R '$top' 2>/dev/null; rmdir '$top' 2>/dev/null" EXIT
+  snap=$top/@snapshots/$n/snapshot
+  [[ -d $snap ]] || die "there is no snapshot $n (see: $DISTRO_ID update snapshots)"
+  stamp=$(date +%Y%m%d-%H%M%S)
+  new=$top/@rollback-$stamp old=$top/@old-$stamp
+  desc=$(sed -n 's:.*<description>\(.*\)</description>.*:\1:p' "$top/@snapshots/$n/info.xml" 2>/dev/null)
+  date=$(sed -n 's:.*<date>\(.*\)</date>.*:\1:p' "$top/@snapshots/$n/info.xml" 2>/dev/null)
+
+  info "Snapshot $n (${date:-unknown date} UTC): ${desc:-no description}"
+  info "Plan:"
+  info "  1. copy snapshot $n into a new writable system"
+  info "  2. keep the system you're running as @old-$stamp ('$DISTRO_ID update rollback --clean' removes it later)"
+  info "  3. make the copy the system that starts next time"
+  for b in /boot/vmlinuz-*; do
+    [[ -f $b ]] || continue
+    base=${b#/boot/vmlinuz-}
+    ver=$(kernel_of "$snap" "$base")
+    if [[ -n $ver ]] && ! cmp -s "$b" "$snap/usr/lib/modules/$ver/vmlinuz"; then
+      info "  4. put kernel $ver ($base) back in /boot and rebuild its initramfs"
+    fi
+  done
+  if (( dry )); then info "(dry run: nothing changed)"; return 0; fi
+
+  btrfs -q subvolume snapshot "$snap" "$new"
+  # Renaming the subvolume that's mounted as / is fine: the mount holds it by id.
+  mv "$top/@" "$old"
+  mv "$new" "$top/@"
+  # Subvolumes nested inside the old system (e.g. /var/lib/machines) aren't in
+  # snapshots; move them across rather than leave them behind.
+  while read -r sub; do
+    [[ -n $sub ]] || continue
+    if [[ -e $top/@/$sub ]] && ! rmdir "$top/@/$sub" 2>/dev/null; then
+      info "left $sub in @old-$stamp (something is in its place)"; continue
+    fi
+    mkdir -p "$(dirname "$top/@/$sub")"
+    mv "$old/$sub" "$top/@/$sub"
+  done < <(btrfs subvolume list -o "$old" | awk '{ print $NF }' | sed "s|^@old-$stamp/||")
+
+  for b in /boot/vmlinuz-*; do
+    [[ -f $b ]] || continue
+    base=${b#/boot/vmlinuz-}
+    ver=$(kernel_of "$top/@" "$base")
+    [[ -n $ver ]] || continue
+    if ! cmp -s "$b" "$top/@/usr/lib/modules/$ver/vmlinuz"; then
+      info "putting back kernel $ver ($base)"
+      install -m644 "$top/@/usr/lib/modules/$ver/vmlinuz" "$b"
+      mount --bind /boot "$top/@/boot"
+      for d in proc sys dev run; do mount --rbind "/$d" "$top/@/$d"; done
+      chroot "$top/@" mkinitcpio -p "$base" >/dev/null
+      umount -R "$top/@/boot" "$top/@/proc" "$top/@/sys" "$top/@/dev" "$top/@/run" 2>/dev/null || true
+    fi
+  done
+  sync
+  info ""
+  info "Rolled back to snapshot $n. Restart to start the restored system."
+  info "The system you're running now is kept as @old-$stamp."
+}
+
+rollback_clean() {
+  local top olds o answer
+  [[ $EUID -eq 0 ]] || die "cleaning up needs root"
+  top=$(mount_top)
+  # shellcheck disable=SC2064
+  trap "umount '$top' 2>/dev/null; rmdir '$top' 2>/dev/null" EXIT
+  mapfile -t olds < <(find "$top" -mindepth 1 -maxdepth 1 -name '@old-*' -printf '%f\n' | sort)
+  if (( ${#olds[@]} == 0 )); then info "Nothing to clean up."; return 0; fi
+  info "Systems set aside by earlier rollbacks: ${olds[*]}"
+  read -rp "Delete them? [y/N] " answer
+  if [[ $answer != [yY]* ]]; then info "Kept."; return 0; fi
+  for o in "${olds[@]}"; do
+    # Nested subvolumes first, deepest first.
+    btrfs subvolume list -o "$top/$o" | awk '{ print $NF }' | sort -r | while read -r sub; do
+      btrfs -q subvolume delete "$top/$sub"
+    done
+    btrfs -q subvolume delete "$top/$o"
+  done
+  info "Deleted."
+}
+
 case ${1:-} in
-  "")
-    if [[ ! -t 0 ]]; then exec "/usr/bin/$DISTRO_ID" terminal launch -- "/usr/bin/$DISTRO_ID" update; fi
-    sudo pacman -Syu
-    # The package's pacman hook runs system migrations; user ones run now
-    # rather than waiting for the next login.
-    "/usr/bin/$DISTRO_ID" migrate --user
-    info ""; read -rp "Done. Press Enter to close." _ ;;
-  check)
-    if out=$(checkupdates 2>/dev/null); then
-      printf '%s\n' "$out"; info "$(wc -l <<<"$out") update(s) available"
-    else
-      info "up to date"
-    fi ;;
+  "") update_all "" ;;
+  --all) update_all 1 ;;
+  check) check ;;
+  snapshots) snapshots ;;
+  rollback)
+    case ${2:-} in
+      "") snapshots ;;
+      --clean) sudo "/usr/bin/$DISTRO_ID" update rollback-clean ;;
+      *)
+        [[ $2 =~ ^[0-9]+$ ]] || die "rollback needs a snapshot number (see: $DISTRO_ID update snapshots)"
+        sudo "/usr/bin/$DISTRO_ID" update rollback-apply "$2" --dry-run
+        if [[ ${3:-} != --dry-run ]]; then
+          read -rp "Roll back now? [y/N] " answer
+          if [[ $answer != [yY]* ]]; then info "Nothing changed."; exit 0; fi
+          sudo "/usr/bin/$DISTRO_ID" update rollback-apply "$2"
+        fi ;;
+    esac ;;
+  rollback-apply) rollback_apply "${2:?snapshot number}" "$([[ ${3:-} == --dry-run ]] && echo 1 || echo 0)" ;;
+  rollback-clean) rollback_clean ;;
   -h|--help) usage ;;
   *) die "unknown update command: $1" ;;
 esac
