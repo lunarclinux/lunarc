@@ -18,3 +18,7 @@ man-db
 man-pages
 less
 nano
+
+# Snapshots before and after every pacman transaction (rollback: `<id> update rollback`)
+snapper
+snap-pac

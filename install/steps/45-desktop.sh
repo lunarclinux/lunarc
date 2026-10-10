@@ -15,5 +15,7 @@ fi
 # A fresh install already has every change existing migrations would make.
 # Lockout policy and keyring at login: the same change existing installs get.
 in_target bash "/usr/share/$DISTRO_ID/migrations/system/20261010-1000-lockout-and-keyring.sh"
+# Snapshots before and after every update (rollback with `update rollback`).
+in_target env DISTRO_ID="$DISTRO_ID" bash "/usr/share/$DISTRO_ID/migrations/system/20261010-1210-snapshots.sh"
 in_target "/usr/bin/$DISTRO_ID" migrate --system --mark-all
 in_target systemctl enable greetd.service power-profiles-daemon.service bluetooth.service >/dev/null 2>&1

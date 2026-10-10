@@ -31,6 +31,7 @@ case $part in
     put "$src/bin/lib.sh" "$dest/usr/lib/$id/lib.sh"
     put "$src/bin/agent-usage.jq" "$dest/usr/lib/$id/agent-usage.jq"
     put "$src/distro.conf" "$dest/usr/lib/$id/distro.conf"
+    put "$src/repo.conf" "$dest/usr/lib/$id/repo.conf"
     for cmd in "$src"/bin/commands/*; do put "$cmd" "$dest/usr/lib/$id/commands/${cmd##*/}" 755; done
 
     # Defaults (Hyprland, Noctalia, plugins, agent guides), themes, new users' configs.
