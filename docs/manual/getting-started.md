@@ -89,6 +89,14 @@ nano is installed as well, with colours, line numbers and Ctrl+S to save. Prefer
 - The system's name: `/etc/os-release` (`ID=lunarc`, `ID_LIKE=arch`), rewritten by a pacman hook whenever Arch's `filesystem` package updates.
 - Package signing: Lunarc's packages are signed; `lunarc-keyring` holds the key pacman checks them against (`pacman-key --list-keys 798A81A89261BC4E49D0784BFD4EE07A81DE46AE`). Lunarc's own repository isn't hosted yet, so for now its packages come from the installer only.
 
+## Locking the screen
+SUPER+L locks the screen and plays the screensaver behind the lock. Start typing
+your password to come back: a ring appears while you type, turns red for a
+wrong password, and fades after a few seconds. The computer also locks after 5
+minutes idle and before it sleeps. If the lock screen ever hangs, press
+CTRL+ALT+L to start it again. To use Noctalia's lock screen instead, set
+`lock.style = noctalia` in `~/.config/lunarc/settings`.
+
 ## Passwords, lock-outs and staying awake
 
 - Wrong passwords: after 10 wrong tries in a row (lock screen, sudo), the account waits 2 minutes before accepting the password again.
