@@ -204,11 +204,15 @@ end
 -- Typing at the top level also searches inside the groups, so "screenshot"
 -- or "steam" finds the item directly: every static item, and every app in the
 -- install catalog. They rank just below a group with an equal match.
+local function contains(text, filter)
+  return string.find(string.lower(text), string.lower(filter), 1, true) ~= nil
+end
+
 local function nested(filter)
   local out = {}
   if string.len(filter) < 2 then return out end
   for _, r in ipairs(menuRows()) do
-    if r.group ~= "" and r.title ~= "" and string.sub(r.cmd, 1, 5) ~= "menu:" then
+    if r.group ~= "" and r.title ~= "" and string.sub(r.cmd, 1, 5) ~= "menu:" and contains(r.title, filter) then
       local score = noctalia.fuzzyScore(filter, r.title)
       if score then
         local it = item(r.title, r.group .. (r.desc ~= "" and (" · " .. r.desc) or ""), r.cmd,
@@ -220,7 +224,7 @@ local function nested(filter)
   end
   for _, a in ipairs(catalogRows()) do
     local score = noctalia.fuzzyScore(filter, a.name .. " " .. a.id)
-    if score then
+    if score and (contains(a.name, filter) or contains(a.id, filter)) then
       local it = item(a.name, "Install" .. sep .. label(a.cat), "term: " .. cli .. " app install " .. a.id,
         categoryGlyph[a.cat] or "download")
       it.score = score - 2

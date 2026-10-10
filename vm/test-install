@@ -292,6 +292,22 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       screenshot reminders
       "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg panel-close >/dev/null" || true
     fi
+    if "$here/ssh" "$vm" "$user" -- "test -x /usr/lib/$id/commands/keyboard"; then
+      check "lock-outs are short"          "grep -qx 'deny = 10' /etc/security/faillock.conf && grep -qx 'unlock_time = 120' /etc/security/faillock.conf && for i in 1 2 3 4; do echo wrong | sudo -S -k -p '' true 2>/dev/null; done; echo '$password' | sudo -S -k -p '' true"
+      check "login screen unlocks the keyring" "grep -q 'pam_gnome_keyring.so auto_start' /etc/pam.d/greetd"
+      if (( encrypt )); then
+        check "keyring needs no password"  "$hypr export DBUS_SESSION_BUS_ADDRESS=unix:path=\$XDG_RUNTIME_DIR/bus; test -f ~/.local/share/keyrings/login.keyring && echo s3cret | timeout 10 secret-tool store --label=install-test app install-test && timeout 10 secret-tool lookup app install-test | grep -qx s3cret && ! hyprctl clients -j | jq -e '.[] | select(.class == \"gcr-prompter\")' >/dev/null"
+      else
+        check "no passwordless keyring"    "! test -e ~/.local/share/keyrings/login.keyring || ! grep -q '^\[keyring\]' ~/.local/share/keyrings/login.keyring"
+      fi
+      check "menu searches inside groups" "grep -q 'local function nested' /usr/share/$id/default/noctalia-plugins/utilities/menu.luau && $hypr noctalia msg panel-open launcher '/m steam' >/dev/null && sleep 1 && noctalia msg status | jq -e '.activePanelId == \"launcher\"' >/dev/null"
+      screenshot menu-search
+      "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg panel-close >/dev/null" || true
+      check "keyboard layouts switch"      "$hypr $id keyboard add de >/dev/null && sleep 1 && hyprctl devices -j | jq -e '[.keyboards[] | select(.main)][0].layout == \"us,de\"' >/dev/null && $id keyboard next && sleep 1 && hyprctl devices -j | jq -r '.keyboards[] | select(.main) | .active_keymap' | grep -q German"
+      screenshot keyboard-layout
+      check "keyboard layout removed"      "$hypr $id keyboard remove de >/dev/null && sleep 1 && hyprctl devices -j | jq -e '[.keyboards[] | select(.main)][0].layout == \"us\"' >/dev/null"
+      check "idle: screensaver stays up; inhibitors respected" "$(sed "s/@ID@/$id/g" "$here/checks/idle.sh")"
+    fi
     check "agent list knows claude"       "$id agent list | grep -qE '^\\* claude'"
     check "update check runs"             "$id update check >/dev/null"
   fi

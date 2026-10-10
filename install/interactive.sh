@@ -148,6 +148,9 @@ styled_questions() {
     summary_line "Time zone" "$TIMEZONE"
     summary_line "Encryption" "$( ((ENCRYPT)) && echo on || echo off)"
     summary_line "Log in automatically" "$( ((AUTOLOGIN)) && echo yes || echo no)"
+    if (( AUTOLOGIN && ! ENCRYPT )); then
+      summary_line "" "a keyring password is asked for once at each login"
+    fi
     printf '\n'
     if GUM_CONFIRM_PROMPT_FOREGROUND=$RED GUM_CONFIRM_SELECTED_BACKGROUND=$RED \
        ask --default=false --affirmative "Erase and install" --negative "Start over" "Erase ${DISK#/dev/} and install $DISTRO_NAME?"; then
