@@ -1,0 +1,10 @@
+[Plymouth Theme]
+Name=@DISTRO_NAME@
+Description=@DISTRO_NAME@ boot splash: the crescent mark on a night sky, with a progress arc and a themed disk passphrase prompt.
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/@DISTRO_ID@
+ScriptFile=/usr/share/plymouth/themes/@DISTRO_ID@/@DISTRO_ID@.script
+Font=Inter 13
+ConsoleLogBackgroundColor=0x0b1020

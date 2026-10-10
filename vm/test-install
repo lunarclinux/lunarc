@@ -142,6 +142,10 @@ if "$here/ssh" "$vm" "$user" -- "pacman -Q $id >/dev/null 2>&1"; then
   check "boot menu has the wallpaper"   "echo '$password' | sudo -S -p '' sh -c 'grep -q \"^wallpaper: boot():/$id/wallpaper.png\" /boot/limine.conf && test -s /boot/$id/wallpaper.png'"
   check "console uses the theme palette" "grep -q 'vt.default_red=11,' /proc/cmdline"
   check "login screen is themed"        "grep -q -- \"--theme 'border=yellow\" /etc/greetd/$id.toml"
+  check "boot splash is the distro theme" "test -f /usr/share/plymouth/themes/$id/$id.script && [ \"\$(plymouth-set-default-theme)\" = $id ]"
+  check "splash hook in the initramfs"   "grep -hE '^HOOKS=' /etc/mkinitcpio.conf.d/$id-hooks.conf | grep -qE 'systemd plymouth'"
+  check "initramfs carries the splash"   "echo '$password' | sudo -S -p '' lsinitcpio /boot/initramfs-linux.img | grep -q 'usr/share/plymouth/themes/$id/$id.script'"
+  check "splash on the boot command line" "grep -qw splash /proc/cmdline"
 fi
 if [[ -n $iso ]]; then
   check "installed from the ISO's installer" "pacman -Q $id | grep -q ."

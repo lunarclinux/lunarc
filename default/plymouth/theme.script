@@ -1,0 +1,203 @@
+# @DISTRO_NAME@ boot splash (Plymouth script module).
+# The crescent mark sits at the top of a dotted arc, like the moon in the
+# default wallpaper; the arc's dots light up left to right as the boot
+# progresses. A disk passphrase prompt appears under the mark when needed.
+
+# --- Sky ---------------------------------------------------------------------
+Window.SetBackgroundTopColor(0.043, 0.063, 0.125);     # #0B1020
+Window.SetBackgroundBottomColor(0.075, 0.106, 0.192);  # #131B31
+
+wx = Window.GetX();
+wy = Window.GetY();
+ww = Window.GetWidth();
+wh = Window.GetHeight();
+
+# Sharper images on high-resolution screens.
+suffix = "";
+scale = 1;
+font_label = "Inter 15";
+font_small = "Inter 12";
+if (wh >= 1800) {
+  suffix = "@2x";
+  scale = 2;
+  font_label = "Inter 30";
+  font_small = "Inter 24";
+}
+
+cx = wx + ww / 2;
+cy = wy + wh * 0.40;
+
+# A few stars at fixed places, each twinkling at its own pace.
+sx[0] = 0.12; sy[0] = 0.18;   sx[1] = 0.27; sy[1] = 0.09;
+sx[2] = 0.36; sy[2] = 0.27;   sx[3] = 0.58; sy[3] = 0.12;
+sx[4] = 0.71; sy[4] = 0.24;   sx[5] = 0.86; sy[5] = 0.15;
+sx[6] = 0.08; sy[6] = 0.47;   sx[7] = 0.92; sy[7] = 0.44;
+sx[8] = 0.19; sy[8] = 0.66;   sx[9] = 0.81; sy[9] = 0.63;
+sx[10] = 0.45; sy[10] = 0.06; sx[11] = 0.64; sy[11] = 0.33;
+star_count = 12;
+star_image = Image("star" + suffix + ".png");
+for (i = 0; i < star_count; i++) {
+  stars[i].sprite = Sprite(star_image);
+  stars[i].sprite.SetPosition(wx + ww * sx[i], wy + wh * sy[i], 0);
+  stars[i].phase = i * 1.7;
+  stars[i].speed = 0.9 + (i - Math.Int(i / 4) * 4) * 0.35;   # four paces
+}
+
+# --- The mark and its glow ---------------------------------------------------
+glow.image = Image("glow" + suffix + ".png");
+glow.sprite = Sprite(glow.image);
+glow.sprite.SetPosition(cx - glow.image.GetWidth() / 2, cy - glow.image.GetHeight() / 2, 2);
+
+mark.image = Image("mark" + suffix + ".png");
+mark.sprite = Sprite(mark.image);
+mark.sprite.SetPosition(cx - mark.image.GetWidth() / 2, cy - mark.image.GetHeight() / 2, 4);
+
+# --- Progress arc ------------------------------------------------------------
+# Dots on a circle whose top passes through the mark; the dots near the top
+# are hidden behind the glow, so the arc seems to run behind the moon.
+arc_radius = ww * 0.17;
+if (arc_radius > wh * 0.34) arc_radius = wh * 0.34;
+arc_cy = cy + arc_radius;
+arc_count = 41;
+dot_image = Image("dot" + suffix + ".png");
+hidden_radius = glow.image.GetWidth() * 0.28;
+for (i = 0; i < arc_count; i++) {
+  angle = 3.14159 - 3.14159 * i / (arc_count - 1);   # left end to right end
+  ax = cx + arc_radius * Math.Cos(angle);
+  ay = arc_cy - arc_radius * Math.Sin(angle);
+  dots[i].sprite = Sprite(dot_image);
+  dots[i].sprite.SetPosition(ax - dot_image.GetWidth() / 2, ay - dot_image.GetHeight() / 2, 1);
+  dots[i].visible = 1;
+  dx = ax - cx;
+  dy = ay - cy;
+  if (Math.Sqrt(dx * dx + dy * dy) < hidden_radius) dots[i].visible = 0;
+  dots[i].sprite.SetOpacity(0.16 * dots[i].visible);
+}
+
+progress_lit = 0;
+progress_value = 0;
+fun show_progress(fraction) {
+  lit = Math.Int(fraction * arc_count);
+  for (i = 0; i < arc_count; i++) {
+    opacity = 0.16;
+    if (i < lit) opacity = 0.9;
+    if (global.status != "normal") opacity = opacity * 0.35;
+    dots[i].sprite.SetOpacity(opacity * dots[i].visible);
+  }
+  global.progress_lit = lit;
+}
+
+fun progress_callback(duration, progress) {
+  global.progress_value = progress;
+  show_progress(progress);
+}
+Plymouth.SetBootProgressFunction(progress_callback);
+
+# Shutdown and reboot have no progress to show.
+mode = Plymouth.GetMode();
+if (mode == "shutdown" || mode == "reboot") {
+  for (i = 0; i < arc_count; i++) dots[i].sprite.SetOpacity(0);
+}
+
+# --- Animation ---------------------------------------------------------------
+time = 0;
+fun refresh_callback() {
+  global.time += 1 / 50;
+  # The glow breathes slowly (about every five seconds).
+  glow.sprite.SetOpacity(0.6 + 0.4 * Math.Sin(global.time * 1.25));
+  for (i = 0; i < star_count; i++) {
+    twinkle = (Math.Sin(global.time * stars[i].speed + stars[i].phase) + 1) / 2;
+    stars[i].sprite.SetOpacity(0.15 + 0.6 * twinkle);
+  }
+}
+Plymouth.SetRefreshFunction(refresh_callback);
+
+# --- Disk passphrase ---------------------------------------------------------
+status = "normal";
+label_color_r = 0.902; label_color_g = 0.886; label_color_b = 0.839;   # #E6E2D6
+hint_color_r = 0.639; hint_color_g = 0.671; hint_color_b = 0.769;      # #A3ABC4
+
+fun dialog_setup() {
+  local.top = cy + mark.image.GetHeight() / 2 + 44 * scale;
+
+  local.label.image = Image.Text("Disk passphrase", label_color_r, label_color_g, label_color_b, 1, font_label);
+  local.label.sprite = Sprite(local.label.image);
+  local.label.sprite.SetPosition(cx - local.label.image.GetWidth() / 2, local.top, 20);
+
+  local.entry.image = Image("entry" + suffix + ".png");
+  local.entry.sprite = Sprite(local.entry.image);
+  local.entry.x = cx - local.entry.image.GetWidth() / 2;
+  local.entry.y = local.top + local.label.image.GetHeight() + 14 * scale;
+  local.entry.sprite.SetPosition(local.entry.x, local.entry.y, 20);
+
+  local.hint.image = Image.Text("Type it and press Enter", hint_color_r, hint_color_g, hint_color_b, 1, font_small);
+  local.hint.sprite = Sprite(local.hint.image);
+  local.hint.sprite.SetPosition(cx - local.hint.image.GetWidth() / 2, local.entry.y + local.entry.image.GetHeight() + 12 * scale, 20);
+
+  global.dialog.label = local.label;
+  global.dialog.entry = local.entry;
+  global.dialog.hint = local.hint;
+  global.dialog.bullet_image = Image("bullet" + suffix + ".png");
+  global.dialog.bullet_count = 0;
+}
+
+fun dialog_opacity(opacity) {
+  dialog.label.sprite.SetOpacity(opacity);
+  dialog.entry.sprite.SetOpacity(opacity);
+  dialog.hint.sprite.SetOpacity(opacity);
+  for (i = 0; i < dialog.bullet_count; i++) dialog.bullets[i].sprite.SetOpacity(0);
+}
+
+fun display_normal_callback() {
+  global.status = "normal";
+  if (global.dialog) dialog_opacity(0);
+  show_progress(global.progress_value);
+}
+
+fun display_password_callback(prompt, bullets) {
+  global.status = "password";
+  if (!global.dialog) dialog_setup();
+  dialog_opacity(1);
+  show_progress(global.progress_value);
+
+  # Bullets centred in the field; past what fits, the field just stays full.
+  local.size = dialog.bullet_image.GetWidth();
+  local.gap = 6 * scale;
+  local.fits = Math.Int((dialog.entry.image.GetWidth() - 28 * scale) / (local.size + local.gap));
+  local.shown = bullets;
+  if (local.shown > local.fits) local.shown = local.fits;
+  local.width = local.shown * (local.size + local.gap) - local.gap;
+  local.x0 = cx - local.width / 2;
+  local.y = dialog.entry.y + dialog.entry.image.GetHeight() / 2 - local.size / 2;
+  for (i = 0; i < local.shown; i++) {
+    if (!dialog.bullets[i]) {
+      dialog.bullets[i].sprite = Sprite(dialog.bullet_image);
+    }
+    dialog.bullets[i].sprite.SetPosition(local.x0 + i * (local.size + local.gap), local.y, 21);
+    dialog.bullets[i].sprite.SetOpacity(1);
+  }
+  for (i = local.shown; i < dialog.bullet_count; i++) dialog.bullets[i].sprite.SetOpacity(0);
+  if (local.shown > dialog.bullet_count) global.dialog.bullet_count = local.shown;
+}
+
+Plymouth.SetDisplayNormalFunction(display_normal_callback);
+Plymouth.SetDisplayPasswordFunction(display_password_callback);
+
+# --- Messages (fsck, errors) -------------------------------------------------
+message_sprite = Sprite();
+fun display_message_callback(text) {
+  local.image = Image.Text(text, hint_color_r, hint_color_g, hint_color_b, 1, font_small);
+  message_sprite.SetImage(local.image);
+  message_sprite.SetPosition(cx - local.image.GetWidth() / 2, wy + wh * 0.9, 30);
+  message_sprite.SetOpacity(1);
+}
+fun hide_message_callback(text) {
+  message_sprite.SetOpacity(0);
+}
+Plymouth.SetDisplayMessageFunction(display_message_callback);
+Plymouth.SetHideMessageFunction(hide_message_callback);
+
+fun quit_callback() {
+  for (i = 0; i < arc_count; i++) dots[i].sprite.SetOpacity(0);
+}
+Plymouth.SetQuitFunction(quit_callback);

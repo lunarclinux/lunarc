@@ -9,7 +9,9 @@ Working name: Lunarc (see decision record 0016); the command is `lunarc`.
 3. To install, open **Install Lunarc** from the launcher (SUPER+Space) and answer the questions: disk (erased), user name and password, computer name, time zone, disk encryption (recommended), automatic login. (Without the desktop: Ctrl+Alt+F2 gives a root shell; run `install-lunarc` there.)
 4. Restart and remove the stick.
 
-Graphics drivers are picked from the hardware: AMD, Intel and NVIDIA (GTX 16xx / RTX 20xx and newer).
+Graphics drivers are picked from the hardware: AMD, Intel and NVIDIA (GTX 16xx / RTX 20xx and newer). On a laptop with both integrated and NVIDIA graphics, the integrated GPU drives the screens and you start an app on the NVIDIA GPU with `prime-run <app>`. Older NVIDIA cards keep the open-source driver (nouveau); the older proprietary driver is only in the AUR.
+
+The installed system boots to a splash screen (the crescent on a night sky); an encrypted disk asks for its passphrase there. To see boot messages instead, pick the "(fallback initramfs)" entry in the boot menu.
 
 ## Keys
 

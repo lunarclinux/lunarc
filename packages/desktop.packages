@@ -35,3 +35,6 @@ qt6ct
 grim
 wl-clipboard
 playerctl
+
+# Boot splash and the themed disk passphrase prompt (theme in the distro package)
+plymouth
