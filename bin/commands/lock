@@ -3,17 +3,13 @@
 set -uo pipefail
 source "$DISTRO_LIB/lib.sh"
 
-grace=$(setting lock.grace 5)
-
 usage() {
   cat <<USAGE
 Usage: $DISTRO_ID lock [--idle | watch]
 
   (none)    lock now: the screensaver plays behind the lock; start typing your
             password to unlock
-  --idle    the idle timer's lock: for the first $grace seconds any key or a
-            big mouse move unlocks without the password (lock.grace = 0 turns
-            this off)
+  --idle    the idle timer's lock (the same lock)
   watch     lock before the computer sleeps (runs as a user service)
 
 The lock is swaylock-plugin running the screensaver through windowtolayer.
@@ -35,7 +31,10 @@ colour() {
 
 # The screensaver lock. --daemonize makes swaylock-plugin return only once the
 # compositor has confirmed the session lock, so exit status 0 means locked.
-screensaver_lock() { # screensaver_lock <grace seconds>
+# No --grace: in swaylock-plugin 1.8.7 ending a grace period early (SIGUSR2,
+# or its sleep watcher) left the locker spinning and no longer checking
+# passwords, so every lock asks for the password.
+screensaver_lock() {
   if ! command -v swaylock-plugin >/dev/null || ! command -v windowtolayer >/dev/null; then return 1; fi
   local gold text night violet wrong
   gold=$(colour mPrimary ebc77a) text=$(colour mOnSurface e6e2d6) night=$(colour mSurface 0b1020)
@@ -68,18 +67,17 @@ screensaver_lock() { # screensaver_lock <grace seconds>
     --text-wrong-color "$wrong" --text-caps-lock-color "$gold"
     --layout-bg-color "${night}cc" --layout-border-color 00000000 --layout-text-color "$text"
   )
-  if (( $1 > 0 )); then args+=(--grace "$1" --pointer-hysteresis 40); fi
   timeout 10 swaylock-plugin "${args[@]}" >/dev/null 2>&1
 }
 
 # Lock, falling back until something is locked; never return quietly unlocked.
-lock_now() { # lock_now <grace seconds>
+lock_now() {
   # A running locker holds the lock (if it died, Hyprland keeps the session
   # locked), so when a second lock is refused while one runs, we're locked.
   local before=0
   if pgrep -x swaylock-plugin >/dev/null; then before=1; fi
   if [[ $(setting lock.style screensaver) != noctalia ]]; then
-    if screensaver_lock "$1"; then return 0; fi
+    if screensaver_lock; then return 0; fi
     if (( before )) && pgrep -x swaylock-plugin >/dev/null; then return 0; fi
   fi
   if noctalia msg session lock >/dev/null 2>&1; then return 0; fi
@@ -90,8 +88,7 @@ lock_now() { # lock_now <grace seconds>
 }
 
 # Lock before sleep: hold a "delay" inhibitor so logind waits for us, lock when
-# it announces sleep, end any idle grace period, and only then let it go; take
-# it again after resume.
+# it announces sleep, and only then let it go; take it again after resume.
 watch() {
   local inhibitor=0 line
   inhibit() {
@@ -104,9 +101,7 @@ watch() {
   while read -r line <&"${logind[0]}"; do
     case $line in
       *"PrepareForSleep (true"*)
-        lock_now 0 || true
-        # No unlock without the password after waking up.
-        pkill -USR2 -x swaylock-plugin 2>/dev/null || true
+        lock_now || true
         # Ending its child ends systemd-inhibit, which releases the inhibitor.
         pkill -P "$inhibitor" 2>/dev/null || true ;;
       *"PrepareForSleep (false"*)
@@ -117,8 +112,7 @@ watch() {
 
 case ${1:-} in
   watch) watch ;;
-  --idle) lock_now "$grace" ;;
-  "") lock_now 0 ;;
+  --idle|"") lock_now ;;
   -h|--help) usage ;;
   *) die "unknown lock option: $1" ;;
 esac
