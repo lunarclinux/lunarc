@@ -19,6 +19,7 @@ work=$(mktemp -d /var/tmp/$DISTRO_ID-iso.XXXXXX)
 trap 'rm -rf "$work"' EXIT
 profile=$work/profile
 cp -r /usr/share/archiso/configs/releng "$profile"
+sed -e 's/#.*//' -e '/^[[:space:]]*$/d' "$root/iso/installer.packages" >> "$profile/packages.x86_64"
 
 # Identity and boot: UEFI only, like the installer.
 date_stamp=$(date --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y%m)

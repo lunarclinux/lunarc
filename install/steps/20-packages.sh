@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# title: Installing the system
 # Install the base system and the distro packages into the target. Sourced by install.sh.
 repo=$root/pkg/out/repo
 [[ -f $repo/$DISTRO_REPO.db ]] || die "no distro packages in $repo; build them first with pkg/build"

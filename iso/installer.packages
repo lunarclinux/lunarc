@@ -1,0 +1,3 @@
+# Extra packages on the live ISO for the installer itself (added to releng's
+# list by iso/build). The installer works without them, just plainer.
+gum

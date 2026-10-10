@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# title: Setting up the desktop
 # Machine-specific desktop setup; the files themselves come from the distro
 # packages. Sourced by install.sh.
 if [[ $AUTOLOGIN == 1 ]]; then

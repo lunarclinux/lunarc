@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# title: Adding graphics drivers
 # Graphics drivers for the GPUs present. Sourced by install.sh.
 # PCI display devices (class 0x03xxxx), by vendor: 1002 AMD, 8086 Intel, 10de NVIDIA.
 gpus=$(for dev in /sys/bus/pci/devices/*; do

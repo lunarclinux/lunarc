@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# title: Creating your account
 # Admin user, sudo, optional SSH key. Sourced by install.sh.
 in_target useradd -m -G wheel -s /bin/bash "$USERNAME"
 printf '%s:%s\n' "$USERNAME" "$PASSWORD" | in_target chpasswd
