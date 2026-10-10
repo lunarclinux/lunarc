@@ -58,8 +58,9 @@ case $part in
     put "$src/etc/systemd/user/first-login.service" "$units/$id-first-login.service"
     put "$src/etc/systemd/user/crash-watch.service" "$units/$id-crash-watch.service"
     put "$src/etc/systemd/user/migrate.service" "$units/$id-migrate.service"
+    put "$src/etc/systemd/user/lock-watch.service" "$units/$id-lock-watch.service"
     install -d "$units/graphical-session.target.wants"
-    for unit in noctalia.service "$id-first-login.service" "$id-crash-watch.service" "$id-migrate.service"; do
+    for unit in noctalia.service "$id-first-login.service" "$id-crash-watch.service" "$id-migrate.service" "$id-lock-watch.service"; do
       ln -s "../$unit" "$units/graphical-session.target.wants/$unit"
     done
 

@@ -7,21 +7,23 @@ polkit_agent = true          # Noctalia's own password prompt, themed like the r
 telemetry_enabled = false
 setup_wizard_enabled = false  # the distro applies its own theme and settings at first login
 
-# Screensaver after 5 minutes idle, lock at 10, screens off a minute later.
+# After 5 minutes idle: lock, with the screensaver playing behind the lock
+# (`@DISTRO_ID@ lock --idle`: a key within the first few seconds unlocks without
+# the password). Screens off at 11 minutes. Noctalia's own lock step stays off;
+# it is the fallback the lock command uses if its lock screen can't start.
 [idle]
 behavior_order = ["screensaver", "lock", "screen-off"]
 
 [idle.behavior.screensaver]
 timeout = 300
 action = "command"
-command = "@DISTRO_ID@ screensaver start"
-resume_command = "@DISTRO_ID@ screensaver stop --idle"
+command = "@DISTRO_ID@ lock --idle"
 enabled = true
 
 [idle.behavior.lock]
 timeout = 600
 action = "lock"
-enabled = true
+enabled = false
 
 [idle.behavior.screen-off]
 timeout = 660

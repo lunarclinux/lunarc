@@ -1,0 +1,13 @@
+# Locks the screen before the computer sleeps (see `@DISTRO_ID@ lock --help`).
+[Unit]
+Description=Lock before sleep
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=/usr/bin/@DISTRO_ID@ lock watch
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target
