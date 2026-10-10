@@ -103,9 +103,11 @@ lock_now() {
     pgrep -n -x swaylock-plugin > "$state"
     return 0
   fi
-  if noctalia msg session lock >/dev/null 2>&1; then return 0; fi
-  loginctl lock-session 2>/dev/null
-  notify-send -u critical -a "$DISTRO_NAME" "Couldn't lock the screen" \
+  # Every step is time-limited: a hung shell or notification daemon must not
+  # leave this waiting instead of reaching the next fallback.
+  if timeout 5 noctalia msg session lock >/dev/null 2>&1; then return 0; fi
+  timeout 5 loginctl lock-session 2>/dev/null
+  timeout 5 notify-send -u critical -a "$DISTRO_NAME" "Couldn't lock the screen" \
     "Neither lock screen started. Lock again with SUPER+L, or log out." 2>/dev/null
   return 1
 }
