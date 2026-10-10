@@ -72,6 +72,12 @@ case $part in
     put "$src/default/branding/logo-symbolic.svg" "$dest/usr/share/icons/hicolor/symbolic/apps/$id-logo-symbolic.svg"
     put "$src/default/branding/logo.svg" "$dest/usr/share/pixmaps/$id-logo.svg"
     put "$src/etc/pacman.d/hooks/boot-wallpaper.hook" "$dest/usr/share/libalpm/hooks/$id-boot-wallpaper.hook"
+    # The boot splash (Plymouth script theme): its script and theme file get the
+    # name substituted; the images are copied as they are.
+    splash=$dest/usr/share/plymouth/themes/$id
+    put "$src/default/plymouth/theme.plymouth" "$splash/$id.plymouth"
+    put "$src/default/plymouth/theme.script" "$splash/$id.script"
+    for image in "$src"/default/plymouth/*.png; do install -Dm644 "$image" "$splash/${image##*/}"; done
     # The system's name (os-release), kept in place by a hook.
     put "$src/etc/os-release" "$dest/usr/share/$id/os-release"
     put "$src/etc/pacman.d/hooks/os-release.hook" "$dest/usr/share/libalpm/hooks/$id-os-release.hook"

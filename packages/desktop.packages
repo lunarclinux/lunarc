@@ -46,3 +46,6 @@ tesseract-data-eng
 zbar
 gpu-screen-recorder
 wtype
+
+# Boot splash and the themed disk passphrase prompt (theme in the distro package)
+plymouth

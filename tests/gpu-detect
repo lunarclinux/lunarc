@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# Checks the installer's graphics detection (install/gpu.sh) against fake /sys
+# trees for the machines it has to tell apart. No root, no hardware.
+#
+#   tests/gpu-detect
+set -euo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd)
+source "$root/install/gpu.sh"
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+fails=0
+
+# machine <name> <pci device spec>...   spec: vendor:device:class[:boot_vga]
+machine() {
+  local dir=$work/$1 spec vendor device class boot n=0
+  shift
+  mkdir -p "$dir/sys/bus/pci/devices"
+  for spec in "$@"; do
+    IFS=: read -r vendor device class boot <<<"$spec"
+    n=$((n + 1))
+    mkdir -p "$dir/sys/bus/pci/devices/0000:0$n:00.0"
+    echo "$vendor" > "$dir/sys/bus/pci/devices/0000:0$n:00.0/vendor"
+    echo "$device" > "$dir/sys/bus/pci/devices/0000:0$n:00.0/device"
+    echo "$class" > "$dir/sys/bus/pci/devices/0000:0$n:00.0/class"
+    if [[ -n $boot ]]; then echo "$boot" > "$dir/sys/bus/pci/devices/0000:0$n:00.0/boot_vga"; fi
+  done
+  printf '%s\n' "$dir"
+}
+
+expect() { # expect <description> <expected> <actual>
+  if [[ $2 == "$3" ]]; then
+    printf 'ok    %s\n' "$1"
+  else
+    printf 'FAIL  %s: expected "%s", got "%s"\n' "$1" "$2" "$3"
+    fails=$((fails + 1))
+  fi
+}
+
+mode_of() { nvidia_mode "$(gpu_devices "$1")"; }
+
+m=$(machine amd 0x1002:0x744c:0x030000:1)
+expect "AMD desktop: no NVIDIA" none "$(mode_of "$m")"
+
+m=$(machine rtx4070 0x10de:0x2786:0x030000:1 0x10de:0x22bc:0x040300)
+expect "RTX 4070 desktop (plus its HDMI audio function)" primary "$(mode_of "$m")"
+
+m=$(machine gtx1650 0x10de:0x1f82:0x030000:1)
+expect "GTX 1650 (Turing, lowest supported family)" primary "$(mode_of "$m")"
+
+m=$(machine hybrid 0x8086:0xa7a0:0x030000:1 0x10de:0x28a0:0x030200)
+expect "Intel + RTX laptop: NVIDIA is a 3D controller" offload "$(mode_of "$m")"
+
+m=$(machine hybrid-amd 0x1002:0x15bf:0x030000:1 0x10de:0x2860:0x030200)
+expect "AMD + RTX laptop" offload "$(mode_of "$m")"
+
+m=$(machine mux 0x8086:0xa7a0:0x030000:0 0x10de:0x28a0:0x030000:1)
+expect "laptop with the firmware switch on NVIDIA" primary "$(mode_of "$m")"
+
+m=$(machine gtx1060 0x10de:0x1c03:0x030000:1)
+expect "GTX 1060 (Pascal): too old for the current driver" legacy "$(mode_of "$m")"
+
+m=$(machine volta 0x10de:0x1db6:0x030200)
+expect "Tesla V100 (Volta): too old" legacy "$(mode_of "$m")"
+
+m=$(machine none 0x8086:0x15f3:0x020000)
+expect "no display devices" none "$(mode_of "$m")"
+
+# Kernel module packages for the installed kernels.
+mkdir -p "$work/k1/usr/lib/modules/6.17.1-arch1-1" "$work/k2/usr/lib/modules/6.17.1-arch1-1" "$work/k2/usr/lib/modules/6.12.50-1-lts"
+echo linux > "$work/k1/usr/lib/modules/6.17.1-arch1-1/pkgbase"
+echo linux > "$work/k2/usr/lib/modules/6.17.1-arch1-1/pkgbase"
+echo linux-lts > "$work/k2/usr/lib/modules/6.12.50-1-lts/pkgbase"
+expect "stock kernel: prebuilt module" nvidia-open "$(nvidia_kernel_packages "$work/k1" | tr '\n' ' ' | sed 's/ $//')"
+expect "stock + LTS kernels: DKMS and headers" "nvidia-open-dkms linux-headers linux-lts-headers" \
+  "$(nvidia_kernel_packages "$work/k2" | tr '\n' ' ' | sed 's/ $//')"
+
+if (( fails )); then echo "$fails failed"; exit 1; fi
+echo "all passed"

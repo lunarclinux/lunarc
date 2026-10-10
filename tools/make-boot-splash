@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Renders the boot splash's images (Plymouth reads PNG, not SVG): the crescent
+# mark, its glow, the progress-arc dot, a star and the passphrase field, each
+# at 1x and 2x. Run after changing default/branding/mark.svg or the palette.
+# Needs rsvg-convert (librsvg).
+#
+#   tools/make-boot-splash
+set -euo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd)
+out=$root/default/plymouth
+mkdir -p "$out"
+
+# render <name> <width> <height> <svg body, drawn in a width x height box at 1x>
+render() {
+  local name=$1 w=$2 h=$3 body=$4 scale suffix
+  for scale in 1 2; do
+    suffix=""; if (( scale == 2 )); then suffix="@2x"; fi
+    rsvg-convert -w $((w * scale)) -h $((h * scale)) -o "$out/$name$suffix.png" /dev/stdin <<SVG
+<svg xmlns="http://www.w3.org/2000/svg" width="$w" height="$h" viewBox="0 0 $w $h">$body</svg>
+SVG
+  done
+}
+
+# The crescent c, 96 px tall at 1x (the mark's own box is 80 x 100).
+mark_path=$(grep -o ' d="[^"]*"' "$root/default/branding/mark.svg" | head -1)
+render mark 77 96 "<g transform=\"scale(0.96)\"><path fill=\"#EBC77A\"$mark_path/></g>"
+
+# Soft gold glow behind the mark; the script pulses its opacity.
+render glow 320 320 '<defs><radialGradient id="g"><stop offset="0" stop-color="#F3E3B5" stop-opacity="0.38"/><stop offset="0.45" stop-color="#EBC77A" stop-opacity="0.12"/><stop offset="1" stop-color="#EBC77A" stop-opacity="0"/></radialGradient></defs><circle cx="160" cy="160" r="160" fill="url(#g)"/>'
+
+# One point of the progress arc (lit = full opacity, unlit = dimmed by the script).
+render dot 6 6 '<circle cx="3" cy="3" r="2.6" fill="#EBC77A"/>'
+
+# A star for the sky (the script twinkles it).
+render star 4 4 '<circle cx="2" cy="2" r="1.6" fill="#E6E2D6"/>'
+
+# The passphrase field and its bullets.
+render entry 320 44 '<rect x="0.75" y="0.75" width="318.5" height="42.5" rx="10" fill="#131B31" stroke="#2E3A5C" stroke-width="1.5"/>'
+render bullet 10 10 '<circle cx="5" cy="5" r="4" fill="#EBC77A"/>'
+
+ls -l "$out"/*.png
