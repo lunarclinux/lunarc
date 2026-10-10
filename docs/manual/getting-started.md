@@ -31,7 +31,7 @@ SUPER is the Windows key. SUPER+K lists every shortcut, searchable.
 | SUPER+T | Float / tile window |
 | SUPER+arrows | Move focus (add SHIFT to move the window) |
 | SUPER+1…0 | Switch workspace (add SHIFT to move the window there) |
-| SUPER+Escape | Lock |
+| SUPER+L (or SUPER+Escape) | Lock |
 | SUPER+N | Act on the latest notification |
 | ALT+Tab | Switch windows |
 | Print | Screenshot of a region (SHIFT: screen, SUPER: window, CTRL: region then edit) |

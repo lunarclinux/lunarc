@@ -68,7 +68,7 @@ Update | Update everything | Packages and the distro | term: @DISTRO_ID@ update 
 Update | Check for updates | See what's waiting | term: @DISTRO_ID@ update check | list-search
 
 Power | | Lock, sleep, restart |
-Power | Lock | SUPER+Escape | noctalia msg session lock | lock
+Power | Lock | SUPER+L | noctalia msg session lock | lock
 Power | Suspend | Sleep until you wake it | noctalia msg session suspend | zzz
 Power | Restart | | noctalia msg session reboot | reload
 Power | Shut down | | noctalia msg session shutdown | power

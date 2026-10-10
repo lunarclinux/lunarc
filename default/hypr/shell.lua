@@ -10,6 +10,7 @@ end
 bind(mod .. " + Space", "Apps", shell("panel-toggle launcher"))
 bind(mod .. " + S", "Quick settings", shell("panel-toggle control-center"))
 bind(mod .. " + comma", "Shell settings", shell("settings-toggle"))
+bind(mod .. " + L", "Lock the screen", shell("session lock"))
 bind(mod .. " + Escape", "Lock the screen", shell("session lock"))
 bind(mod .. " + N", "Open the latest notification", shell("notification-invoke-latest"))
 bind(mod .. " + V", "Clipboard history", shell("panel-toggle clipboard"))

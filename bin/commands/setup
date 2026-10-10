@@ -28,7 +28,7 @@ case ${1:-} in
     weather_location
     mkdir -p "$STATE_DIR"; date -Is > "$done_file"
     notify-send -a "$DISTRO_NAME" "Welcome to $DISTRO_NAME" \
-      "SUPER+ALT+Space: menu. SUPER+Space: apps. SUPER+Return: terminal. SUPER+K: all shortcuts. SUPER+W: close a window. SUPER+Escape: lock.
+      "SUPER+ALT+Space: menu. SUPER+Space: apps. SUPER+Return: terminal. SUPER+K: all shortcuts. SUPER+W: close a window. SUPER+L: lock.
 Run '$DISTRO_ID help' in a terminal for the command-line tools." 2>/dev/null || true ;;
   -h|--help|"") echo "Usage: $DISTRO_ID setup first-login" ;;
   *) die "unknown setup step: $1" ;;
