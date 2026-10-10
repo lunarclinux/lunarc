@@ -55,10 +55,11 @@ store() { # store <json>
   jq . <<<"$1" > "$tmp" && mv "$tmp" "$state"
 }
 
-# Connected screens, with "id" = description (or the port, if a screen has none).
+# Connected screens, with "id" = description (or "port:<name>" for a screen
+# without one, like Hyprland's headless test outputs).
 monitors() {
   hyprctl monitors all -j | jq '[.[]
-    | . + {id: (if .description == "" then .name else .description end),
+    | . + {id: (if .description == "" then "port:" + .name else .description end),
            builtin: (.name | test("^(eDP|LVDS|DSI)"))}]'
 }
 
@@ -87,13 +88,15 @@ rules() { # rules <monitors-json> <state-json>
 }
 
 lua_rule() { # lua_rule <id> <mode> <scale> <position> <transform> <on|off>
-  local scale=$3
+  local scale=$3 output="desc:$1"
   [[ $scale == auto ]] && scale='"auto"'
+  if [[ $1 == port:* ]]; then output=${1#port:}; fi
   if [[ $6 == off ]]; then
-    printf 'hl.monitor({ output = %s, disabled = true })\n' "$(lua_string "desc:$1")"
+    printf 'hl.monitor({ output = %s, disabled = true })\n' "$(lua_string "$output")"
   else
-    printf 'hl.monitor({ output = %s, mode = %s, position = %s, scale = %s, transform = %s })\n' \
-      "$(lua_string "desc:$1")" "$(lua_string "$2")" "$(lua_string "$4")" "$scale" "$5"
+    # disabled = false: a rule without it doesn't turn a screen back on.
+    printf 'hl.monitor({ output = %s, disabled = false, mode = %s, position = %s, scale = %s, transform = %s })\n' \
+      "$(lua_string "$output")" "$(lua_string "$2")" "$(lua_string "$4")" "$scale" "$5"
   fi
 }
 
@@ -139,8 +142,8 @@ resolve() {
 }
 
 label() { # label <monitor-json>
-  jq -r 'if .builtin then "Built-in screen" else ([.make, .model] | map(select(. != "" and . != null)) | join(" ")) end
-    + " (" + .name + ")"' <<<"$1"
+  jq -r '(if .builtin then "Built-in screen" else ([.make, .model] | map(select(. != "" and . != null)) | join(" ")) end) as $what
+    | if $what == "" then .name else $what + " (" + .name + ")" end' <<<"$1"
 }
 
 transform_number() {
