@@ -168,7 +168,10 @@ pick_mode() { # pick_mode <monitor-json> <mode>
   printf '%s@%s\n' "$res" "$best"
 }
 
-valid_scale() { [[ $1 == auto || $1 =~ ^[0-9]+(\.[0-9]+)?$ ]] && awk -v s="$1" 'BEGIN{exit !(s=="auto" || (s>=0.5 && s<=4))}'; }
+valid_scale() {
+  [[ $1 == auto ]] && return 0
+  if [[ $1 =~ ^[0-9]+(\.[0-9]+)?$ ]]; then awk -v s="$1" 'BEGIN{exit !(s>=0.5 && s<=4)}'; else return 1; fi
+}
 
 # --- arranging --------------------------------------------------------------
 
@@ -443,7 +446,8 @@ edit() {
         Done|"") return 0 ;;
         "Save as profile")
           read -rp "Profile name (e.g. docked, desk): " name
-          [[ -n $name ]] && save "$name"; read -rp "Press Enter to continue " _; continue ;;
+          if [[ -n $name ]]; then save "$name"; fi
+          read -rp "Press Enter to continue " _; continue ;;
       esac
       mon=$(resolve "$mons" "$(sed -E 's/.*\(([^)]*)\)$/\1/' <<<"$choice")")
     fi
@@ -467,7 +471,7 @@ edit() {
       "Turn off") on_off off "$id" || read -rp "Press Enter " _ ;;
       "Turn on") on_off on "$id" ;;
     esac
-    [[ $(jq length <<<"$mons") -eq 1 ]] && [[ $what == Back ]] && return 0
+    if [[ $what == Back && $(jq length <<<"$mons") -eq 1 ]]; then return 0; fi
   done
 }
 
