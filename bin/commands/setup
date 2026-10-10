@@ -47,8 +47,14 @@ backups_skipped() {
 
 open_pika_setup() {
   if ! command -v pika-backup >/dev/null; then install_packages pika-backup; fi
-  # Pika Backup is D-Bus activatable; its "setup" action opens "Setup Backup".
-  if ! setsid -f gapplication action org.gnome.World.PikaBackup setup >/dev/null 2>&1; then
+  # Pika Backup is D-Bus activatable: start it, then its "setup" action opens
+  # "Set Up Backup Repository" (the action needs the main window first).
+  if gapplication launch org.gnome.World.PikaBackup >/dev/null 2>&1; then
+    sleep 1
+    gapplication action org.gnome.World.PikaBackup setup >/dev/null 2>&1 || true
+    # In front of the setup window (both float), so its dialog isn't hidden.
+    hyprctl dispatch 'hl.dsp.focus({ window = "class:^org\\.gnome\\.World\\.PikaBackup$" })' >/dev/null 2>&1 || true
+  else
     setsid -f pika-backup >/dev/null 2>&1
   fi
 }
@@ -92,11 +98,14 @@ welcome() { # welcome [--skip] [--only <step name>]
 
 # The setup window: a Ghostty window running the screens above.
 open_window() { # open_window [welcome arguments...]
-  if pgrep -f -- "--class=$class( |\$)" >/dev/null; then return 0; fi
-  setsid -f bash -c 'source "$DISTRO_LIB/lib.sh"; launch_app "$@"' _ \
-    ghostty --class="$class" --title="Set up $DISTRO_NAME" --font-size=12 \
-    --confirm-close-surface=false --cursor-style-blink=false \
-    -e "/usr/bin/$DISTRO_ID" setup welcome "$@" >/dev/null 2>&1
+  local -a window=(ghostty --class="$class" --title="Set up $DISTRO_NAME" --font-size=12
+    --confirm-close-surface=false --cursor-style-blink=false -e "/usr/bin/$DISTRO_ID" setup welcome "$@")
+  if pgrep -f -- "^(/usr/bin/)?ghostty --class=$class( |\$)" >/dev/null; then return 0; fi
+  # A unit of its own, so it outlives the first-login service that opens it.
+  if ! systemd-run --user --quiet --collect --slice=app-graphical.slice \
+      --unit="$DISTRO_ID-setup-window-$$" -- "${window[@]}" >/dev/null 2>&1; then
+    setsid -f bash -c 'source "$DISTRO_LIB/lib.sh"; launch_app "$@"' _ "${window[@]}" >/dev/null 2>&1
+  fi
 }
 
 # Once, a few days after "Later": a notification with a button that opens the

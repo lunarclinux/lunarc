@@ -48,6 +48,15 @@ hl.window_rule({
     size = { 900, 640 },
 })
 
+-- Pika Backup floats too, so it can sit in front of the setup window while the
+-- user finishes setting up a backup there.
+hl.window_rule({
+    name = "pika-backup",
+    match = { class = "^org\\.gnome\\.World\\.PikaBackup$" },
+    float = true,
+    size = { 960, 720 },
+})
+
 -- Noctalia's settings window floats; its surfaces get blur and keep their own animations.
 hl.window_rule({
     name = "noctalia-settings",

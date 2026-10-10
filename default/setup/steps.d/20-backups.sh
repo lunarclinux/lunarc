@@ -40,8 +40,11 @@ step_run() {
   ui_text "$C_GOLD" "Keep Encryption on and choose a password. Save it in your password manager: without it the backup can't be read, by anyone."
   printf '\n'
   ui_text "$C_MUTED" "Then open Schedule and choose Daily, so new backups happen on their own."
+  ui_continue "Open Pika Backup"
   open_pika_setup
-  ui_continue "Done in Pika Backup"
+  ui_step "$STEP" "$STEPS" "Backups"
+  ui_text "$C_TEXT" "Finish in the Pika Backup window. Come back here when you're done (ALT+Tab)."
+  ui_continue "Done"
   if backups_configured; then
     record backups configured
   else
