@@ -51,14 +51,35 @@ effect_list() {
   tte_run --help | sed -n '/^usage/,/^$/p' | tr -d ' \n' | grep -o '{[^}]*}' | tail -1 | tr -d '{}' | tr ',' '\n'
 }
 
-# The theme's text colour and accent, for each effect's final colours: on
-# Moonlit that is moonlight fading into gold, left to right.
-theme_colour() { # theme_colour <key>
+theme_palette() {
   local palette
   palette=$SHARE/themes/$(setting theme)/palette.json
-  [[ -f $palette ]] || return 0
+  if [[ -f $palette ]]; then printf '%s\n' "$palette"; fi
+}
+
+# One colour from the theme: theme_colour <key>.
+theme_colour() {
+  local palette
+  palette=$(theme_palette)
+  [[ -n $palette ]] || return 0
   jq -r --arg m "$(setting theme.mode dark)" --arg k "$1" '.[$m][$k] // empty' "$palette" | tr -d '#'
 }
+
+# The theme's bright colours, one per line: text, accents and the terminal's
+# coloured entries. Each round of the screensaver mixes two or three of them.
+theme_colours() {
+  local palette
+  palette=$(theme_palette)
+  [[ -n $palette ]] || return 0
+  jq -r --arg m "$(setting theme.mode dark)" '
+    .[$m] as $p
+    | [$p.mOnSurface, $p.mPrimary, $p.mSecondary, $p.mTertiary]
+      + ([$p.terminal.normal, $p.terminal.bright] | map(select(. != null) | del(.black, .white) | .[]))
+    | map(select(. != null)) | unique | .[]' "$palette" | tr -d '#'
+}
+
+# The distro's own effects keep their signature colours: moonlight into gold.
+own_effect() { [[ -f $SHARE/default/screensaver/effects/$1.py ]]; }
 
 open_window() { # open_window [effect]
   command -v ghostty >/dev/null || die "the screensaver needs Ghostty"
@@ -111,6 +132,8 @@ case ${1:-} in
       last=$size; sleep 0.1
     done
     mapfile -t effects < <(effect_list)
+    mapfile -t colours < <(theme_colours)
+    directions=(horizontal vertical diagonal radial)
     text=$(theme_colour mOnSurface) accent=$(theme_colour mPrimary) background=$(theme_colour mSurface)
     # One effect per round (random unless one was asked for), centred; any key ends it.
     ( while :; do
@@ -119,7 +142,18 @@ case ${1:-} in
         if [[ -n $background ]]; then args+=(--terminal-background-color "$background"); fi
         args+=("$effect")
         if [[ -n $text && -n $accent ]] && tte_run "$effect" --help 2>/dev/null | grep -q -- --final-gradient-stops; then
-          args+=(--final-gradient-stops "$text" "$accent" --final-gradient-direction horizontal)
+          if own_effect "$effect" || (( ${#colours[@]} < 3 )); then
+            args+=(--final-gradient-stops "$text" "$accent" --final-gradient-direction horizontal)
+          else
+            # Two or three different theme colours, in a random direction, so
+            # each effect ends looking different but still in the theme.
+            stops=() n=$(( RANDOM % 2 + 2 ))
+            while (( ${#stops[@]} < n )); do
+              pick=${colours[RANDOM % ${#colours[@]}]}
+              if [[ " ${stops[*]} " != *" $pick "* ]]; then stops+=("$pick"); fi
+            done
+            args+=(--final-gradient-stops "${stops[@]}" --final-gradient-direction "${directions[RANDOM % ${#directions[@]}]}")
+          fi
         fi
         clear
         tte_run "${args[@]}" 2>/dev/null || sleep 1
