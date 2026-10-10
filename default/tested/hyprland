@@ -1,0 +1,5 @@
+# The Hyprland release the distro's config was last tested with. `update`
+# holds back newer releases (and the Hyprland libraries that move with them)
+# until a distro update raises this line; `update --all` takes them anyway.
+# A version prefix: 0.56 accepts every 0.56.x.
+0.56

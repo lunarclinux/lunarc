@@ -48,12 +48,16 @@ genfstab -U "$MNT" >> "$MNT/etc/fstab"
 # warn that /boot's permissions differ from the filesystem package's.
 sed -i '/[[:space:]]\/boot[[:space:]]*vfat/ s/\(vfat[[:space:]]*\)\([^[:space:]]*\)/\1\2,fmask=0077,dmask=0077/' "$MNT/etc/fstab"
 
-# The installed system's source for the distro's packages (repo.conf). Until
-# the repository is hosted the section is left commented out.
+# The installed system's source for the distro's packages (repo.conf), with
+# signatures required on packages and the database. It goes last, after
+# Arch's repositories: the distro's packages don't replace any of Arch's, so
+# order only matters for a name clash, and then Arch's package should win.
+# Until the repository is hosted the section is left commented out.
 REPO_URL=""
 source "$root/repo.conf"
 if [[ -n $REPO_URL ]]; then
-  printf '\n[%s]\nSigLevel = Required\nServer = %s\n' "$DISTRO_REPO" "$REPO_URL" >> "$MNT/etc/pacman.conf"
+  printf '\n# %s packages (signed; key from the %s-keyring package)\n[%s]\nSigLevel = Required\nServer = %s\n' \
+    "$DISTRO_NAME" "$DISTRO_ID" "$DISTRO_REPO" "$REPO_URL" >> "$MNT/etc/pacman.conf"
 else
   printf '\n#[%s]\n#SigLevel = Required\n#Server = (not hosted yet; see repo.conf)\n' "$DISTRO_REPO" >> "$MNT/etc/pacman.conf"
 fi
