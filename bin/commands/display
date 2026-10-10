@@ -246,7 +246,7 @@ list() {
       jq -r --arg n "$n" --arg name "$name" '
         "\($n)  \($name)\n   \(.width)x\(.height) at \(.refreshRate * 100 | round / 100) Hz, scale \(.scale), at \(.x)x\(.y)"
         + (if .transform != 0 then ", rotated" else "" end)
-        + "\n   \(.description)"' <<<"$mon"
+        + (if .description == "" then "" else "\n   \(.description)" end)' <<<"$mon"
     fi
   done < <(jq -c '.[]' <<<"$mons")
   profile=$(active_profile "$mons" "$st")
