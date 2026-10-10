@@ -64,7 +64,7 @@ SUPER+ALT+Space (or `/m` in the launcher). Type part of a name and press Enter t
 | `lunarc shell defaults on\|off` / `shell set bash\|zsh\|fish` | Shell defaults (prompt, `z`, `ll`, Ctrl+R search) and your login shell |
 | `lunarc dev docker` / `dev lang node` / `dev db add postgres` | Docker, language runtimes (mise) and local databases |
 | `lunarc app list` / `search <word>` / `install <app>` | Browse and install apps: browsers, editors, AI (Claude, ChatGPT, Ollama, Hermes), games (Steam, Lutris, Heroic), chat and more |
-| `lunarc update` / `update check` | Update everything / see what's waiting |
+| `lunarc update` / `update check` | Update everything safely / see what's waiting (see Updating) |
 | `lunarc capture screenshot\|record\|stop\|color\|text\|qr` | Screenshots (`~/Pictures/Screenshots`), recordings (`~/Videos/Recordings`), colour picker, copy text or a QR code from the screen |
 | `lunarc remind "stretch" in 20m` / `at 15:30` / `list` / `cancel <id>` | Reminders (also the alarm icon in the bar) |
 | `lunarc dictate toggle` / `setup` | Dictation; runs locally with whisper.cpp (first use downloads a ~150 MB model) |
@@ -74,6 +74,23 @@ SUPER+ALT+Space (or `/m` in the launcher). Type part of a name and press Enter t
 | `lunarc screensaver effects` / `preview [effect]` | List the screensaver's effects / play one now (any key closes it) |
 
 Settings for these live in `~/.config/lunarc/settings` (`key = value`); defaults are in `/usr/share/lunarc/default/settings`.
+
+## Updating
+
+`lunarc update` (or Update in the system menu) updates everything, in this order:
+
+1. the package keyrings, so signatures check out even after a long gap;
+2. Arch and Lunarc packages, with a snapshot of the system taken just before and after;
+3. AUR apps, separately, so a broken AUR package never stops the system update;
+4. Flatpak apps, if you have any.
+
+At the end it says what changed, which snapshot to go back to, and whether to restart for a new kernel.
+
+A newer Hyprland release than the one Lunarc's settings were tested with is held back (with its libraries) until a Lunarc update says it's tested; `lunarc update --all` takes it anyway. `lunarc update check` lists what's waiting without installing.
+
+If an update breaks something: `lunarc update snapshots` lists the snapshots, and `lunarc update rollback <number>` puts the system back as it was in that snapshot, then you restart. Your files, `/home` and logs are not touched. The replaced system is kept until `lunarc update rollback --clean`.
+
+Lunarc's packages come from https://pkgs.lunarclinux.com and must be signed by the Lunarc key.
 
 ## Editing files in the terminal
 `micro` is the default editor (`$EDITOR`; git and `sudoedit` use it). It works like a desktop text editor: **Ctrl+S** save, **Ctrl+Q** quit, **Ctrl+C / Ctrl+X / Ctrl+V** copy, cut, paste (the system clipboard), **Ctrl+Z** undo, **Ctrl+F** find, the mouse to select and scroll. A few nano keys work too: **Ctrl+W** find, **Ctrl+K** cut the line, **Ctrl+U** paste. **Ctrl+E** opens micro's command bar (`help keybindings`, `set tabsize 2`); **Alt+G** shows the key list at the bottom. Its colours follow the theme.
