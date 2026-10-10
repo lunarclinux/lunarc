@@ -4,7 +4,8 @@
 # it; give it a description with a line whose title is empty.
 # Commands run detached. Prefixes:
 #   term:      run in a terminal and wait for a key before closing
-#   menu:      a generated submenu (install, remove, theme, terminal, agent)
+#   menu:      a generated submenu (install, remove, theme, terminal, agent),
+#              or "menu: list <command>" for the lines of `@DISTRO_ID@ <command> menu-items`
 #   launcher:  switch the launcher to this search (e.g. "/keys ")
 # Copy this file to ~/.config/@DISTRO_ID@/menu to change your own.
 
@@ -52,6 +53,7 @@ Setup | Set up @DISTRO_NAME@ | The first-login choices again | @DISTRO_ID@ setup
 Setup | Wi-Fi | Networks and connections | noctalia msg panel-open control-center network | wifi
 Setup | Bluetooth | Pair and connect devices | noctalia msg panel-open control-center bluetooth | bluetooth
 Setup | Sound | Outputs, inputs and volume | noctalia msg panel-open control-center audio | volume
+Setup | Displays | Resolution, scale, arrangement and profiles | menu: list display | device-desktop
 Setup | Power profile | Cycle performance, balanced and power saver | noctalia msg power-cycle | bolt
 Setup | Reminders | Upcoming reminders | noctalia msg panel-toggle @DISTRO_ID@/utilities:reminders-panel | alarm
 Setup | Keyboard: next layout | Switch layout (SUPER+CTRL+Space) | @DISTRO_ID@ keyboard next | keyboard

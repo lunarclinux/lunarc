@@ -4,7 +4,7 @@
 -- "/m Install › AI › cla" lists AI apps matching "cla". Choosing a group sets
 -- the query to its path and the launcher stays open; choosing an item runs it.
 -- Items come from the menu file; Install, Remove, Theme, Terminal and Agent
--- lists are generated.
+-- lists are generated, and "menu: list <command>" asks `<cli> <command> menu-items`.
 local cli = "@DISTRO_ID@"
 local sep = " › "
 
@@ -170,6 +170,18 @@ local function level(path, done)
         if (a.src == "repo" or a.src == "multilib" or a.src == "aur") and installed[pkg] then
           table.insert(list, item(a.name, "Remove", "term: " .. cli .. " app remove " .. a.id, "trash"))
         end
+      end
+      done(list)
+    end)
+    return nil
+  elseif string.sub(generator or "", 1, 5) == "list " then
+    -- "menu: list <command>": the items come from `<cli> <command> menu-items`,
+    -- one per line: title, subtitle, command, icon (tab-separated).
+    noctalia.runAsync({ cli, trim(string.sub(generator, 6)), "menu-items" }, function(result)
+      local list = {}
+      for _, line in ipairs(string.split(result.stdout or "", "\n")) do
+        local f = string.split(line, "\t")
+        if #f >= 3 and f[1] ~= "" then table.insert(list, item(f[1], f[2], f[3], f[4] ~= "" and f[4] or nil)) end
       end
       done(list)
     end)

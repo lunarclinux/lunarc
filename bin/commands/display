@@ -1,0 +1,521 @@
+#!/usr/bin/env bash
+# summary: Displays: resolution, scale, arrangement and docked/undocked profiles
+set -euo pipefail
+source "$DISTRO_LIB/lib.sh"
+
+# Each screen is remembered by its description (make, model and serial), not
+# the port it's plugged into, so its settings follow it from port to port.
+# Two kinds of memory, in $CONFIG_DIR/displays.json:
+#   monitors.<description>  resolution, scale and rotation of that screen
+#   layouts.<set>           where each screen sits (and whether it's on) for one
+#                           particular set of connected screens; naming a layout
+#                           makes it a profile ("docked", "desk", ...)
+# Hyprland reads the remembered resolution and scale from a file this command
+# writes ($CONFIG_DIR/hypr/displays.lua), and calls `display apply --hotplug`
+# whenever a screen is plugged in or unplugged.
+state=$CONFIG_DIR/displays.json
+generated=$CONFIG_DIR/hypr/displays.lua
+scales=(1 1.25 1.5 1.6 1.75 2)
+
+usage() {
+  cat <<USAGE
+Usage: $DISTRO_ID display <command>
+
+  list                       connected screens and their settings
+  edit [screen]              change resolution, scale, position or rotation, step by step
+  set <screen> [mode] [scale] [position] [rotation]
+                             change one screen; use - to keep a value, e.g.
+                               set DP-1 2560x1440@144 1.25 right-of eDP-1
+                               set "Dell" - 1.5
+  off <screen> | on <screen> turn a screen off or back on ("internal" = the built-in one)
+  save [name]                remember the current arrangement as a profile
+  profiles                   the saved profiles (* = in use)
+  apply [profile]            apply a profile, or the arrangement for the screens now connected
+  forget <profile>           delete a profile
+  auto on|off                rearrange automatically when screens are plugged in (default on)
+  xwayland sharp|default     how older (X11) apps look at fractional scales
+  preview                    a sketch of the current arrangement
+
+A screen can be named by its port (DP-1), its number in 'list', part of its
+description ("Dell"), or "internal" for a laptop's built-in screen.
+Positions: right-of, left-of, above or below another screen; XxY; or auto.
+Rotation: normal, 90, 180, 270, flipped, flipped-90, flipped-180, flipped-270.
+Scales most screens look right at: ${scales[*]}.
+USAGE
+}
+
+need_hyprland() { [[ -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]] || die "this needs the Hyprland session"; }
+
+# --- state ------------------------------------------------------------------
+
+load() { if [[ -s $state ]]; then cat "$state"; else echo '{"monitors":{},"layouts":{}}'; fi; }
+store() { # store <json>
+  local tmp
+  mkdir -p "$CONFIG_DIR"; tmp=$(mktemp "$state.XXXXXX")
+  jq . <<<"$1" > "$tmp" && mv "$tmp" "$state"
+}
+
+# Connected screens, with "id" = description (or "port:<name>" for a screen
+# without one, like Hyprland's headless test outputs).
+monitors() {
+  hyprctl monitors all -j | jq '[.[]
+    | . + {id: (if .description == "" then "port:" + .name else .description end),
+           builtin: (.name | test("^(eDP|LVDS|DSI)"))}]'
+}
+
+# The set of connected screens, as one key: their ids, sorted, joined by " + ".
+set_key() { jq -r '[.[].id] | sort | join(" + ")' <<<"$1"; }
+
+# --- applying ---------------------------------------------------------------
+
+lua_string() { local s=$1; s=${s//\\/\\\\}; s=${s//\"/\\\"}; printf '"%s"' "$s"; }
+
+# Hyprland monitor rules for the connected screens, from what's remembered.
+rules() { # rules <monitors-json> <state-json>
+  local mons=$1 st=$2 key
+  key=$(set_key "$mons")
+  jq -r --arg key "$key" --argjson st "$st" '
+    ($st.layouts[$key] // {}) as $layout
+    | (if ([.[] | select(($layout.off // {})[.id] != true)] | length) == 0 then {} else ($layout.off // {}) end) as $off
+    | .[] | . as $m
+    | ($st.monitors[$m.id] // {}) as $saved
+    | [$m.id,
+       ($saved.mode // "preferred"),
+       (($saved.scale // "auto") | tostring),
+       (($layout.positions // {})[$m.id] // "auto"),
+       (($saved.transform // 0) | tostring),
+       (if $off[$m.id] == true then "off" else "on" end)] | @tsv' <<<"$mons"
+}
+
+lua_rule() { # lua_rule <id> <mode> <scale> <position> <transform> <on|off>
+  local scale=$3 output="desc:$1"
+  [[ $scale == auto ]] && scale='"auto"'
+  if [[ $1 == port:* ]]; then output=${1#port:}; fi
+  if [[ $6 == off ]]; then
+    printf 'hl.monitor({ output = %s, disabled = true })\n' "$(lua_string "$output")"
+  else
+    # disabled = false: a rule without it doesn't turn a screen back on.
+    printf 'hl.monitor({ output = %s, disabled = false, mode = %s, position = %s, scale = %s, transform = %s })\n' \
+      "$(lua_string "$output")" "$(lua_string "$2")" "$(lua_string "$4")" "$scale" "$5"
+  fi
+}
+
+# The include Hyprland loads at start and on reload: every remembered screen's
+# resolution, scale and rotation, plus the arrangement for what's connected now.
+write_generated() { # write_generated <monitors-json> <state-json>
+  local mons=$1 st=$2 tmp
+  mkdir -p "${generated%/*}"; tmp=$(mktemp "$generated.XXXXXX")
+  {
+    printf -- '-- Written by `%s display`; change it with that command, not here.\n' "$DISTRO_ID"
+    jq -r --argjson connected "$(jq '[.[].id]' <<<"$mons")" '.monitors | to_entries[] | select(.key as $k | $connected | index($k) | not) | [.key, (.value.mode // "preferred"), ((.value.scale // "auto") | tostring), "auto", ((.value.transform // 0) | tostring), "on"] | @tsv' <<<"$st" |
+      while IFS=$'\t' read -r id mode scale pos transform onoff; do lua_rule "$id" "$mode" "$scale" "$pos" "$transform" "$onoff"; done
+    rules "$mons" "$st" | while IFS=$'\t' read -r id mode scale pos transform onoff; do lua_rule "$id" "$mode" "$scale" "$pos" "$transform" "$onoff"; done
+    if [[ $(setting display.xwayland default) == sharp ]]; then
+      printf 'hl.config({ xwayland = { force_zero_scaling = true } })\n'
+    fi
+  } > "$tmp"
+  mv "$tmp" "$generated"
+}
+
+# Apply the remembered settings to the connected screens, live.
+apply_now() {
+  local mons st lua
+  mons=$(monitors); st=$(load)
+  write_generated "$mons" "$st"
+  lua=$(rules "$mons" "$st" | while IFS=$'\t' read -r id mode scale pos transform onoff; do lua_rule "$id" "$mode" "$scale" "$pos" "$transform" "$onoff"; done)
+  [[ -n $lua ]] || return 0
+  hyprctl eval "$lua" >/dev/null
+}
+
+# --- finding a screen -------------------------------------------------------
+
+# resolve <name|number|description part|internal> → that screen's JSON object
+resolve() {
+  local mons=$1 want=$2 found
+  found=$(jq -c --arg w "$want" '
+    (to_entries | map(.value + {n: (.key + 1 | tostring)})) as $all
+    | ([$all[] | select(.name == $w or .n == $w or .id == $w)]
+       + (if $w == "internal" then [$all[] | select(.builtin)] else [] end)
+       + [$all[] | select(.id | ascii_downcase | contains($w | ascii_downcase))]) | .[0] // empty' <<<"$mons")
+  [[ -n $found ]] || die "no connected screen matches '$want' (see: $DISTRO_ID display list)"
+  printf '%s\n' "$found"
+}
+
+label() { # label <monitor-json>
+  jq -r '(if .builtin then "Built-in screen" else ([.make, .model] | map(select(. != "" and . != null)) | join(" ")) end) as $what
+    | if $what == "" then .name else $what + " (" + .name + ")" end' <<<"$1"
+}
+
+transform_number() {
+  case $1 in
+    0|normal) echo 0 ;; 1|90) echo 1 ;; 2|180) echo 2 ;; 3|270) echo 3 ;;
+    4|flipped) echo 4 ;; 5|flipped-90) echo 5 ;; 6|flipped-180) echo 6 ;; 7|flipped-270) echo 7 ;;
+    *) die "unknown rotation '$1' (normal, 90, 180, 270, flipped, flipped-90, flipped-180, flipped-270)" ;;
+  esac
+}
+transform_name() { local names=(normal 90 180 270 flipped flipped-90 flipped-180 flipped-270); echo "${names[$1]:-normal}"; }
+
+# A mode the screen supports: "2560x1440@144" picks the closest refresh rate,
+# "2560x1440" the highest; "preferred", "highres" and "highrr" pass through.
+pick_mode() { # pick_mode <monitor-json> <mode>
+  local mon=$1 want=$2 res rate best
+  case $want in preferred|highres|highrr) echo "$want"; return ;; esac
+  res=${want%%@*}; rate=""
+  [[ $want == *@* ]] && rate=${want#*@}
+  best=$(jq -r --arg res "$res" --arg rate "$rate" '
+    [.availableModes[] | capture("^(?<r>[0-9]+x[0-9]+)@(?<hz>[0-9.]+)Hz$") | select(.r == $res) | .hz | tonumber]
+    | if length == 0 then empty
+      elif $rate == "" then max
+      else (map({hz: ., d: ((. - ($rate | tonumber)) | fabs)}) | min_by(.d) | .hz) end' <<<"$mon")
+  [[ -n $best ]] || die "$(label "$mon") can't do $res (see: $DISTRO_ID display list)"
+  printf '%s@%s\n' "$res" "$best"
+}
+
+valid_scale() {
+  [[ $1 == auto ]] && return 0
+  if [[ $1 =~ ^[0-9]+(\.[0-9]+)?$ ]]; then awk -v s="$1" 'BEGIN{exit !(s>=0.5 && s<=4)}'; else return 1; fi
+}
+
+# --- arranging --------------------------------------------------------------
+
+# Logical size (what other screens line up against): pixels / scale, swapped
+# when rotated a quarter turn.
+logical() { # logical <monitor-json> → "w h"
+  jq -r '. as $m | (if (.transform % 2) == 1 then [.height, .width] else [.width, .height] end)
+    | map(. / $m.scale | round) | "\(.[0]) \(.[1])"' <<<"$1"
+}
+
+# Freeze where every connected screen is now into the current layout, so moving
+# one screen doesn't let the others drift.
+freeze_positions() { # freeze_positions <monitors-json> <state-json> → state
+  local key
+  key=$(set_key "$1")
+  jq --arg key "$key" --argjson mons "$1" '
+    .layouts[$key] = ((.layouts[$key] // {}) | .positions = ((.positions // {}) +
+      ([$mons[] | select(.disabled | not) | {key: .id, value: "\(.x)x\(.y)"}] | from_entries)))' <<<"$2"
+}
+
+# Shift positions so the top-left screen is at 0x0.
+normalise() { # normalise <state-json> <key>
+  jq --arg key "$2" '
+    if (.layouts[$key].positions // {}) == {} then . else
+      ([.layouts[$key].positions[] | select(. != "auto") | split("x") | map(tonumber)]) as $p
+      | ($p | map(.[0]) | min) as $minx | ($p | map(.[1]) | min) as $miny
+      | .layouts[$key].positions |= with_entries(if .value == "auto" then . else
+          .value = (.value | split("x") | map(tonumber) | "\(.[0] - $minx)x\(.[1] - $miny)") end) end' <<<"$1"
+}
+
+position_for() { # position_for <monitors-json> <monitor-json> <position words...>
+  local mons=$1 mon=$2; shift 2
+  local how=$1 other ox oy ow oh w h
+  case $how in
+    auto) echo auto; return ;;
+    *x*) [[ $how =~ ^-?[0-9]+x-?[0-9]+$ ]] || die "position '$how' should look like 1920x0"; echo "$how"; return ;;
+    right-of|left-of|above|below) ;;
+    *) die "unknown position '$how' (right-of, left-of, above or below a screen; XxY; auto)" ;;
+  esac
+  [[ -n ${2:-} ]] || die "$how which screen?"
+  other=$(resolve "$mons" "$2")
+  [[ $(jq -r .name <<<"$other") != "$(jq -r .name <<<"$mon")" ]] || die "a screen can't be placed next to itself"
+  read -r ox oy < <(jq -r '"\(.x) \(.y)"' <<<"$other")
+  read -r ow oh < <(logical "$other")
+  read -r w h < <(logical "$mon")
+  case $how in
+    right-of) echo "$((ox + ow))x$oy" ;;
+    left-of) echo "$((ox - w))x$oy" ;;
+    below) echo "${ox}x$((oy + oh))" ;;
+    above) echo "${ox}x$((oy - h))" ;;
+  esac
+}
+
+# --- showing ----------------------------------------------------------------
+
+active_profile() { # active_profile <monitors-json> <state-json>
+  jq -r --arg key "$(set_key "$1")" '.layouts[$key].name // empty' <<<"$2"
+}
+
+list() {
+  local mons st n=0 mon name
+  mons=$(monitors); st=$(load)
+  while IFS= read -r mon; do
+    n=$((n + 1))
+    name=$(label "$mon")
+    if [[ $(jq -r .disabled <<<"$mon") == true ]]; then
+      printf '%d  %s  off\n' "$n" "$name"
+    else
+      jq -r --arg n "$n" --arg name "$name" '
+        "\($n)  \($name)\n   \(.width)x\(.height) at \(.refreshRate * 100 | round / 100) Hz, scale \(.scale), at \(.x)x\(.y)"
+        + (if .transform != 0 then ", rotated" else "" end)
+        + (if .description == "" then "" else "\n   \(.description)" end)' <<<"$mon"
+    fi
+  done < <(jq -c '.[]' <<<"$mons")
+  profile=$(active_profile "$mons" "$st")
+  info ""
+  if [[ -n $profile ]]; then info "Profile: $profile"; else info "Profile: none saved for these screens (save one with: $DISTRO_ID display save <name>)"; fi
+}
+
+# A rough sketch of the arrangement, scaled to fit the terminal.
+preview() {
+  local mons cols
+  mons=$(monitors)
+  cols=$(tput cols 2>/dev/null || echo 80); (( cols > 100 )) && cols=100
+  jq -r '[.[] | select(.disabled | not)]
+    | to_entries | .[] | (.value) as $m
+    | (if ($m.transform % 2) == 1 then [$m.height, $m.width] else [$m.width, $m.height] end | map(. / $m.scale | round)) as $sz
+    | [(.key + 1), $m.x, $m.y, $sz[0], $sz[1], $m.name] | @tsv' <<<"$mons" |
+  awk -F'\t' -v cols="$cols" '
+    { n[NR]=$1; x[NR]=$2; y[NR]=$3; w[NR]=$4; h[NR]=$5; nm[NR]=$6
+      if (NR == 1 || $2 < minx) minx = $2; if (NR == 1 || $3 < miny) miny = $3
+      if ($2 + $4 > maxx) maxx = $2 + $4; if ($3 + $5 > maxy) maxy = $3 + $5 }
+    END {
+      if (NR == 0) { print "(no screens on)"; exit }
+      f = (cols - 2) / (maxx - minx); rows = int((maxy - miny) * f / 2) + 1
+      for (r = 0; r < rows; r++) for (c = 0; c < cols; c++) g[r, c] = " "
+      for (i = 1; i <= NR; i++) {
+        c0 = int((x[i] - minx) * f); c1 = int((x[i] + w[i] - minx) * f) - 1
+        r0 = int((y[i] - miny) * f / 2); r1 = int((y[i] + h[i] - miny) * f / 2) - 1
+        if (r1 <= r0) r1 = r0 + 2; if (c1 <= c0 + 4) c1 = c0 + 6
+        for (c = c0; c <= c1; c++) { g[r0, c] = "-"; g[r1, c] = "-" }
+        for (r = r0; r <= r1; r++) { g[r, c0] = "|"; g[r, c1] = "|" }
+        g[r0, c0] = g[r0, c1] = g[r1, c0] = g[r1, c1] = "+"
+        t = n[i] " " nm[i]; rr = int((r0 + r1) / 2); cc = c0 + 2
+        for (k = 1; k <= length(t) && cc + k - 1 < c1; k++) g[rr, cc + k - 1] = substr(t, k, 1)
+        if (r1 + 1 > rows) rows = r1 + 1
+      }
+      for (r = 0; r < rows; r++) { line = ""; for (c = 0; c < cols; c++) line = line (g[r, c] == "" ? " " : g[r, c]); sub(/ +$/, "", line); print line }
+    }'
+}
+
+# --- changing ---------------------------------------------------------------
+
+# set <screen> [mode] [scale] [position words] [rotation]
+set_screen() {
+  need_hyprland
+  [[ -n ${1:-} ]] || die "set which screen? (see: $DISTRO_ID display list)"
+  local mons st mon id key mode="${2:--}" scale="${3:--}" pos=() rot="-"
+  mons=$(monitors); st=$(load)
+  mon=$(resolve "$mons" "$1"); id=$(jq -r .id <<<"$mon"); key=$(set_key "$mons")
+  shift; (( $# )) && shift; (( $# )) && shift
+  # Position: one word (XxY, auto, -) or two (right-of DP-1); then rotation.
+  if (( $# )); then
+    case $1 in right-of|left-of|above|below) pos=("$1" "${2:-}"); shift; (( $# )) && shift ;; *) pos=("$1"); shift ;; esac
+  fi
+  if (( $# )); then rot=$1; fi
+  if [[ $mode != - ]]; then
+    mode=$(pick_mode "$mon" "$mode")
+    st=$(jq --arg id "$id" --arg v "$mode" '.monitors[$id].mode = $v' <<<"$st")
+  fi
+  if [[ $scale != - ]]; then
+    valid_scale "$scale" || die "scale '$scale' should be a number like 1, 1.25, 1.5 or 2 (or auto)"
+    if [[ $scale == auto ]]; then
+      st=$(jq --arg id "$id" '.monitors[$id] |= ((. // {}) | del(.scale))' <<<"$st")
+    else
+      st=$(jq --arg id "$id" --argjson v "$scale" '.monitors[$id].scale = $v' <<<"$st")
+    fi
+  fi
+  if [[ $rot != - ]]; then
+    st=$(jq --arg id "$id" --argjson v "$(transform_number "$rot")" '.monitors[$id].transform = $v' <<<"$st")
+  fi
+  # The resolution, scale or rotation changes the screen's size; apply those
+  # first so a position relative to another screen uses the new size.
+  store "$st"; apply_now
+  if (( ${#pos[@]} )) && [[ ${pos[0]} != - ]]; then
+    mons=$(monitors); st=$(load); mon=$(resolve "$mons" "$id")
+    local where
+    where=$(position_for "$mons" "$mon" "${pos[@]}")
+    st=$(freeze_positions "$mons" "$st")
+    st=$(jq --arg key "$key" --arg id "$id" --arg v "$where" '.layouts[$key].positions[$id] = $v' <<<"$st")
+    st=$(normalise "$st" "$key")
+    store "$st"; apply_now
+  fi
+  scale_note "$(jq -r --arg id "$id" '.monitors[$id].scale // empty' "$state")"
+}
+
+scale_note() {
+  local s=${1:-}
+  [[ -n $s ]] || return 0
+  if awk -v s="$s" 'BEGIN{exit !(s != int(s))}' && [[ $(setting display.xwayland default) != sharp ]]; then
+    info "Fractional scale: older X11 apps may look slightly soft. '$DISTRO_ID display xwayland sharp' makes them sharp but small."
+  fi
+}
+
+on_off() { # on_off on|off <screen>
+  need_hyprland
+  [[ -n ${2:-} ]] || die "turn which screen $1?"
+  local mons st mon id key
+  mons=$(monitors); st=$(load)
+  mon=$(resolve "$mons" "$2"); id=$(jq -r .id <<<"$mon"); key=$(set_key "$mons")
+  if [[ $1 == off ]]; then
+    local others
+    others=$(jq --arg id "$id" --arg key "$key" --argjson st "$st" \
+      '[.[] | select(.id != $id and (.disabled | not) and ((($st.layouts[$key].off // {})[.id]) != true))] | length' <<<"$mons")
+    (( others > 0 )) || die "that's the only screen that's on; leaving it on"
+    st=$(freeze_positions "$mons" "$st")
+    st=$(jq --arg key "$key" --arg id "$id" '.layouts[$key].off[$id] = true' <<<"$st")
+  else
+    st=$(jq --arg key "$key" --arg id "$id" '.layouts[$key].off |= ((. // {}) | del(.[$id]))' <<<"$st")
+  fi
+  store "$st"; apply_now
+  info "$(label "$mon"): $1"
+}
+
+save() { # save [name]
+  need_hyprland
+  local mons st key name=${1:-}
+  mons=$(monitors); st=$(load); key=$(set_key "$mons")
+  if [[ -z $name ]]; then
+    if [[ $(jq length <<<"$mons") -gt 1 ]]; then name=docked; else name=undocked; fi
+  fi
+  [[ $name =~ ^[A-Za-z0-9._-]+$ ]] || die "profile names use letters, numbers, dots, dashes and underscores"
+  # A name belongs to one set of screens: take it off any other.
+  st=$(jq --arg key "$key" --arg n "$name" '
+    .layouts |= with_entries(if .key != $key and .value.name == $n then .value |= del(.name) else . end)' <<<"$st")
+  st=$(freeze_positions "$mons" "$st")
+  st=$(jq --arg key "$key" --arg n "$name" '.layouts[$key].name = $n' <<<"$st")
+  store "$(normalise "$st" "$key")"
+  info "saved '$name' for: $(jq -r '[.[] | .id] | join(", ")' <<<"$mons")"
+  info "It's applied again whenever exactly these screens are connected."
+}
+
+profiles() {
+  local key=""
+  if [[ -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then key=$(set_key "$(monitors)"); fi
+  load | jq -r --arg key "$key" '.layouts | to_entries[] | select(.value.name)
+    | (if .key == $key then "* " else "  " end) + .value.name + "  (" + .key + ")"' | sed '/^$/d'
+}
+
+apply_profile() { # apply_profile [name]
+  need_hyprland
+  if [[ -z ${1:-} ]]; then apply_now; return; fi
+  local mons st key want
+  mons=$(monitors); st=$(load); key=$(set_key "$mons")
+  want=$(jq -r --arg n "$1" '.layouts | to_entries[] | select(.value.name == $n) | .key' <<<"$st")
+  [[ -n $want ]] || die "no profile called '$1' (see: $DISTRO_ID display profiles)"
+  [[ $want == "$key" ]] || die "'$1' is for: $want — those screens aren't all connected"
+  apply_now
+  info "applied '$1'"
+}
+
+forget() {
+  [[ -n ${1:-} ]] || die "forget which profile?"
+  local st
+  st=$(load)
+  jq -e --arg n "$1" '[.layouts[] | select(.name == $n)] | length > 0' <<<"$st" >/dev/null || die "no profile called '$1'"
+  store "$(jq --arg n "$1" '.layouts |= with_entries(if .value.name == $n then .value |= del(.name) else . end)' <<<"$st")"
+  info "forgot '$1' (the screens keep their positions until changed)"
+}
+
+# Called by Hyprland when a screen is plugged in or unplugged. Several events
+# arrive together (a dock brings two screens), so wait a moment and run once.
+hotplug() {
+  [[ $(setting display.auto on) == on ]] || exit 0
+  local lock=${XDG_RUNTIME_DIR:-/tmp}/$DISTRO_ID-display.lock
+  exec 9>"$lock"
+  flock -n 9 || exit 0
+  sleep 1
+  apply_now
+}
+
+# --- the step-by-step editor --------------------------------------------------
+
+ask_choice() { # ask_choice <prompt> <options...> → choice
+  local prompt=$1; shift
+  if command -v gum >/dev/null && [[ -t 0 ]]; then
+    gum choose --header "$prompt" "$@"
+  else
+    local i=1 o
+    printf '%s\n' "$prompt" >&2
+    for o in "$@"; do printf '  %d) %s\n' "$i" "$o" >&2; i=$((i + 1)); done
+    read -rp "> " i
+    [[ $i =~ ^[0-9]+$ ]] && (( i >= 1 && i <= $# )) || return 1
+    printf '%s\n' "${!i}"
+  fi
+}
+
+edit() {
+  need_hyprland
+  local mons mon id choice name what
+  while :; do
+    clear 2>/dev/null || true
+    info "Displays"; info ""
+    preview; info ""; list; info ""
+    mons=$(monitors)
+    if [[ -n ${1:-} ]]; then mon=$(resolve "$mons" "$1"); set --
+    elif [[ $(jq length <<<"$mons") -eq 1 ]]; then mon=$(jq -c '.[0]' <<<"$mons")
+    else
+      mapfile -t names < <(jq -c '.[]' <<<"$mons" | while IFS= read -r m; do label "$m"; done)
+      choice=$(ask_choice "Which screen?" "${names[@]}" "Save as profile" "Done") || return 0
+      case $choice in
+        Done|"") return 0 ;;
+        "Save as profile")
+          read -rp "Profile name (e.g. docked, desk): " name
+          if [[ -n $name ]]; then save "$name"; fi
+          read -rp "Press Enter to continue " _; continue ;;
+      esac
+      mon=$(resolve "$mons" "$(sed -E 's/.*\(([^)]*)\)$/\1/' <<<"$choice")")
+    fi
+    id=$(jq -r .name <<<"$mon")
+    what=$(ask_choice "$(label "$mon"):" "Resolution" "Scale" "Position" "Rotation" "Turn off" "Turn on" "Back") || continue
+    case $what in
+      Resolution)
+        mapfile -t modes < <(jq -r '[.availableModes[] | capture("^(?<r>[0-9]+x[0-9]+)@(?<hz>[0-9.]+)Hz$")
+          | {r, hz: (.hz | tonumber | . * 100 | round / 100)}] | unique | sort_by(-(.r | split("x") | map(tonumber) | .[0] * .[1]), -.hz) | .[] | "\(.r)@\(.hz)"' <<<"$mon")
+        choice=$(ask_choice "Resolution:" "${modes[@]}") && set_screen "$id" "$choice" ;;
+      Scale)
+        choice=$(ask_choice "Scale (bigger number = bigger text):" "${scales[@]}" auto) && set_screen "$id" - "$choice" ;;
+      Position)
+        mapfile -t others < <(jq -r --arg n "$id" '.[] | select(.name != $n) | .name' <<<"$mons")
+        if (( ${#others[@]} == 0 )); then info "Only one screen is connected."; read -rp "Press Enter " _; continue; fi
+        choice=$(ask_choice "Place it:" "right-of" "left-of" "above" "below") || continue
+        other=$(ask_choice "Of which screen?" "${others[@]}") || continue
+        set_screen "$id" - - "$choice" "$other" ;;
+      Rotation)
+        choice=$(ask_choice "Rotation:" normal 90 180 270 flipped) && set_screen "$id" - - - "$choice" ;;
+      "Turn off") on_off off "$id" || read -rp "Press Enter " _ ;;
+      "Turn on") on_off on "$id" ;;
+    esac
+    if [[ $what == Back && $(jq length <<<"$mons") -eq 1 ]]; then return 0; fi
+  done
+}
+
+# Lines for the system menu (Setup › Displays): title, subtitle, command, icon.
+menu_items() {
+  local mons st profile
+  printf '%s\t%s\t%s\t%s\n' "Arrange displays" "Resolution, scale, position and rotation" "term: $DISTRO_ID display edit" "device-desktop"
+  if [[ -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then
+    mons=$(monitors); st=$(load); profile=$(active_profile "$mons" "$st")
+    printf '%s\t%s\t%s\t%s\n' "Save as profile" "${profile:+In use: $profile. }Remember this arrangement for these screens" \
+      "term: read -rp 'Profile name (e.g. docked, desk): ' n; [ -n \"\$n\" ] && $DISTRO_ID display save \"\$n\"" "device-floppy"
+  fi
+  load | jq -r --arg cli "$DISTRO_ID" '.layouts[] | select(.name) | [("Use profile: " + .name), "Apply this arrangement", ($cli + " display apply " + .name), "layout-board"] | @tsv'
+  if [[ $(setting display.auto on) == on ]]; then
+    printf '%s\t%s\t%s\t%s\n' "Switch automatically: on" "Rearrange when screens are plugged in" "$DISTRO_ID display auto off" "toggle-right"
+  else
+    printf '%s\t%s\t%s\t%s\n' "Switch automatically: off" "Rearrange when screens are plugged in" "$DISTRO_ID display auto on" "toggle-left"
+  fi
+}
+
+case ${1:-} in
+  list) need_hyprland; list ;;
+  edit) shift; edit "$@" ;;
+  set) shift; set_screen "$@" ;;
+  on|off) on_off "$1" "${2:-}" ;;
+  save) save "${2:-}" ;;
+  profiles) profiles ;;
+  apply)
+    if [[ ${2:-} == --hotplug ]]; then hotplug; else apply_profile "${2:-}"; fi ;;
+  forget) forget "${2:-}" ;;
+  auto)
+    case ${2:-} in on|off) set_setting display.auto "$2"; info "automatic switching: $2" ;; *) die "auto on or off?" ;; esac ;;
+  xwayland)
+    case ${2:-} in
+      sharp) set_setting display.xwayland sharp; info "X11 apps: sharp (drawn unscaled, so they look smaller at fractional scales)" ;;
+      default) set_setting display.xwayland default; info "X11 apps: scaled like everything else (may look slightly soft)" ;;
+      *) die "xwayland sharp or default?" ;;
+    esac
+    if [[ -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then write_generated "$(monitors)" "$(load)"; hyprctl reload config-only >/dev/null; fi ;;
+  preview) need_hyprland; preview ;;
+  menu-items) menu_items ;;
+  -h|--help|"") usage ;;
+  *) die "unknown display command: $1" ;;
+esac

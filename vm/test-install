@@ -355,6 +355,10 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       check "keyboard layouts switch"      "$hypr $id keyboard add de >/dev/null && sleep 1 && hyprctl devices -j | jq -e '[.keyboards[] | select(.main)][0].layout == \"us,de\"' >/dev/null && $id keyboard next && sleep 1 && hyprctl devices -j | jq -r '.keyboards[] | select(.main) | .active_keymap' | grep -q German"
       screenshot keyboard-layout
       check "keyboard layout removed"      "$hypr $id keyboard remove de >/dev/null && sleep 1 && hyprctl devices -j | jq -e '[.keyboards[] | select(.main)][0].layout == \"us\"' >/dev/null"
+      check "displays: scale, arrangement, profile, hotplug" "$(sed "s/@ID@/$id/g" "$here/checks/displays.sh")"
+      "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg panel-open launcher '/m Setup › Displays › ' >/dev/null" || true
+      screenshot displays-menu
+      "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg panel-close >/dev/null" || true
       check "idle: lock stays up; inhibitors respected" "$(sed "s/@ID@/$id/g" "$here/checks/idle.sh")"
       if "$here/ssh" "$vm" "$user" -- "test -x /usr/lib/$id/commands/power"; then
         check "idle counts again after a video" "$(sed "s/@ID@/$id/g" "$here/checks/idle-rearm.sh")"
