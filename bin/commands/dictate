@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# summary: Dictation: speak, and the text is typed into the focused window
+set -euo pipefail
+source "$DISTRO_LIB/lib.sh"
+
+# Speech-to-text runs locally with whisper.cpp; the audio never leaves the computer.
+models=${XDG_DATA_HOME:-$HOME/.local/share}/$DISTRO_ID/whisper
+model_name=$(setting dictate.model base.en)
+model=$models/ggml-$model_name.bin
+model_url=https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-$model_name.bin
+runtime=${XDG_RUNTIME_DIR:-/tmp}/$DISTRO_ID-dictate
+pidfile=$runtime/record.pid
+audio=$runtime/speech.wav
+
+usage() {
+  cat <<USAGE
+Usage: $DISTRO_ID dictate <command>
+
+  toggle    start listening; run again to stop and type what was said
+  setup     install whisper.cpp and download the speech model (~150 MB, once)
+  status    "listening", "ready" or "not set up"
+
+The model is set by dictate.model in ~/.config/$DISTRO_ID/settings
+(tiny.en, base.en, small.en, ...; default base.en). Everything runs on this computer.
+USAGE
+}
+
+note() { notify-send -a "$DISTRO_NAME" -h string:x-canonical-private-synchronous:dictate "$@" 2>/dev/null || true; }
+ready() { command -v whisper-cli >/dev/null && [[ -s $model ]]; }
+listening() { [[ -f $pidfile ]] && kill -0 "$(cat "$pidfile")" 2>/dev/null; }
+refresh_bar() { noctalia msg plugin "$DISTRO_ID/utilities:dictate" all refresh >/dev/null 2>&1 || true; }
+
+setup() {
+  local missing=()
+  command -v whisper-cli >/dev/null || missing+=(whisper-cpp)
+  command -v wtype >/dev/null || missing+=(wtype)
+  if (( ${#missing[@]} )); then install_packages "${missing[@]}"; fi
+  if [[ ! -s $model ]]; then
+    mkdir -p "$models"
+    info "downloading the $model_name speech model"
+    curl -fL --progress-bar -o "$model.part" "$model_url"
+    mv "$model.part" "$model"
+  fi
+  info "dictation is ready: press the microphone button in the bar, or SUPER+CTRL+D"
+}
+
+start() {
+  mkdir -p "$runtime"
+  rm -f "$audio"
+  setsid -f bash -c 'echo $$ > "$1"; exec pw-record --rate 16000 --channels 1 --format s16 "$2"' _ "$pidfile" "$audio"
+  sleep 0.3
+  refresh_bar
+  note -i audio-input-microphone "Listening" "Run dictation again to stop."
+}
+
+finish() {
+  local pid text
+  pid=$(cat "$pidfile"); rm -f "$pidfile"
+  kill -INT "$pid" 2>/dev/null || true
+  for _ in $(seq 30); do kill -0 "$pid" 2>/dev/null || break; sleep 0.1; done
+  refresh_bar
+  note -i audio-input-microphone "Transcribing…"
+  text=$(whisper-cli -m "$model" -f "$audio" -nt -np -t "$(nproc)" 2>/dev/null \
+    | sed -e 's/^[[:space:]]*//' -e '/^\[.*\]$/d' | tr '\n' ' ' | sed -e 's/[[:space:]]*$//')
+  rm -f "$audio"
+  if [[ -z $text ]]; then note "Didn't catch that"; exit 1; fi
+  wtype -- "$text"
+  note -t 1500 "Typed" "$text"
+}
+
+case ${1:-} in
+  toggle)
+    if listening; then finish
+    elif ready; then start
+    else
+      # First use: set up in a terminal so the download and password prompt are visible.
+      note "Setting up dictation" "Installing the speech engine and model (once)."
+      "/usr/bin/$DISTRO_ID" terminal launch -- bash -c "/usr/bin/$DISTRO_ID dictate setup; read -rsn1 -p 'Press any key to close'"
+    fi ;;
+  setup) setup ;;
+  status)
+    if listening; then echo listening; elif ready; then echo ready; else echo "not set up"; fi ;;
+  -h|--help|"") usage ;;
+  *) die "unknown dictate command: $1" ;;
+esac

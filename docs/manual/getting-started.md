@@ -13,14 +13,17 @@ Graphics drivers are picked from the hardware: AMD, Intel and NVIDIA (GTX 16xx /
 
 ## Keys
 
-SUPER is the Windows key.
+SUPER is the Windows key. SUPER+K lists every shortcut, searchable.
 
 | Key | Does |
 |---|---|
+| SUPER+ALT+Space | System menu: apps, capture, toggles, style, setup, install, update, power |
 | SUPER+Space | App launcher |
+| SUPER+K | Keyboard shortcuts |
 | SUPER+Return | Terminal |
 | SUPER+S | Quick settings (Wi-Fi, Bluetooth, sound) |
 | SUPER+comma | Settings |
+| SUPER+V | Clipboard history |
 | SUPER+W | Close window |
 | SUPER+F | Fullscreen |
 | SUPER+T | Float / tile window |
@@ -29,8 +32,19 @@ SUPER is the Windows key.
 | SUPER+Escape | Lock |
 | SUPER+N | Act on the latest notification |
 | ALT+Tab | Switch windows |
-| Print | Screenshot; SHIFT+Print: area; SUPER+Print: annotate |
+| Print | Screenshot of a region (SHIFT: screen, SUPER: window, CTRL: region then edit) |
+| ALT+Print | Start or stop a screen recording |
+| SUPER+CTRL+C | Pick a colour from the screen |
+| SUPER+CTRL+D | Dictate: speak, press again, the text is typed |
 | SUPER+SHIFT+Escape | Log out |
+
+## The bar
+
+Left: the menu (crescent; right-click for apps) and workspaces. Centre: stay awake, night light, silence notifications, reminders, screen recording and dictation, then the clock and weather. Right: media, tray, AI usage, crashes, and status icons (network, Bluetooth, sound, brightness, battery, power), each opening its own panel.
+
+## The system menu
+
+SUPER+ALT+Space (or `/m` in the launcher). Type part of a name and press Enter to open it; keep typing to filter the next level; Backspace goes back. Items are in `/usr/share/lunarc/default/menu/menu`; copy it to `~/.config/lunarc/menu` to make your own.
 
 ## The `lunarc` command
 
@@ -44,6 +58,10 @@ SUPER is the Windows key.
 | `lunarc crash list` / `show` / `diagnose` / `resolve` | The crash list; also the bug icon in the bar |
 | `lunarc app list` / `search <word>` / `install <app>` | Browse and install apps: browsers, editors, AI (Claude, ChatGPT, Ollama, Hermes), games (Steam, Lutris, Heroic), chat and more |
 | `lunarc update` / `update check` | Update everything / see what's waiting |
+| `lunarc capture screenshot\|record\|stop\|color\|text\|qr` | Screenshots (`~/Pictures/Screenshots`), recordings (`~/Videos/Recordings`), colour picker, copy text or a QR code from the screen |
+| `lunarc remind "stretch" in 20m` / `at 15:30` / `list` / `cancel <id>` | Reminders (also the alarm icon in the bar) |
+| `lunarc dictate toggle` / `setup` | Dictation; runs locally with whisper.cpp (first use downloads a ~150 MB model) |
+| `lunarc menu` / `lunarc keys` | The system menu / the shortcut list |
 | `lunarc migrate --list --user` | See which config migrations have run |
 | `lunarc screensaver effects` / `preview [effect]` | List the screensaver's effects / play one now (any key closes it) |
 

@@ -1,0 +1,157 @@
+#!/usr/bin/env bash
+# summary: Screenshots, screen recordings, colour picker, text and QR from the screen
+set -euo pipefail
+source "$DISTRO_LIB/lib.sh"
+
+shots=$(xdg-user-dir PICTURES 2>/dev/null || echo "$HOME/Pictures")/Screenshots
+videos=$(xdg-user-dir VIDEOS 2>/dev/null || echo "$HOME/Videos")/Recordings
+recording_pid=${XDG_RUNTIME_DIR:-/tmp}/$DISTRO_ID-recording.pid
+recording_file=${XDG_RUNTIME_DIR:-/tmp}/$DISTRO_ID-recording.path
+
+usage() {
+  cat <<USAGE
+Usage: $DISTRO_ID capture <command>
+
+  screenshot [region|window|screen] [--edit]   save to $shots and copy it
+  record [region|screen] [--audio]            start a screen recording
+  stop                                         stop the recording
+  record-toggle [region|screen]                start or stop
+  status                                       "recording" or "idle"
+  color                                        pick a colour; copies its hex code
+  text                                         copy the text in a region (OCR)
+  qr                                           read a QR code in a region
+
+Screenshots are copied to the clipboard as well as saved. Recordings go to
+$videos.
+USAGE
+}
+
+note() { notify-send -a "$DISTRO_NAME" "$@" 2>/dev/null || true; }
+
+# A region chosen with the mouse, or empty if cancelled.
+pick_region() { slurp -d 2>/dev/null || true; }
+
+active_window_geometry() {
+  hyprctl activewindow -j | jq -r 'if .at then "\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])" else empty end'
+}
+
+focused_output() {
+  hyprctl monitors -j | jq -r '.[] | select(.focused) | .name'
+}
+
+screenshot() {
+  local mode=region edit=0 arg file geometry=""
+  for arg in "$@"; do
+    case $arg in
+      region|window|screen) mode=$arg ;;
+      --edit) edit=1 ;;
+      *) die "unknown screenshot option: $arg" ;;
+    esac
+  done
+  case $mode in
+    region) geometry=$(pick_region); [[ -n $geometry ]] || exit 0 ;;
+    window) geometry=$(active_window_geometry); [[ -n $geometry ]] || die "no focused window" ;;
+  esac
+  mkdir -p "$shots"
+  file=$shots/screenshot-$(date +%Y%m%d-%H%M%S).png
+  if [[ $mode == screen ]]; then grim -o "$(focused_output)" "$file"
+  else grim -g "$geometry" "$file"; fi
+  if (( edit )) && command -v satty >/dev/null; then
+    satty --filename "$file" --output-filename "$file" --copy-command wl-copy --early-exit >/dev/null 2>&1
+  else
+    # wl-copy stays running to serve the clipboard; keep it off our stdout.
+    wl-copy --type image/png < "$file" >/dev/null 2>&1
+  fi
+  printf '%s\n' "$file"
+  if [[ -t 1 ]]; then return; fi
+  note -i "$file" "Screenshot saved" "Copied to the clipboard. ${file/#$HOME/\~}"
+}
+
+is_recording() {
+  if [[ ! -f $recording_pid ]]; then return 1; fi
+  kill -0 "$(cat "$recording_pid")" 2>/dev/null
+}
+
+refresh_bar() {
+  noctalia msg plugin "$DISTRO_ID/utilities:recorder" all refresh >/dev/null 2>&1 || true
+}
+
+record() {
+  local mode=screen audio=0 arg file geometry args
+  for arg in "$@"; do
+    case $arg in
+      region|screen) mode=$arg ;;
+      --audio) audio=1 ;;
+      *) die "unknown record option: $arg" ;;
+    esac
+  done
+  if is_recording; then info "already recording"; return; fi
+  command -v gpu-screen-recorder >/dev/null || die "screen recording needs gpu-screen-recorder"
+  mkdir -p "$videos"
+  file=$videos/recording-$(date +%Y%m%d-%H%M%S).mp4
+  if [[ $mode == region ]]; then
+    geometry=$(pick_region); [[ -n $geometry ]] || exit 0
+    # slurp gives "x,y WxH"; gpu-screen-recorder wants "WxH+x+y".
+    local xy=${geometry%% *} wh=${geometry##* }
+    args=(-w region -region "$wh+${xy%,*}+${xy#*,}")
+  else
+    args=(-w "$(focused_output)")
+  fi
+  if (( audio )); then args+=(-a default_output); fi
+  # The GPU's video encoder when there is one, the CPU otherwise.
+  args+=(-f 60 -fallback-cpu-encoding yes -o "$file")
+  setsid -f bash -c 'echo $$ > "$1"; shift; exec gpu-screen-recorder "$@"' _ \
+    "$recording_pid" "${args[@]}" </dev/null >"${XDG_RUNTIME_DIR:-/tmp}/$DISTRO_ID-recording.log" 2>&1
+  printf '%s\n' "$file" > "$recording_file"
+  sleep 1
+  if ! is_recording; then
+    rm -f "$recording_pid" "$recording_file"
+    note -u critical "Recording didn't start" "$(tail -n 2 "${XDG_RUNTIME_DIR:-/tmp}/$DISTRO_ID-recording.log")"
+    die "recording didn't start; see ${XDG_RUNTIME_DIR:-/tmp}/$DISTRO_ID-recording.log"
+  fi
+  refresh_bar
+  if [[ -t 1 ]]; then info "recording to $file ($DISTRO_ID capture stop to finish)"; fi
+}
+
+stop_recording() {
+  local pid file
+  if ! is_recording; then info "not recording"; return; fi
+  pid=$(cat "$recording_pid")
+  kill -INT "$pid"
+  for _ in $(seq 50); do kill -0 "$pid" 2>/dev/null || break; sleep 0.1; done
+  file=$(cat "$recording_file" 2>/dev/null || true)
+  rm -f "$recording_pid" "$recording_file"
+  refresh_bar
+  printf '%s\n' "$file"
+  note "Recording saved" "${file/#$HOME/\~}"
+}
+
+case ${1:-} in
+  screenshot) shift; screenshot "$@" ;;
+  record) shift; record "$@" ;;
+  stop) stop_recording ;;
+  record-toggle)
+    shift
+    if is_recording; then stop_recording; else record "$@"; fi ;;
+  status) if is_recording; then echo recording; else echo idle; fi ;;
+  color)
+    hex=$(hyprpicker -f hex 2>/dev/null || true)
+    if [[ -n $hex ]]; then
+      printf '%s' "$hex" | wl-copy >/dev/null 2>&1
+      note "Colour copied" "$hex"; printf '%s\n' "$hex"
+    fi ;;
+  text)
+    geometry=$(pick_region); [[ -n $geometry ]] || exit 0
+    text=$(grim -g "$geometry" - | tesseract - - 2>/dev/null | sed -e '/^[[:space:]]*$/d')
+    if [[ -z $text ]]; then note "No text found"; exit 1; fi
+    printf '%s' "$text" | wl-copy >/dev/null 2>&1
+    note "Text copied" "$(head -c 200 <<<"$text")" ;;
+  qr)
+    geometry=$(pick_region); [[ -n $geometry ]] || exit 0
+    code=$(grim -g "$geometry" - | zbarimg -q --raw - 2>/dev/null || true)
+    if [[ -z $code ]]; then note "No QR code found"; exit 1; fi
+    printf '%s' "$code" | wl-copy >/dev/null 2>&1
+    note "QR code copied" "$code" ;;
+  -h|--help|"") usage ;;
+  *) die "unknown capture command: $1" ;;
+esac

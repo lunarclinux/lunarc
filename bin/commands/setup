@@ -3,14 +3,30 @@
 set -euo pipefail
 source "$DISTRO_LIB/lib.sh"
 
+# Weather location from the time zone: its city name (only that is looked up
+# online), and imperial units where those are the norm.
+weather_location() {
+  local config=${XDG_CONFIG_HOME:-$HOME/.config}/noctalia/config.toml zone city country unit=metric
+  [[ -f $config ]] || return 0
+  grep -q '^\[location\]' "$config" && return 0
+  zone=$(timedatectl show -p Timezone --value 2>/dev/null || true)
+  [[ $zone == */* ]] || return 0
+  city=${zone##*/}; city=${city//_/ }
+  country=$(awk -v z="$zone" '$3 == z { print $1; exit }' /usr/share/zoneinfo/zone.tab 2>/dev/null)
+  case $country in US|LR|MM) unit=imperial ;; esac
+  printf '\n# Set at first login from the time zone; change it here or in Settings.\n[location]\naddress = "%s"\n\n[weather]\nunit = "%s"\n' \
+    "$city" "$unit" >> "$config"
+}
+
 case ${1:-} in
   first-login)
     done_file=$STATE_DIR/first-login-done
     [[ -f $done_file ]] && exit 0
     "/usr/bin/$DISTRO_ID" theme set "$(setting theme moonlit)"
+    weather_location
     mkdir -p "$STATE_DIR"; date -Is > "$done_file"
     notify-send -a "$DISTRO_NAME" "Welcome to $DISTRO_NAME" \
-      "SUPER+Space: apps. SUPER+Return: terminal. SUPER+S: quick settings. SUPER+comma: settings. SUPER+W: close a window. SUPER+Escape: lock.
+      "SUPER+ALT+Space: menu. SUPER+Space: apps. SUPER+Return: terminal. SUPER+K: all shortcuts. SUPER+W: close a window. SUPER+Escape: lock.
 Run '$DISTRO_ID help' in a terminal for the command-line tools." 2>/dev/null || true ;;
   -h|--help|"") echo "Usage: $DISTRO_ID setup first-login" ;;
   *) die "unknown setup step: $1" ;;

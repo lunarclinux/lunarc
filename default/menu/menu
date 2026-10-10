@@ -1,0 +1,72 @@
+# The system menu (SUPER+ALT+Space, or /m in the launcher). One item per line:
+#   group | title | description | command | glyph (optional, a Tabler icon name)
+# A top-level item has an empty group. A group appears as soon as an item uses
+# it; give it a description with a line whose title is empty.
+# Commands run detached. Prefixes:
+#   term:      run in a terminal and wait for a key before closing
+#   menu:      a generated submenu (install, remove, theme, terminal, agent)
+#   launcher:  switch the launcher to this search (e.g. "/keys ")
+# Copy this file to ~/.config/@DISTRO_ID@/menu to change your own.
+
+| Apps | Search and open apps | launcher: | apps
+
+Learn | | Shortcuts, commands and documentation |
+Learn | Keyboard shortcuts | Every key binding, searchable (SUPER+K) | launcher: /keys | keyboard
+Learn | The @DISTRO_ID@ command | What the command-line tool can do | term: @DISTRO_ID@ help
+Learn | Arch Wiki | The Arch Linux documentation | xdg-open https://wiki.archlinux.org
+Learn | Hyprland Wiki | Window manager settings and rules | xdg-open https://wiki.hypr.land
+Learn | Noctalia docs | The bar, launcher and panels | xdg-open https://docs.noctalia.dev
+Learn | Bash basics | A short guide to the terminal | xdg-open https://linuxcommand.org/lc3_learning_the_shell.php
+
+Capture | | Screenshots, recordings, colours and text |
+Capture | Screenshot: region | Select an area (Print) | @DISTRO_ID@ capture screenshot region | screenshot
+Capture | Screenshot: region, then edit | Draw, crop, add arrows and text | @DISTRO_ID@ capture screenshot region --edit | pencil
+Capture | Screenshot: window | The focused window (SUPER+Print) | @DISTRO_ID@ capture screenshot window | app-window
+Capture | Screenshot: screen | The whole screen (SHIFT+Print) | @DISTRO_ID@ capture screenshot screen | device-desktop
+Capture | Record the screen | Click the red button in the bar to stop | @DISTRO_ID@ capture record screen | video
+Capture | Record a region | Select an area to record | @DISTRO_ID@ capture record region | video
+Capture | Record the screen with sound | Includes what you hear | @DISTRO_ID@ capture record screen --audio | video-plus
+Capture | Stop recording | Save the recording | @DISTRO_ID@ capture stop | player-stop
+Capture | Pick a colour | Copies the hex code | @DISTRO_ID@ capture color | color-picker
+Capture | Copy text from the screen | Select an area; its text is copied | @DISTRO_ID@ capture text | text-recognition
+Capture | Read a QR code | Select the code; its contents are copied | @DISTRO_ID@ capture qr | qrcode
+
+Toggle | | Quick switches |
+Toggle | Stay awake | Keep the screen on and the computer awake | noctalia msg caffeine-toggle | coffee
+Toggle | Night light | Warmer colours in the evening | noctalia msg nightlight-toggle | moon
+Toggle | Silence notifications | Notifications still go to the history | noctalia msg notification-dnd-toggle | bell-off
+Toggle | Dictation | Speak to type (SUPER+CTRL+D) | @DISTRO_ID@ dictate toggle | microphone
+Toggle | Dark mode | Use the theme's dark colours | @DISTRO_ID@ theme mode dark | moon-stars
+Toggle | Light mode | Use the theme's light colours | @DISTRO_ID@ theme mode light | sun
+Toggle | Bar | Show or hide the bar | noctalia msg bar-toggle | layout-navbar
+
+Style | | Theme, wallpaper and screensaver |
+Style | Theme | Colours for everything | menu: theme | palette
+Style | Wallpaper | Choose a wallpaper | noctalia msg panel-open wallpaper | photo
+Style | Next wallpaper | Switch to the next one | noctalia msg wallpaper-next | arrow-right
+Style | Screensaver | Preview the screensaver | @DISTRO_ID@ screensaver preview | device-tv
+
+Setup | | Network, devices and defaults |
+Setup | Wi-Fi | Networks and connections | noctalia msg panel-open control-center network | wifi
+Setup | Bluetooth | Pair and connect devices | noctalia msg panel-open control-center bluetooth | bluetooth
+Setup | Sound | Outputs, inputs and volume | noctalia msg panel-open control-center audio | volume
+Setup | Power profile | Cycle performance, balanced and power saver | noctalia msg power-cycle | bolt
+Setup | Reminders | Upcoming reminders | noctalia msg panel-toggle @DISTRO_ID@/utilities:reminders-panel | alarm
+Setup | Default terminal | The terminal SUPER+Return opens | menu: terminal | terminal-2
+Setup | Coding agent | The AI agent used for diagnosis and prompts | menu: agent | sparkles
+Setup | Dictation | Install the speech engine (once) | term: @DISTRO_ID@ dictate setup | microphone
+Setup | Shell settings | Bar, launcher, notifications and more | noctalia msg settings-open | adjustments
+
+Install | | Add apps, by category | menu: install
+Remove | | Remove apps you added | menu: remove
+
+Update | | Keep the system current |
+Update | Update everything | Packages and the distro | term: @DISTRO_ID@ update | refresh
+Update | Check for updates | See what's waiting | term: @DISTRO_ID@ update check | list-search
+
+Power | | Lock, sleep, restart |
+Power | Lock | SUPER+Escape | noctalia msg session lock | lock
+Power | Suspend | Sleep until you wake it | noctalia msg session suspend | zzz
+Power | Restart | | noctalia msg session reboot | reload
+Power | Shut down | | noctalia msg session shutdown | power
+Power | Log out | | noctalia msg session logout | logout

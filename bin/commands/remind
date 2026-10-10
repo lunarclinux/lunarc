@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+# summary: Reminders: a notification at a time you choose
+set -euo pipefail
+source "$DISTRO_LIB/lib.sh"
+
+store=$STATE_DIR/reminders
+units=${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user
+prefix=$DISTRO_ID-remind
+
+usage() {
+  cat <<USAGE
+Usage: $DISTRO_ID remind <text> in <time>     e.g. remind "stretch" in 20m   (s, m, h, d; 1h30m)
+       $DISTRO_ID remind <text> at <time>     e.g. remind "call Sam" at 15:30, at "tomorrow 9:00"
+       $DISTRO_ID remind list [--json]
+       $DISTRO_ID remind cancel <id>
+
+Reminders are systemd user timers, so they survive a restart; one that was
+due while the computer was off shows up at the next login.
+USAGE
+}
+
+# "1h30m" -> "1 hour 30 min" for date -d.
+duration_words() {
+  local d=$1 out="" n u
+  [[ $d =~ ^([0-9]+[smhd])+$ ]] || return 1
+  while [[ $d =~ ^([0-9]+)([smhd])(.*)$ ]]; do
+    n=${BASH_REMATCH[1]} u=${BASH_REMATCH[2]} d=${BASH_REMATCH[3]}
+    case $u in s) u=sec ;; m) u=min ;; h) u=hour ;; d) u=day ;; esac
+    out+=" $n $u"
+  done
+  printf '%s\n' "$out"
+}
+
+due_epoch() { # due_epoch in|at <time>
+  local words t now
+  now=$(date +%s)
+  case $1 in
+    in)
+      words=$(duration_words "$2") || die "can't read '$2' (use e.g. 20m, 1h, 1h30m)"
+      date -d "now$words" +%s ;;
+    at)
+      t=$(date -d "$2" +%s 2>/dev/null) || die "can't read the time '$2'"
+      # A bare clock time that has passed today means tomorrow.
+      if (( t <= now )) && [[ $2 =~ ^[0-9]{1,2}(:[0-9]{2})?( ?[aApP][mM])?$ ]]; then
+        t=$(date -d "tomorrow $2" +%s)
+      fi
+      (( t > now )) || die "that time has already passed"
+      printf '%s\n' "$t" ;;
+    *) return 1 ;;
+  esac
+}
+
+refresh_bar() {
+  noctalia msg plugin "$DISTRO_ID/utilities:reminders" all refresh >/dev/null 2>&1 || true
+}
+
+add() {
+  local text=$1 when=$2 value=$3 due id
+  [[ -n $text ]] || die "what should the reminder say?"
+  due=$(due_epoch "$when" "$value") || { usage >&2; exit 2; }
+  id=$(date +%s%N | tail -c 7)
+  mkdir -p "$store" "$units"
+  jq -n --arg id "$id" --arg text "$text" --argjson due "$due" '{id: $id, text: $text, due: $due}' > "$store/$id.json"
+  cat > "$units/$prefix-$id.service" <<UNIT
+[Unit]
+Description=Reminder $id
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/$DISTRO_ID remind fire $id
+UNIT
+  cat > "$units/$prefix-$id.timer" <<UNIT
+[Unit]
+Description=Reminder $id (timer)
+
+[Timer]
+OnCalendar=$(date -d "@$due" '+%Y-%m-%d %H:%M:%S')
+AccuracySec=1s
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+  systemctl --user daemon-reload
+  systemctl --user enable --now "$prefix-$id.timer" >/dev/null 2>&1
+  refresh_bar
+  info "reminder $id at $(date -d "@$due" '+%a %H:%M')"
+}
+
+remove_units() { # remove_units <id>
+  systemctl --user disable --now "$prefix-$1.timer" >/dev/null 2>&1 || true
+  rm -f "$units/$prefix-$1.timer" "$units/$prefix-$1.service" "$store/$1.json"
+  systemctl --user daemon-reload
+}
+
+list_json() {
+  local f
+  shopt -s nullglob
+  local files=("$store"/*.json)
+  if (( ${#files[@]} == 0 )); then echo '[]'; return; fi
+  for f in "${files[@]}"; do cat "$f"; done | jq -s 'sort_by(.due)'
+}
+
+case ${1:-} in
+  list)
+    if [[ ${2:-} == --json ]]; then list_json
+    else
+      list_json | jq -r '.[] | "\(.id)  \(.due | strflocaltime("%a %H:%M"))  \(.text)"'
+    fi ;;
+  cancel)
+    [[ -n ${2:-} ]] || die "cancel which reminder? see: $DISTRO_ID remind list"
+    [[ -f $store/$2.json ]] || die "no reminder $2"
+    remove_units "$2"; refresh_bar; info "cancelled" ;;
+  fire)
+    # Run by the reminder's timer.
+    [[ -f $store/${2:-}.json ]] || exit 0
+    text=$(jq -r .text "$store/$2.json")
+    notify-send -a "$DISTRO_NAME" -i alarm-symbolic -u critical "Reminder" "$text" || true
+    remove_units "$2"; refresh_bar ;;
+  -h|--help|"") usage ;;
+  *)
+    # remind <text...> in|at <time>
+    args=("$@")
+    n=${#args[@]}
+    if (( n < 3 )) || [[ ${args[n-2]} != in && ${args[n-2]} != at ]]; then usage >&2; exit 2; fi
+    add "${args[*]:0:n-2}" "${args[n-2]}" "${args[n-1]}" ;;
+esac
