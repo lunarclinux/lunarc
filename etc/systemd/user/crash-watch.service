@@ -7,6 +7,9 @@ PartOf=graphical-session.target
 
 [Service]
 ExecStart=/usr/bin/@DISTRO_ID@ crash watch
+# Capturing a crash must not look up debug symbols online (that would tell a
+# server which programs crashed); diagnosing one, which the user starts, may.
+Environment=DEBUGINFOD_URLS=
 Restart=on-failure
 RestartSec=5
 

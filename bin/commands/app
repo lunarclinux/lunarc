@@ -115,6 +115,27 @@ DESKTOP
   info "added $2 to the launcher"
 }
 
+# Apps that send usage data by default get it turned off when installed
+# through the catalog (decision record 0031); the user can turn it back on in
+# the app. Only adds the setting; never rewrites a settings file it can't parse.
+json_setting_defaults() { # json_setting_defaults <file> <jq object of defaults>
+  local file=$1 tmp
+  mkdir -p "${file%/*}"
+  if [[ ! -s $file ]]; then printf '%s\n' "$2" | jq . > "$file"; return; fi
+  tmp=$(mktemp)
+  if jq --argjson d "$2" '$d * .' "$file" > "$tmp" 2>/dev/null; then mv "$tmp" "$file"
+  else rm -f "$tmp"; info "note: couldn't update $file (comments?); turn telemetry off in the app's settings"; fi
+}
+
+app_privacy_defaults() { # app_privacy_defaults <id>
+  local config=${XDG_CONFIG_HOME:-$HOME/.config}
+  case $1 in
+    vscode) json_setting_defaults "$config/Code/User/settings.json" '{"telemetry.telemetryLevel":"off","workbench.enableExperiments":false,"workbench.settings.enableNaturalLanguageSearch":false}' ;;
+    code) json_setting_defaults "$config/Code - OSS/User/settings.json" '{"telemetry.telemetryLevel":"off","workbench.enableExperiments":false}' ;;
+    zed) json_setting_defaults "$config/zed/settings.json" '{"telemetry":{"diagnostics":false,"metrics":false}}' ;;
+  esac
+}
+
 install_one() {
   local r id cat name src target note pkgs
   r=$(row "$1") || true
@@ -137,6 +158,7 @@ install_one() {
       esac ;;
     *) die "catalog: $id has an unknown source '$src'" ;;
   esac
+  app_privacy_defaults "$id"
 }
 
 remove_one() {

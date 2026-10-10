@@ -11,7 +11,9 @@ if [[ -n $SSH_KEY ]]; then
   install -m600 "$SSH_KEY" "$home/.ssh/authorized_keys"
   in_target chown -R "$USERNAME:$USERNAME" "/home/$USERNAME/.ssh"
   in_target systemctl enable sshd.service >/dev/null 2>&1
-  info "sshd enabled with the given key"
+  # The firewall (set up in 45-desktop) refuses SSH unless asked; it was.
+  in_target firewall-offline-cmd --zone=public --add-service=ssh >/dev/null
+  info "sshd enabled with the given key (and allowed through the firewall)"
 fi
 
 # The desktop keyring (passwords saved by browsers, editors, mail). A password

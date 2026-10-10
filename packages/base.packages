@@ -22,3 +22,9 @@ nano
 # Snapshots before and after every pacman transaction (rollback: `<id> update rollback`)
 snapper
 snap-pac
+
+# Security (decision record 0031): a firewall that refuses incoming
+# connections, and firmware security updates (checked only when asked:
+# `<id> update firmware`).
+firewalld
+fwupd

@@ -83,6 +83,18 @@ case $part in
     # The system's name (os-release), kept in place by a hook.
     put "$src/etc/os-release" "$dest/usr/share/$id/os-release"
     put "$src/etc/pacman.d/hooks/os-release.hook" "$dest/usr/share/libalpm/hooks/$id-os-release.hook"
+    # Privacy and security defaults (decision record 0031): telemetry opt-outs
+    # for the session and for login shells, kernel hardening, GNOME app defaults.
+    put "$src/default/privacy/environment.conf" "$dest/usr/lib/environment.d/60-$id-privacy.conf"
+    install -d "$dest/etc/profile.d"
+    printf '# Telemetry opt-outs for shells outside the desktop session (TTY, SSH).\nset -a\n. /usr/lib/environment.d/60-%s-privacy.conf\nset +a\n' "$id" \
+      > "$dest/etc/profile.d/$id-privacy.sh"
+    put "$src/etc/sysctl.d/hardening.conf" "$dest/usr/lib/sysctl.d/90-$id-hardening.conf"
+    put "$src/default/privacy/gschema.override" "$dest/usr/share/glib-2.0/schemas/90_$id.gschema.override"
+    # New users' AI tool defaults outside ~/.config (Gemini CLI reads ~/.gemini).
+    put "$src/default/privacy/gemini-settings.json" "$dest/etc/skel/.gemini/settings.json"
+    # The connection inventory, also in the manual.
+    put "$src/docs/manual/privacy.md" "$dest/usr/share/$id/doc/privacy.md"
     # ~/.local/bin on PATH for shells.
     put "$src/etc/profile.d/local-bin.sh" "$dest/etc/profile.d/$id-local-bin.sh"
     # The same editor default for shells outside the desktop session (TTY, SSH).
@@ -92,6 +104,12 @@ case $part in
     install -d -m750 "$dest/etc/sudoers.d"   # sudo's own package creates it 750
     put "$src/etc/sudoers.d/10-wheel" "$dest/etc/sudoers.d/10-$id-wheel" 440
     put "$src/etc/systemd/zram-generator.conf" "$dest/etc/systemd/zram-generator.conf"
+    # Firefox's system policies: no telemetry, studies or sponsored content,
+    # strict tracking protection, HTTPS-only, uBlock Origin (decision record 0031).
+    put "$src/etc/firefox/policies.json" "$dest/etc/firefox/policies/policies.json"
+    # Network privacy: random Wi-Fi MAC per network, IPv6 privacy addresses,
+    # the hostname not sent to DHCP servers.
+    put "$src/etc/NetworkManager/privacy.conf" "$dest/etc/NetworkManager/conf.d/50-$id-privacy.conf"
     # fastfetch's system-wide defaults (it reads $XDG_CONFIG_DIRS): the crescent logo, theme colours.
     put "$src/default/branding/fastfetch.jsonc" "$dest/etc/xdg/fastfetch/config.jsonc"
     # greetd's own package owns /etc/greetd/config.toml, so ours lives beside it

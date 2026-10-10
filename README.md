@@ -4,6 +4,10 @@ A personal Arch Linux based distribution, built from scratch in layers.
 
 The working name is set in `distro.conf` (history in `docs/decisions/`). Nothing else in the repo writes the name out, so it can be changed in one place.
 
+## Project rule: privacy and security by default
+
+Nothing about the user leaves the machine unless they ask: telemetry off in everything we ship, every automatic connection listed in `docs/manual/privacy.md`, encryption and a closed firewall by default. Any new default goes through the checklist in `docs/decisions/0031-privacy-and-security-by-default.md`.
+
 ## Layers
 
 | Layer | What it adds |
