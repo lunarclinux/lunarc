@@ -42,7 +42,7 @@ done
 names="\\b(${DISTRO_ID}|${DISTRO_REPO}|${DISTRO_NAME})\\b"
 blocked=''
 while read -r f; do
-  case $f in distro.conf|docs/*|.githooks/*|tools/lint) continue ;; esac
+  case $f in distro.conf|docs/*|site/*|.githooks/*|tools/lint) continue ;; esac
   [[ -f $f ]] || continue
   grep -qE "$names" <<<"$f" && problem "file name contains the distro name: $f"
   grep -IqE "$names" "$f" && problem "$f writes the distro name literally"

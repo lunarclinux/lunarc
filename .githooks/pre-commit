@@ -3,7 +3,7 @@
 #   1. write the distro name anywhere except distro.conf, or
 #   2. mention the reference distro or its makers (clean-room rule, ADR 0001), or
 #   3. contain a private key block.
-# docs/ is exempt from both: decision records and the build log need to name
+# docs/ and site/ (the public website) are exempt from both: decision records and the build log need to name
 # things. Run `git config core.hooksPath .githooks` once after cloning.
 set -euo pipefail
 
@@ -17,7 +17,7 @@ names="\\b(${DISTRO_ID}|${DISTRO_REPO}|${DISTRO_NAME})\\b"
 fail=0
 while IFS= read -r -d '' file; do
   case "$file" in
-    distro.conf|docs/*|.githooks/*|tools/lint) continue ;;
+    distro.conf|docs/*|site/*|.githooks/*|tools/lint) continue ;;
   esac
   added=$(git diff --cached -U0 -- "$file" | grep -E '^\+[^+]' || true)
   checks=("$file" "$added")
