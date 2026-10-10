@@ -174,7 +174,20 @@ case ${1:-} in
         sleep 2
       done ) &
     anim=$!
-    if (( lock )); then wait "$anim"; exit 0; fi
+    if (( lock )); then
+      # Behind the lock this terminal is a child of windowtolayer. If the lock
+      # screen goes away without closing it (a crash), stop, so no orphaned
+      # animation keeps running.
+      terminal=$PPID
+      while kill -0 "$anim" 2>/dev/null; do
+        holder=$(ps -o ppid= -p "$terminal" 2>/dev/null | tr -d ' ')
+        if [[ -z $holder || $(ps -o comm= -p "$holder" 2>/dev/null) != windowtolayer ]]; then
+          pkill -P "$anim" 2>/dev/null; kill "$anim" 2>/dev/null; exit 0
+        fi
+        sleep 2
+      done
+      exit 0
+    fi
     # Any key or mouse movement ends it. The terminal reports mouse motion once
     # asked to (\e[?1003h); ignore what arrives while the window settles.
     printf '\e[?1003h'

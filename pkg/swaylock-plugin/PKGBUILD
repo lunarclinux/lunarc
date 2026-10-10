@@ -2,6 +2,10 @@
 # plays the screensaver behind a real session lock. Not in Arch's official
 # repositories, so the distro's repository carries it. Built from the tagged
 # release, checksum-pinned.
+#
+# Built without logind: its sleep watcher (ends the grace period on sleep)
+# segfaulted on suspend in testing and left the locker spinning. The distro's
+# lock-watch service ends the grace period instead (SIGUSR2) before sleep.
 pkgname=swaylock-plugin
 pkgver=1.8.7
 pkgrel=1
@@ -9,7 +13,7 @@ pkgdesc="Fork of swaylock that draws its background with a wallpaper program"
 arch=(x86_64)
 url="https://github.com/mstoeckl/swaylock-plugin"
 license=(MIT)
-depends=(glibc wayland cairo pam libxkbcommon systemd-libs glib2 gdk-pixbuf2 swaybg)
+depends=(glibc wayland cairo pam libxkbcommon glib2 gdk-pixbuf2 swaybg)
 makedepends=(meson ninja scdoc wayland-protocols)
 optdepends=('windowtolayer: run a terminal program as the background')
 backup=(etc/pam.d/swaylock-plugin)
@@ -29,6 +33,7 @@ build() {
   command -v scdoc >/dev/null || man=disabled
   _meson setup --prefix=/usr --libexecdir=lib --sbindir=bin --buildtype=plain \
     --wrap-mode=nodownload -Db_pie=true -Dman-pages=$man \
+    -Dlogind=disabled \
     build "$pkgname-$pkgver"
   _meson compile -C build
 }
