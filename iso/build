@@ -80,6 +80,11 @@ sed -i 's/^timeout .*/timeout 5/' "$profile/efiboot/loader/loader.conf"
 # own keyring is left alone. The live system trusts the key at boot: the
 # keyring package is installed and pacman-init populates every keyring.
 cp -r "$repo" "$work/repo"; chmod 755 "$work/repo"; chmod 644 "$work/repo"/*
+# mkarchiso uses the build machine's package cache; an older build of one of
+# these packages with the same version would fail its checksum there.
+for pkg in "$work/repo"/*.pkg.tar.*; do
+  rm -f "/var/cache/pacman/pkg/${pkg##*/}"
+done
 gpgdir=$work/gnupg
 pacman-key --gpgdir "$gpgdir" --init >/dev/null 2>&1
 pacman-key --gpgdir "$gpgdir" --populate archlinux >/dev/null 2>&1
