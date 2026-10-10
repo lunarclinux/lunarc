@@ -1,11 +1,23 @@
 #!/usr/bin/env bash
-# Uploads the built repository (pkg/out/repo) to the GitHub release named
-# "packages" in the repository set in repo.conf (REPO_GITHUB), which installed
-# systems download from (REPO_URL). Refuses unsigned builds.
+# Publishes the built repository (pkg/out/repo) to the GitHub release named
+# "packages" in the repository set in repo.conf (REPO_GITHUB). Installed
+# systems download from REPO_URL, which redirects there.
 #
-#   pkg/build && tools/publish
+#   pkg/build && tools/publish [--dry-run]
 #
-# Needs the GitHub CLI (gh), logged in with write access to that repository.
+# Safe to rerun and to interrupt:
+# - it refuses unsigned builds, and any package whose version would go
+#   backwards compared with what is published;
+# - a package whose version hasn't changed keeps the published file (a rebuild
+#   of the same version has a different checksum, which would break clients
+#   that already downloaded it), and the database is rebuilt and re-signed to
+#   match;
+# - new package files go up first, then the database, then files the database
+#   no longer names are removed, so clients never see a database naming a
+#   missing file.
+#
+# Needs the GitHub CLI (gh) with write access, and the signing key (the one
+# pkg/build uses) when the database has to be rebuilt.
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 source "$root/distro.conf"
@@ -13,26 +25,103 @@ REPO_GITHUB=""
 source "$root/repo.conf"
 repo=$root/pkg/out/repo
 tag=packages
+dry=0
+if [[ ${1:-} == --dry-run ]]; then dry=1; fi
 
-[[ -n $REPO_GITHUB ]] || { echo "publish: set REPO_GITHUB in repo.conf first" >&2; exit 1; }
-[[ -f $repo/$DISTRO_REPO.db.tar.gz ]] || { echo "publish: nothing built; run pkg/build" >&2; exit 1; }
-command -v gh >/dev/null || { echo "publish: needs the GitHub CLI (gh)" >&2; exit 1; }
+fail() { echo "publish: $*" >&2; exit 1; }
+[[ -n $REPO_GITHUB ]] || fail "set REPO_GITHUB in repo.conf first"
+[[ -f $repo/$DISTRO_REPO.db.tar.gz ]] || fail "nothing built; run pkg/build"
+command -v gh >/dev/null || fail "needs the GitHub CLI (gh)"
 
 # Every package and the database must carry a signature.
-unsigned=0
 for file in "$repo"/*.pkg.tar.zst "$repo/$DISTRO_REPO.db.tar.gz" "$repo/$DISTRO_REPO.files.tar.gz"; do
-  if [[ ! -f $file.sig ]]; then echo "publish: $(basename "$file") is not signed" >&2; unsigned=1; fi
+  [[ -f $file.sig ]] || fail "$(basename "$file") is not signed; build on the machine with the signing key"
 done
-(( unsigned == 0 )) || { echo "publish: refusing to publish unsigned packages (build on the machine with the signing key)" >&2; exit 1; }
 
-if ! gh release view "$tag" --repo "$REPO_GITHUB" >/dev/null 2>&1; then
-  gh release create "$tag" --repo "$REPO_GITHUB" --title "Packages" \
-    --notes "The $DISTRO_NAME package repository. Installed systems download from here; files are replaced on every publish."
+# "name version filename" for every package in a repository database.
+db_entries() {
+  bsdtar -xOf "$1" '*/desc' 2>/dev/null | awk '
+    /^%[A-Z0-9]+%$/ { k = $0; next }
+    k == "%FILENAME%" { f = $0 } k == "%NAME%" { n = $0 } k == "%VERSION%" { v = $0 }
+    { k = "" }
+    f != "" && n != "" && v != "" { print n, v, f; f = n = v = "" }'
+}
+
+work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
+published=$work/published.db.tar.gz
+exists=0
+if gh release view "$tag" --repo "$REPO_GITHUB" >/dev/null 2>&1; then
+  exists=1
+  gh release download "$tag" --repo "$REPO_GITHUB" --pattern "$DISTRO_REPO.db.tar.gz" --output "$published" 2>/dev/null || true
 fi
 
-# pacman asks for <repo>.db and <repo>.files; repo-add makes those symlinks, and
-# release assets can't be links, so upload real copies under those names too.
-staging=$(mktemp -d); trap 'rm -rf "$staging"' EXIT
+declare -A pub_ver=() pub_file=()
+if [[ -s $published ]]; then
+  while read -r n v f; do pub_ver[$n]=$v; pub_file[$n]=$f; done < <(db_entries "$published")
+fi
+
+new=() reused=()
+while read -r n v f; do
+  if [[ -n ${pub_ver[$n]:-} ]]; then
+    cmp=$(vercmp "$v" "${pub_ver[$n]}")
+    if (( cmp < 0 )); then fail "$n $v is older than the published ${pub_ver[$n]}; refusing to go backwards"; fi
+    if (( cmp == 0 )); then reused+=("$n:$f:${pub_file[$n]}"); continue; fi
+  fi
+  new+=("$n ${pub_ver[$n]:-(new)} -> $v")
+done < <(db_entries "$repo/$DISTRO_REPO.db.tar.gz")
+
+echo "publish: to $REPO_GITHUB ($tag)"
+for e in "${new[@]}"; do echo "  update   $e"; done
+for e in "${reused[@]}"; do echo "  same     ${e%%:*} (keeps the published file)"; done
+if (( dry )); then echo "publish: dry run, nothing uploaded"; exit 0; fi
+if (( ${#new[@]} == 0 )); then echo "publish: nothing new to publish"; exit 0; fi
+
+# Same version as published: use the published file and signature, so the
+# database's checksums match what clients download; then rebuild the database.
+if (( ${#reused[@]} )); then
+  for e in "${reused[@]}"; do
+    IFS=: read -r _ local_file pub <<<"$e"
+    rm -f "$repo/$local_file" "$repo/$local_file.sig"
+    gh release download "$tag" --repo "$REPO_GITHUB" --pattern "$pub" --pattern "$pub.sig" --dir "$repo"
+  done
+  fpr=$(<"$root/pkg/keyring/fingerprint")
+  export GNUPGHOME=${SIGNING_GNUPGHOME:-$HOME/.local/share/$DISTRO_ID-signing/gnupg}
+  rm -f "$repo/$DISTRO_REPO".{db,files}{,.sig} "$repo/$DISTRO_REPO".{db,files}.tar.gz{,.sig}
+  repo-add -q --sign --key "$fpr" "$repo/$DISTRO_REPO.db.tar.gz" "$repo"/*.pkg.tar.zst
+fi
+
+# pacman asks for <repo>.db and <repo>.db.sig; repo-add makes those symlinks,
+# and release assets can't be links, so upload real copies under those names.
+staging=$work/staging; mkdir -p "$staging"
 cp -L "$repo"/* "$staging"/
-gh release upload "$tag" --repo "$REPO_GITHUB" --clobber "$staging"/*
-echo "publish: uploaded $(find "$staging" -type f | wc -l) files to $REPO_GITHUB ($tag)"
+
+if (( ! exists )); then
+  gh release create "$tag" --repo "$REPO_GITHUB" --title "Packages" \
+    --notes "The $DISTRO_NAME package repository. Installed systems download from here."
+fi
+mapfile -t current < <(gh release view "$tag" --repo "$REPO_GITHUB" --json assets --jq '.assets[].name')
+is_published() { local a; for a in "${current[@]}"; do if [[ $a == "$1" ]]; then return 0; fi; done; return 1; }
+
+# 1. New package files (unchanged ones are already there).
+uploads=()
+for f in "$staging"/*.pkg.tar.zst "$staging"/*.pkg.tar.zst.sig; do
+  if ! is_published "$(basename "$f")"; then uploads+=("$f"); fi
+done
+if (( ${#uploads[@]} )); then gh release upload "$tag" --repo "$REPO_GITHUB" "${uploads[@]}"; fi
+
+# 2. The database, which moves clients to the new packages.
+dbfiles=()
+for f in "$staging/$DISTRO_REPO".{db,files}{,.sig} "$staging/$DISTRO_REPO".{db,files}.tar.gz{,.sig}; do
+  if [[ -f $f ]]; then dbfiles+=("$f"); fi
+done
+gh release upload "$tag" --repo "$REPO_GITHUB" --clobber "${dbfiles[@]}"
+
+# 3. Files the database no longer names.
+pruned=0
+for a in "${current[@]}"; do
+  if [[ ! -e $staging/$a ]]; then
+    gh release delete-asset "$tag" "$a" --repo "$REPO_GITHUB" --yes
+    pruned=$((pruned + 1))
+  fi
+done
+echo "publish: uploaded ${#uploads[@]} package file(s) and the database; removed $pruned old file(s)"
