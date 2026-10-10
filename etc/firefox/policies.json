@@ -1,0 +1,51 @@
+{
+  "policies": {
+    "DisableTelemetry": true,
+    "DisableFirefoxStudies": true,
+    "DisableFeedbackCommands": true,
+    "SkipTermsOfUse": true,
+    "FirefoxHome": {
+      "SponsoredTopSites": false,
+      "SponsoredStories": false,
+      "SponsoredPocket": false,
+      "Stories": false,
+      "Pocket": false,
+      "Snippets": false
+    },
+    "FirefoxSuggest": {
+      "WebSuggestions": false,
+      "SponsoredSuggestions": false,
+      "ImproveSuggest": false
+    },
+    "UserMessaging": {
+      "ExtensionRecommendations": false,
+      "FeatureRecommendations": false,
+      "UrlbarInterventions": false,
+      "SkipOnboarding": true,
+      "MoreFromMozilla": false,
+      "FirefoxLabs": false
+    },
+    "EnableTrackingProtection": {
+      "Value": true,
+      "Category": "strict",
+      "Cryptomining": true,
+      "Fingerprinting": true,
+      "EmailTracking": true
+    },
+    "HttpsOnlyMode": "enabled",
+    "DNSOverHTTPS": {
+      "Enabled": false
+    },
+    "NetworkPrediction": false,
+    "SearchSuggestEnabled": false,
+    "SearchEngines": {
+      "Default": "DuckDuckGo"
+    },
+    "ExtensionSettings": {
+      "uBlock0@raymondhill.net": {
+        "installation_mode": "normal_installed",
+        "install_url": "https://addons.mozilla.org/firefox/downloads/latest/uBlock0@raymondhill.net/latest.xpi"
+      }
+    }
+  }
+}

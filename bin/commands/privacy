@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+# summary: Privacy switches: weather lookup, encrypted DNS, connectivity check
+set -euo pipefail
+source "$DISTRO_LIB/lib.sh"
+
+# Every connection the system makes on its own is listed in the manual
+# ("What ... connects to", docs/manual/privacy.md); these have a switch here.
+usage() {
+  cat <<USAGE
+Usage: $DISTRO_ID privacy [command]
+
+  status                        what's on and off (the default)
+  weather on|off                weather in the bar (looks up your city online)
+  dns quad9|mullvad|cloudflare  encrypt DNS lookups (DNS over TLS) to that provider
+  dns off                       use the network's own DNS server again
+  connectivity on|off           the network check that detects Wi-Fi login pages
+
+Everything else that could send data about you is off by default; see
+$SHARE/doc/privacy.md or the manual's "What $DISTRO_NAME connects to".
+USAGE
+}
+
+as_root() { if (( EUID == 0 )); then "$@"; elif [[ -t 0 ]]; then sudo "$@"; else pkexec "$@"; fi; }
+
+noctalia_config=${XDG_CONFIG_HOME:-$HOME/.config}/noctalia/config.toml
+mark_start="# >>> $DISTRO_ID privacy: weather"
+mark_end="# <<< $DISTRO_ID privacy: weather"
+dns_conf=/etc/systemd/resolved.conf.d/90-$DISTRO_ID-dns.conf
+nm_dns_conf=/etc/NetworkManager/conf.d/90-$DISTRO_ID-dns.conf
+nm_check_conf=/etc/NetworkManager/conf.d/90-$DISTRO_ID-connectivity.conf
+
+weather_state() { if [[ -f $noctalia_config ]] && grep -qF "$mark_start" "$noctalia_config"; then echo on; else echo off; fi; }
+
+# Weather needs a place: the city of the time zone (only its name is sent, to
+# Noctalia's geocoder; the forecast comes from Open-Meteo). Imperial units
+# where those are the norm.
+weather_on() {
+  local zone city country unit=metric
+  [[ $(weather_state) == on ]] && { info "weather: already on"; return; }
+  zone=$(timedatectl show -p Timezone --value 2>/dev/null || true)
+  city=${zone##*/}; city=${city//_/ }
+  [[ $zone == */* && -n $city ]] || die "no time zone set; set one first (timedatectl set-timezone Region/City)"
+  country=$(awk -v z="$zone" '$3 == z { print $1; exit }' /usr/share/zoneinfo/zone.tab 2>/dev/null)
+  case $country in US|LR|MM) unit=imperial ;; esac
+  mkdir -p "${noctalia_config%/*}"; touch "$noctalia_config"
+  if grep -qE '^\[(location|weather)\]' "$noctalia_config"; then
+    die "your $noctalia_config already has its own [location] or [weather] section; set enabled = true under [weather] there"
+  fi
+  printf '\n%s\n# Turned on with `%s privacy weather on`; `off` removes this block.\n[location]\naddress = "%s"\n\n[weather]\nenabled = true\nunit = "%s"\n%s\n' \
+    "$mark_start" "$DISTRO_ID" "$city" "$unit" "$mark_end" >> "$noctalia_config"
+  set_setting privacy.weather on
+  info "weather: on ($city)"
+}
+
+weather_off() {
+  if [[ -f $noctalia_config ]]; then
+    sed -i "\|^$mark_start\$|,\|^$mark_end\$|d" "$noctalia_config"
+  fi
+  set_setting privacy.weather off
+  info "weather: off"
+}
+
+dns_state() {
+  if [[ -f $dns_conf ]]; then sed -n 's/^# provider: //p' "$dns_conf" | head -1; else echo "off (the network's DNS)"; fi
+}
+
+dns_servers() { # dns_servers <provider>
+  case $1 in
+    quad9) echo "9.9.9.9#dns.quad9.net 149.112.112.112#dns.quad9.net 2620:fe::fe#dns.quad9.net 2620:fe::9#dns.quad9.net" ;;
+    mullvad) echo "194.242.2.2#dns.mullvad.net 2a07:e340::2#dns.mullvad.net" ;;
+    cloudflare) echo "1.1.1.1#cloudflare-dns.com 1.0.0.1#cloudflare-dns.com 2606:4700:4700::1111#cloudflare-dns.com 2606:4700:4700::1001#cloudflare-dns.com" ;;
+    *) return 1 ;;
+  esac
+}
+
+# Encrypted DNS through systemd-resolved: NetworkManager hands its DNS to
+# resolved, which only talks to the chosen provider over TLS (no plain-text
+# fallback, no built-in fallback servers).
+dns_on() { # dns_on <provider>
+  local servers
+  servers=$(dns_servers "$1") || die "unknown DNS provider: $1 (quad9, mullvad or cloudflare)"
+  as_root bash -euc '
+    install -d /etc/systemd/resolved.conf.d /etc/NetworkManager/conf.d
+    printf "# provider: %s\n# Written by \`%s privacy dns\`; \`%s privacy dns off\` removes it.\n[Resolve]\nDNS=%s\nDNSOverTLS=yes\nDomains=~.\nFallbackDNS=\n" "$1" "$4" "$4" "$2" > "$3"
+    printf "[main]\ndns=systemd-resolved\n" > "$5"
+    systemctl enable --now systemd-resolved.service >/dev/null 2>&1
+    systemctl restart systemd-resolved.service
+    ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
+    systemctl restart NetworkManager.service
+  ' _ "$1" "$servers" "$dns_conf" "$DISTRO_ID" "$nm_dns_conf"
+  set_setting privacy.dns "$1"
+  info "dns: encrypted, $1"
+  info "On a Wi-Fi network with a login page (hotels, airports), run '$DISTRO_ID privacy dns off' to sign in, then turn it back on."
+}
+
+dns_off() {
+  as_root bash -euc '
+    rm -f "$1" "$2"
+    systemctl disable --now systemd-resolved.service >/dev/null 2>&1 || true
+    if [[ -L /etc/resolv.conf ]]; then rm -f /etc/resolv.conf; fi
+    systemctl restart NetworkManager.service
+  ' _ "$dns_conf" "$nm_dns_conf"
+  set_setting privacy.dns off
+  info "dns: the network's own DNS server"
+}
+
+connectivity_state() { if [[ -f $nm_check_conf ]]; then echo off; else echo on; fi; }
+
+# NetworkManager fetches http://ping.archlinux.org/nm-check.txt every few
+# minutes to notice Wi-Fi login pages (captive portals). On by default as an
+# exception: without it a laptop can't tell it's stuck behind a login page.
+connectivity() { # connectivity on|off
+  case $1 in
+    on) as_root bash -euc 'rm -f "$1"; systemctl reload NetworkManager.service' _ "$nm_check_conf" ;;
+    off) as_root bash -euc 'install -d /etc/NetworkManager/conf.d; printf "[connectivity]\nenabled=false\n" > "$1"; systemctl reload NetworkManager.service' _ "$nm_check_conf" ;;
+    *) die "connectivity on or off?" ;;
+  esac
+  info "connectivity check: $1"
+}
+
+status() {
+  printf '%-22s %s\n' "weather in the bar" "$(weather_state)"
+  printf '%-22s %s\n' "encrypted DNS" "$(dns_state)"
+  printf '%-22s %s\n' "connectivity check" "$(connectivity_state)"
+  if command -v firewall-cmd >/dev/null; then
+    printf '%-22s %s\n' "firewall" "$(firewall-cmd --state 2>/dev/null || echo off)"
+  fi
+  printf '%-22s %s\n' "telemetry" "off everywhere we ship (see the manual)"
+}
+
+case ${1:-status} in
+  status) status ;;
+  weather)
+    case ${2:-} in on) weather_on ;; off) weather_off ;; *) die "weather on or off?" ;; esac ;;
+  dns)
+    case ${2:-} in
+      off) dns_off ;;
+      "") info "encrypted DNS: $(dns_state)" ;;
+      *) dns_on "$2" ;;
+    esac ;;
+  connectivity) connectivity "${2:-}" ;;
+  -h|--help) usage ;;
+  *) die "unknown privacy command: $1" ;;
+esac

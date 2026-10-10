@@ -8,12 +8,14 @@ pkgrel=1
 pkgdesc="$DISTRO_NAME system settings"
 arch=(any)
 license=(GPL-3.0-or-later)
-depends=(sudo zram-generator greetd greetd-tuigreet)
+depends=(sudo zram-generator greetd greetd-tuigreet firewalld)
 backup=(
   "etc/greetd/$DISTRO_ID.toml"
   "etc/systemd/zram-generator.conf"
   "etc/xdg/fastfetch/config.jsonc"
   "etc/sudoers.d/10-$DISTRO_ID-wheel"
+  "etc/firefox/policies/policies.json"
+  "etc/NetworkManager/conf.d/50-$DISTRO_ID-privacy.conf"
 )
 
 package() {

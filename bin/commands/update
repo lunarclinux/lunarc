@@ -5,7 +5,7 @@ source "$DISTRO_LIB/lib.sh"
 
 usage() {
   cat <<USAGE
-Usage: $DISTRO_ID update [--all] | check | snapshots | rollback <n> [--dry-run] | rollback --clean
+Usage: $DISTRO_ID update [--all] | check | firmware | snapshots | rollback <n> [--dry-run] | rollback --clean
 
   (no argument)   update everything: keyrings first, then Arch and $DISTRO_NAME
                   packages (a snapshot is taken before and after), then AUR
@@ -13,6 +13,8 @@ Usage: $DISTRO_ID update [--all] | check | snapshots | rollback <n> [--dry-run] 
   --all           also take a Hyprland release newer than the one $DISTRO_NAME
                   was tested with (normally held back until a distro update)
   check           list waiting updates, by source, without installing
+  firmware        check for and install firmware updates (BIOS/UEFI, SSD, dock...)
+                  through fwupd; firmware lists are only downloaded when you run this
   snapshots       list the snapshots taken before updates
   rollback <n>    put the system back as it was in snapshot <n>, then restart;
                   /home, logs and your files are not touched
@@ -261,6 +263,14 @@ case ${1:-} in
   "") update_all "" ;;
   --all) update_all 1 ;;
   check) check ;;
+  firmware)
+    command -v fwupdmgr >/dev/null || die "fwupd isn't installed (sudo pacman -S fwupd)"
+    # Downloads the firmware list from the Linux Vendor Firmware Service (LVFS)
+    # now, at the user's request; nothing refreshes it in the background.
+    # --no-unreported-check: never offer to upload update reports (if fwupd asks
+    # anyway, answering no keeps it on this computer).
+    fwupdmgr refresh --force --no-unreported-check || true
+    if fwupdmgr get-updates --no-unreported-check; then fwupdmgr update --no-unreported-check; else info "no firmware updates"; fi ;;
   snapshots) snapshots ;;
   rollback)
     case ${2:-} in

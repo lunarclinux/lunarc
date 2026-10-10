@@ -124,28 +124,13 @@ remind_backups() {
   if [[ $action == backups ]]; then open_window --only backups; fi
 }
 
-# Weather location from the time zone: its city name (only that is looked up
-# online), and imperial units where those are the norm.
-weather_location() {
-  local config=${XDG_CONFIG_HOME:-$HOME/.config}/noctalia/config.toml zone city country unit=metric
-  [[ -f $config ]] || return 0
-  grep -q '^\[location\]' "$config" && return 0
-  zone=$(timedatectl show -p Timezone --value 2>/dev/null || true)
-  [[ $zone == */* ]] || return 0
-  city=${zone##*/}; city=${city//_/ }
-  country=$(awk -v z="$zone" '$3 == z { print $1; exit }' /usr/share/zoneinfo/zone.tab 2>/dev/null)
-  case $country in US|LR|MM) unit=imperial ;; esac
-  printf '\n# Set at first login from the time zone; change it here or in Settings.\n[location]\naddress = "%s"\n\n[weather]\nunit = "%s"\n' \
-    "$city" "$unit" >> "$config"
-}
-
 first_login() {
   local done_file=$STATE_DIR/first-login-done
   [[ -f $done_file ]] && return 0
   # Shell defaults first, so the theme below also renders the prompt and editor colours.
   "/usr/bin/$DISTRO_ID" shell defaults on >/dev/null || true
   "/usr/bin/$DISTRO_ID" theme set "$(setting theme moonlit)"
-  weather_location
+  # Weather is opt-in (it looks up the city online): the privacy step asks.
   mkdir -p "$STATE_DIR"; date -Is > "$done_file"
   # The live system has nothing to keep; installed systems get the setup window.
   if [[ -d /run/archiso ]] || recorded finished; then

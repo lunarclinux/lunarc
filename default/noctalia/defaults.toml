@@ -4,7 +4,7 @@
 [shell]
 font_family = "Inter"
 polkit_agent = true          # Noctalia's own password prompt, themed like the rest
-telemetry_enabled = false
+telemetry_enabled = false     # no usage ping to noctalia.dev
 setup_wizard_enabled = false  # the distro applies its own theme and settings at first login
 
 # After 5 minutes idle: lock, with the screensaver playing behind the lock
@@ -44,6 +44,9 @@ builtin_ids = ["ghostty", "alacritty", "kitty", "foot", "wezterm", "gtk3", "gtk4
 # Distro plugins ship read-only in /usr/share; Noctalia loads them from there.
 [plugins]
 enabled = ["@DISTRO_ID@/crashes", "@DISTRO_ID@/agents", "@DISTRO_ID@/utilities"]
+# No background checks of online plugin catalogs; install or update plugins
+# from Settings when you want to.
+auto_update = "none"
 
 [[plugins.source]]
 name = "@DISTRO_ID@"
@@ -131,8 +134,12 @@ start  = ["menu", "workspaces"]
 center = ["stay-awake", "nightlight", "silence", "reminders", "recorder", "dictate", "clock", "weather"]
 end    = ["media", "tray", "ai-usage", "crashes", "notifications", "keyboard_layout", "network", "bluetooth", "volume", "brightness", "battery", "session"]
 
-# Weather in the bar. The location is set from your time zone at first login
-# (just the city name is looked up); change it under Settings → Location.
+# Location and weather are off until you turn them on (they send your city to
+# Noctalia's geocoder and Open-Meteo): first-login setup asks, or run
+# `@DISTRO_ID@ privacy weather on`. Never locate by IP address.
+[location]
+auto_locate = false
+
 [weather]
-enabled = true
+enabled = false
 unit = "metric"

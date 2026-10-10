@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# summary: The firewall: nothing gets in unless you allow it
+set -euo pipefail
+source "$DISTRO_LIB/lib.sh"
+
+# firewalld, default zone "public": every incoming connection is refused
+# except replies to your own traffic and DHCPv6. NetworkManager can give a
+# network its own zone, so something allowed at home stays closed elsewhere.
+usage() {
+  cat <<USAGE
+Usage: $DISTRO_ID firewall [command]
+
+  status               on or off, and what's allowed in (the default)
+  allow <app|port>     let it in, e.g. localsend, kdeconnect, syncthing, ssh,
+                       steam-streaming, or a port like 8080/tcp
+  deny <app|port>      close it again
+  apps                 the app names this command knows
+
+Changes apply to the default zone and survive restarts. Outgoing connections
+are never blocked.
+USAGE
+}
+
+as_root() { if (( EUID == 0 )); then "$@"; elif [[ -t 0 ]]; then sudo "$@"; else pkexec "$@"; fi; }
+
+# name | firewalld services or ports | what it's for
+presets=(
+  "localsend|port:53317/tcp port:53317/udp|LocalSend file sharing on your network"
+  "kdeconnect|service:kdeconnect|KDE Connect / GSConnect phone pairing"
+  "syncthing|service:syncthing|Syncthing file sync"
+  "ssh|service:ssh|log in to this computer remotely (needs sshd)"
+  "steam-streaming|service:steam-streaming|Steam Remote Play / in-home streaming"
+  "mdns|service:mdns|find printers and devices by name (.local) on your network"
+)
+
+rules_for() { # rules_for <app|port/proto> -> "service:x" / "port:x" words
+  local row
+  for row in "${presets[@]}"; do
+    if [[ ${row%%|*} == "$1" ]]; then cut -d'|' -f2 <<<"$row"; return; fi
+  done
+  if [[ $1 =~ ^[0-9]{1,5}(-[0-9]{1,5})?/(tcp|udp)$ ]]; then echo "port:$1"; return; fi
+  return 1
+}
+
+need_firewalld() { command -v firewall-cmd >/dev/null || die "firewalld isn't installed"; }
+
+change() { # change add|remove <app|port>
+  local rules rule args=()
+  rules=$(rules_for "$2") || die "unknown app or port: $2 (see: $DISTRO_ID firewall apps, or use e.g. 8080/tcp)"
+  for rule in $rules; do
+    case $rule in
+      service:*) args+=("--$1-service=${rule#service:}") ;;
+      port:*) args+=("--$1-port=${rule#port:}") ;;
+    esac
+  done
+  as_root firewall-cmd --permanent "${args[@]}" >/dev/null
+  as_root firewall-cmd --reload >/dev/null
+}
+
+case ${1:-status} in
+  status)
+    need_firewalld
+    state=$(firewall-cmd --state 2>/dev/null || echo "not running")
+    info "firewall: $state"
+    if [[ $state == running ]]; then
+      zone=$(firewall-cmd --get-default-zone)
+      info "zone: $zone (incoming refused unless listed)"
+      info "allowed services: $(firewall-cmd --zone="$zone" --list-services)"
+      info "allowed ports: $(firewall-cmd --zone="$zone" --list-ports)"
+    fi ;;
+  allow) [[ -n ${2:-} ]] || die "allow what?"; need_firewalld; change add "$2"; info "allowed in: $2" ;;
+  deny) [[ -n ${2:-} ]] || die "deny what?"; need_firewalld; change remove "$2"; info "closed: $2" ;;
+  apps)
+    for row in "${presets[@]}"; do
+      IFS='|' read -r name _ what <<<"$row"
+      printf '  %-16s %s\n' "$name" "$what"
+    done ;;
+  -h|--help) usage ;;
+  *) die "unknown firewall command: $1" ;;
+esac

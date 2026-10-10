@@ -17,5 +17,8 @@ fi
 in_target bash "/usr/share/$DISTRO_ID/migrations/system/20261010-1000-lockout-and-keyring.sh"
 # Snapshots before and after every update (rollback with `update rollback`).
 in_target env DISTRO_ID="$DISTRO_ID" bash "/usr/share/$DISTRO_ID/migrations/system/20261010-1210-snapshots.sh"
+# The firewall: refuse incoming connections (SSH stays open only when 50-users
+# enables sshd for a given key; that step opens it).
+in_target bash "/usr/share/$DISTRO_ID/migrations/system/20261010-1300-firewall.sh"
 in_target "/usr/bin/$DISTRO_ID" migrate --system --mark-all
 in_target systemctl enable greetd.service power-profiles-daemon.service bluetooth.service >/dev/null 2>&1

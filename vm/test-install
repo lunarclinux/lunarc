@@ -148,6 +148,19 @@ check "root account locked"            "echo '$password' | sudo -S -p '' passwd 
 check "/boot is root-only"           'test "$(stat -c %a /boot)" = 700'
 if "$here/ssh" "$vm" "$user" -- "pacman -Q $id >/dev/null 2>&1"; then
   check "distro packages installed"     "pacman -Q $id $id-settings"
+  # Privacy and security by default (decision record 0031).
+  sudo_vm="echo '$password' | sudo -S -p ''"
+  check "firefox policies in place"     "jq -e '.policies.DisableTelemetry == true and .policies.DNSOverHTTPS.Enabled == false and .policies.HttpsOnlyMode == \"enabled\"' /etc/firefox/policies/policies.json >/dev/null"
+  check "telemetry opt-outs in shells"  "bash -lc 'echo \$DO_NOT_TRACK \$DOTNET_CLI_TELEMETRY_OPTOUT \$DISABLE_TELEMETRY' | grep -qx '1 1 1'"
+  check "firewall refuses incoming"     "$sudo_vm firewall-cmd --state | grep -qx running && $sudo_vm firewall-cmd --get-default-zone | grep -qx public && $sudo_vm firewall-cmd --zone=public --get-target | grep -qx default && $sudo_vm firewall-cmd --zone=public --list-ports | grep -qx ''"
+  check "firewall: ssh open only because a key was set up" "$sudo_vm firewall-cmd --zone=public --list-services | tr ' ' '\\n' | grep -qx ssh && systemctl is-enabled --quiet sshd"
+  check "network privacy settings"      "NetworkManager --print-config | grep -qx 'wifi.cloned-mac-address=stable' && NetworkManager --print-config | grep -qx 'ipv6.ip6-privacy=2' && NetworkManager --print-config | grep -qx 'ipv4.dhcp-send-hostname=false'"
+  check "kernel hardening applied"      "[ \$(sysctl -n kernel.kptr_restrict) = 2 ] && [ \$(sysctl -n kernel.unprivileged_bpf_disabled) = 1 ] && [ \$(sysctl -n kernel.kexec_load_disabled) = 1 ] && [ \$(sysctl -n kernel.yama.ptrace_scope) = 1 ]"
+  check "calculator downloads nothing"  "[ \$(gsettings get org.gnome.calculator refresh-interval) = 0 ]"
+  check "firmware checks only on request" "pacman -Q fwupd >/dev/null && ! systemctl is-enabled --quiet fwupd-refresh.timer"
+  check "home folder private"           "[ \$(stat -c %a ~) = 700 ]"
+  check "privacy switches report"       "$id privacy | grep -qE '^weather in the bar +off' && $id firewall apps | grep -q localsend"
+  check "encrypted DNS on and off"      "$sudo_vm env HOME=/root /usr/bin/$id privacy dns quad9 >/dev/null && sleep 3 && resolvectl status | grep -q '+DNSOverTLS' && getent hosts archlinux.org >/dev/null && $sudo_vm env HOME=/root /usr/bin/$id privacy dns off >/dev/null && sleep 3 && ! systemctl is-active --quiet systemd-resolved && getent hosts archlinux.org >/dev/null"
   check "package files intact"          "pacman -Qkk $id 2>&1 | grep -q ', 0 altered files'"
   check "login screen uses distro config" "systemctl cat greetd | grep -q -- '--config /etc/greetd/$id.toml'"
   check "hidden apps dir in XDG_DATA_DIRS" "systemctl --user show-environment | grep -q '^XDG_DATA_DIRS=/usr/share/$id/xdg'"
@@ -215,6 +228,9 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     check "notifications can be sent"    "$hypr"' notify-send "Test" "Hello from the install test"'
     check "shell answers its IPC"        "$hypr"' noctalia msg status >/dev/null'
     check "shell config has no errors"   "$hypr"' noctalia config validate 2>&1 | tail -3; noctalia config validate >/dev/null 2>&1'
+    check "weather and location off by default" "$hypr"' noctalia config export | grep -A3 "^\[weather\]" | grep -q "enabled = false" && noctalia config export | grep -A3 "^\[location\]" | grep -q "auto_locate = false"'
+    check "crash capture never looks up symbols online" "systemctl --user show -p Environment $id-crash-watch.service | grep -qE 'DEBUGINFOD_URLS=( |\$)'"
+    check "idle desktop connects nowhere unexpected" "$(sed -e "s/@ID@/$id/g" -e "s/@PW@/$password/g" "$here/checks/privacy-traffic.sh")"
     check "editor follows the theme"     "grep -q 'rendered by Noctalia' ~/.config/micro/colorschemes/noctalia.micro && ! grep -q '{{' ~/.config/micro/colorschemes/noctalia.micro"
     check "distro shell defaults applied" "$hypr"' noctalia config export | grep -qE "^polkit_agent *= *true"'
     check "clutter hidden from launcher"  "grep -q '^NoDisplay=true' /usr/local/share/applications/avahi-discover.desktop 2>/dev/null || grep -q '^NoDisplay=true' /usr/share/$id/xdg/applications/avahi-discover.desktop"

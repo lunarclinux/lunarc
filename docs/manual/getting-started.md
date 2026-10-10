@@ -67,6 +67,9 @@ SUPER+ALT+Space (or `/m` in the launcher). Type part of a name and press Enter t
 | `lunarc app export apps.txt` / `import apps.txt` | Save your apps and a few settings to a file, then install them all on another computer |
 | `lunarc setup` / `setup backups` | The first-login choices again / set up backups |
 | `lunarc update` / `update check` | Update everything safely / see what's waiting (see Updating) |
+| `lunarc update firmware` | Check for firmware updates (only when you run it) |
+| `lunarc privacy` | Privacy switches: weather lookup, encrypted DNS, network check (see "What Lunarc connects to", `privacy.md`) |
+| `lunarc firewall allow <app>` / `deny` | Let LocalSend, KDE Connect, Syncthing, SSH or a port through the firewall (closed by default) |
 | `lunarc capture screenshot\|record\|stop\|color\|text\|qr` | Screenshots (`~/Pictures/Screenshots`), recordings (`~/Videos/Recordings`), colour picker, copy text or a QR code from the screen |
 | `lunarc remind "stretch" in 20m` / `at 15:30` / `list` / `cancel <id>` | Reminders (also the alarm icon in the bar) |
 | `lunarc dictate toggle` / `setup` | Dictation; runs locally with whisper.cpp (first use downloads a ~150 MB model) |
