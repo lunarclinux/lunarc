@@ -132,6 +132,10 @@ case ${1:-} in
   effects)
     effect_list ;;
   run)
+    # --lock: drawn behind the lock screen (see `lock`). Input goes to the lock,
+    # never to this terminal, so it just plays until the lock ends it.
+    lock=0
+    if [[ ${2:-} == --lock ]]; then lock=1; shift; fi
     only=${2:-}
     # The window opens tiled and then goes fullscreen; wait for its size to
     # settle so the first effect is centred on the whole screen.
@@ -170,6 +174,7 @@ case ${1:-} in
         sleep 2
       done ) &
     anim=$!
+    if (( lock )); then wait "$anim"; exit 0; fi
     # Any key or mouse movement ends it. The terminal reports mouse motion once
     # asked to (\e[?1003h); ignore what arrives while the window settles.
     printf '\e[?1003h'

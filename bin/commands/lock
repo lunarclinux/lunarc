@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+# summary: Lock the screen, with the screensaver playing behind the lock
+set -euo pipefail
+source "$DISTRO_LIB/lib.sh"
+
+usage() {
+  cat <<USAGE
+Usage: $DISTRO_ID lock [--idle | watch]
+
+  (none)    lock now: the screensaver plays behind the lock; start typing your
+            password to unlock
+  --idle    the idle timer's lock: for the first $grace seconds any key or a
+            big mouse move unlocks without the password
+  watch     lock before the computer sleeps (runs as a user service)
+
+The lock is swaylock-plugin running the screensaver through windowtolayer.
+Set lock.style = noctalia in ~/.config/$DISTRO_ID/settings to use Noctalia's
+own lock screen instead. If the lock ever hangs, CTRL+ALT+L restarts it.
+USAGE
+}
+
+grace=$(setting lock.grace 10)
+
+# One colour from the active theme, as rrggbb.
+colour() {
+  local palette
+  palette=$SHARE/themes/$(setting theme)/palette.json
+  [[ -f $palette ]] || { printf '%s\n' "$2"; return; }
+  local c
+  c=$(jq -r --arg m "$(setting theme.mode dark)" --arg k "$1" '.[$m][$k] // empty' "$palette" | tr -d '#')
+  printf '%s\n' "${c:-$2}"
+}
+
+noctalia_lock() { exec noctalia msg session lock; }
+
+# Lock before sleep: hold a "delay" inhibitor so logind waits for us, lock
+# when it announces sleep, then let it go; take it again after resume.
+watch() {
+  local inhibitor=0 line
+  inhibit() {
+    systemd-inhibit --what=sleep --mode=delay --who="$DISTRO_NAME lock" \
+      --why="Lock the screen before sleeping" sleep infinity &
+    inhibitor=$!
+  }
+  coproc logind { exec gdbus monitor --system --dest org.freedesktop.login1 --object-path /org/freedesktop/login1; }
+  inhibit
+  while read -r line <&"${logind[0]}"; do
+    case $line in
+      *"PrepareForSleep (true"*)
+        "/usr/bin/$DISTRO_ID" lock || true
+        # Ending its child ends systemd-inhibit, which releases the inhibitor.
+        pkill -P "$inhibitor" 2>/dev/null || true ;;
+      *"PrepareForSleep (false"*)
+        inhibit ;;
+    esac
+  done
+}
+
+idle=0
+case ${1:-} in
+  watch) watch; exit 0 ;;
+  --idle) idle=1 ;;
+  "") ;;
+  -h|--help) usage; exit 0 ;;
+  *) die "unknown lock option: $1" ;;
+esac
+
+if [[ $(setting lock.style screensaver) == noctalia ]] || ! command -v swaylock-plugin >/dev/null || ! command -v windowtolayer >/dev/null; then
+  noctalia_lock
+fi
+# Already locked (Super+L pressed twice, idle firing while locked).
+if pgrep -x swaylock-plugin >/dev/null; then exit 0; fi
+
+gold=$(colour mPrimary ebc77a) text=$(colour mOnSurface e6e2d6) night=$(colour mSurface 0b1020)
+violet=$(colour mSecondary 9c9bef) wrong=$(colour mError f28b82)
+
+# The screensaver's own terminal, one per screen, drawn as the lock background.
+# Same flags as the screensaver window so it looks the same.
+background="windowtolayer -- ghostty --class=$DISTRO_ID.lockscreen --gtk-single-instance=false \
+--font-size=13 --window-padding-x=0 --window-padding-y=0 --cursor-style-blink=false \
+--cursor-opacity=0 --confirm-close-surface=false --background-opacity=1 --scrollbar=never \
+-e /usr/bin/$DISTRO_ID screensaver run --lock"
+
+args=(
+  --daemonize                       # return once the screen is locked
+  --command-each "$background"
+  --ignore-empty-password
+  --show-failed-attempts
+  --font "Inter" --font-size 18
+  --indicator-radius 90 --indicator-thickness 7
+  # The ring only appears while typing; it fades back to the screensaver.
+  --inside-color "${night}cc" --inside-clear-color "${night}cc" --inside-ver-color "${night}cc"
+  --inside-wrong-color "${night}cc" --inside-caps-lock-color "${night}cc"
+  --ring-color "${gold}" --ring-clear-color "${violet}" --ring-ver-color "${text}"
+  --ring-wrong-color "${wrong}" --ring-caps-lock-color "${gold}"
+  --key-hl-color "${text}" --bs-hl-color "${wrong}" --caps-lock-key-hl-color "${text}"
+  --caps-lock-bs-hl-color "${wrong}"
+  --line-color 00000000 --line-clear-color 00000000 --line-ver-color 00000000
+  --line-wrong-color 00000000 --line-caps-lock-color 00000000 --separator-color 00000000
+  --text-color "${text}" --text-clear-color "${text}" --text-ver-color "${text}"
+  --text-wrong-color "${wrong}" --text-caps-lock-color "${gold}"
+  --layout-bg-color "${night}cc" --layout-border-color 00000000 --layout-text-color "${text}"
+)
+if (( idle )); then args+=(--grace "$grace" --pointer-hysteresis 40); fi
+
+exec swaylock-plugin "${args[@]}"
