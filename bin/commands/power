@@ -130,6 +130,12 @@ case ${1:-} in
     if [[ -z ${2:-} || ${2:-} == status ]]; then charge_limit_status
     else
       [[ $2 == off || $2 =~ ^[0-9]+$ ]] || die "charge-limit takes a number from 50 to 100, or off"
+      # Check the hardware before asking for the password.
+      supported=0
+      while read -r bat; do
+        if [[ -n $bat && -e $bat/charge_control_end_threshold ]]; then supported=1; fi
+      done < <(batteries)
+      (( supported )) || die "this computer's battery doesn't support a charge limit (no battery, or the firmware doesn't offer one)"
       as_root "$helper" charge-limit "$2"
     fi ;;
   hibernate)
