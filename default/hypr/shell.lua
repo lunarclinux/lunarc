@@ -1,27 +1,30 @@
 -- Integration with the Noctalia shell (started by the noctalia.service user unit).
 local mod = "SUPER"
 local function shell(cmd) return hl.dsp.exec_cmd("noctalia msg " .. cmd) end
+local function bind(keys, description, action, opts)
+    opts = opts or {}
+    opts.description = description
+    hl.bind(keys, action, opts)
+end
 
-hl.bind(mod .. " + Space", shell("panel-toggle launcher"))
-hl.bind(mod .. " + S", shell("panel-toggle control-center"))
-hl.bind(mod .. " + comma", shell("settings-toggle"))
-hl.bind(mod .. " + Escape", shell("session lock"))
-hl.bind(mod .. " + N", shell("notification-invoke-latest"))
-hl.bind("ALT + Tab", shell("window-switcher hold"))
-
--- Screenshots through Noctalia (replaces the plain grim bindings).
-hl.bind("Print", shell("screenshot-fullscreen"))
-hl.bind("SHIFT + Print", shell("screenshot-region"))
-hl.bind(mod .. " + Print", shell("screenshot-annotate"))
+bind(mod .. " + Space", "Apps", shell("panel-toggle launcher"))
+bind(mod .. " + S", "Quick settings", shell("panel-toggle control-center"))
+bind(mod .. " + comma", "Shell settings", shell("settings-toggle"))
+bind(mod .. " + Escape", "Lock the screen", shell("session lock"))
+bind(mod .. " + N", "Open the latest notification", shell("notification-invoke-latest"))
+bind(mod .. " + V", "Clipboard history", shell("panel-toggle clipboard"))
+bind("ALT + Tab", "Switch windows", shell("window-switcher hold"))
 
 -- Volume and brightness through Noctalia, so its on-screen display shows.
-local held = { locked = true, repeating = true }
-hl.bind("XF86AudioRaiseVolume", shell("volume-up"), held)
-hl.bind("XF86AudioLowerVolume", shell("volume-down"), held)
-hl.bind("XF86AudioMute", shell("volume-mute"), held)
-hl.bind("XF86AudioMicMute", shell("mic-mute"), held)
-hl.bind("XF86MonBrightnessUp", shell("brightness-up"), held)
-hl.bind("XF86MonBrightnessDown", shell("brightness-down"), held)
+local function held() return { locked = true, repeating = true } end
+bind("XF86AudioRaiseVolume", "Volume up", shell("volume-up"), held())
+bind("XF86AudioLowerVolume", "Volume down", shell("volume-down"), held())
+bind("XF86AudioMute", "Mute", shell("volume-mute"), held())
+bind("XF86AudioMicMute", "Mute the microphone", shell("mic-mute"), held())
+bind("XF86MonBrightnessUp", "Brightness up", shell("brightness-up"), held())
+bind("XF86MonBrightnessDown", "Brightness down", shell("brightness-down"), held())
+
+-- Screenshots are bound in binds.lua (`@DISTRO_ID@ capture`).
 
 -- The screensaver covers the whole screen, without open/close animation.
 hl.window_rule({

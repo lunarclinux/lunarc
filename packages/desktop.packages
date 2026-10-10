@@ -35,3 +35,14 @@ qt6ct
 grim
 wl-clipboard
 playerctl
+
+# Capture (`<id> capture`) and dictation typing: region select, annotation,
+# colour picker, OCR, QR, screen recording, typing into windows
+slurp
+satty
+hyprpicker
+tesseract
+tesseract-data-eng
+zbar
+gpu-screen-recorder
+wtype

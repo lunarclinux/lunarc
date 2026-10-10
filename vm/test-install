@@ -263,6 +263,19 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       check "screensaver closes on stop"   "$hypr $id screensaver stop; sleep 2; ! hyprctl clients | grep -q 'class: $id.screensaver'"
       check "idle runs the screensaver"    "$hypr noctalia config export | grep -A4 'idle.behavior.screensaver' | grep -q 'screensaver start'"
     fi
+    if "$here/ssh" "$vm" "$user" -- "test -x /usr/lib/$id/commands/menu"; then
+      check "bar has the utility group"   "$hypr noctalia config export | grep -qE 'center *=.*stay-awake.*silence.*reminders.*recorder.*dictate.*clock'"
+      check "utilities plugin enabled"    "$hypr noctalia msg plugins list 2>&1 | grep -E '$id/utilities' | grep -qiE 'enabled'"
+      check "system menu opens"           "$hypr $id menu; sleep 1.5; noctalia msg status | jq -e '.activePanelId == \"launcher\"' >/dev/null"
+      screenshot menu
+      check "keyboard shortcuts listed"   "$hypr noctalia msg panel-close >/dev/null; $id keys --list | grep -q 'System menu'"
+      check "screenshot saves a file"     "$hypr f=\$($id capture screenshot screen) && test -s \"\$f\""
+      check "screen recording saves a file" "$hypr $id capture record screen >/dev/null && sleep 3 && f=\$($id capture stop | tail -1) && test -s \"\$f\""
+      check "a reminder fires"            "$hypr $id remind 'install test' in 3s >/dev/null && for i in \$(seq 15); do $id remind list | grep -q 'install test' || exit 0; sleep 1; done; exit 1"
+      "$here/ssh" "$vm" "$user" -- "$hypr $id remind 'stretch' in 20m >/dev/null; noctalia msg panel-open $id/utilities:reminders-panel >/dev/null" || true
+      screenshot reminders
+      "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg panel-close >/dev/null" || true
+    fi
     check "agent list knows claude"       "$id agent list | grep -qE '^\\* claude'"
     check "update check runs"             "$id update check >/dev/null"
   fi

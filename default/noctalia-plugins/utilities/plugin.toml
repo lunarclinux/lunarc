@@ -1,0 +1,47 @@
+id = "@DISTRO_ID@/utilities"
+name = "Utilities"
+version = "0.1.0"
+plugin_api = 28
+author = "@DISTRO_ID@"
+license = "GPL-3.0-or-later"
+icon = "tool"
+description = "One-click utilities for the bar: silence notifications, screen recording, dictation and reminders."
+tags = ["system"]
+
+[[widget]]
+id = "silence"
+entry = "silence.luau"
+
+[[widget]]
+id = "recorder"
+entry = "recorder.luau"
+
+[[widget]]
+id = "dictate"
+entry = "dictate.luau"
+
+[[widget]]
+id = "reminders"
+entry = "reminders.luau"
+
+[[panel]]
+id = "reminders-panel"
+entry = "reminders-panel.luau"
+width = 420
+height = 460
+placement = "attached"
+
+# The system menu (SUPER+ALT+Space): /m in the launcher. Groups drill in and
+# the launcher stays open; type to filter each level.
+[[launcher_provider]]
+id = "menu"
+entry = "menu.luau"
+prefix = "m"
+glyph = "layout-grid"
+
+# Keyboard shortcuts (SUPER+K): /keys in the launcher.
+[[launcher_provider]]
+id = "keys"
+entry = "keys.luau"
+prefix = "keys"
+glyph = "keyboard"

@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# summary: Keyboard shortcuts: a searchable list (SUPER+K)
+set -euo pipefail
+source "$DISTRO_LIB/lib.sh"
+
+usage() {
+  cat <<USAGE
+Usage: $DISTRO_ID keys [--list [--tsv]]
+
+Shows every key binding that has a description, searchable, in the launcher
+(/keys). --list prints them instead. Bindings come from the running Hyprland, so your
+own additions show up too (give them a description = "..." option).
+USAGE
+}
+
+# "SUPER + SHIFT + Return<TAB>Description" lines, from Hyprland's live binds.
+list() {
+  hyprctl binds -j | jq -r '
+    def mods: [ (if . / 64 | floor % 2 == 1 then "SUPER" else empty end),
+                (if . / 4  | floor % 2 == 1 then "CTRL"  else empty end),
+                (if . / 8  | floor % 2 == 1 then "ALT"   else empty end),
+                (if .      | floor % 2 == 1 then "SHIFT" else empty end) ];
+    def keyname: {"Return": "Enter", "comma": ",", "period": ".", "space": "Space",
+                  "Print": "Print", "mouse:272": "left drag", "mouse:273": "right drag"}[.] // .;
+    .[] | select(.has_description and .description != "")
+    | ((.modmask | mods) + [.key | keyname] | join(" + ")) + "\t" + .description'
+}
+
+case ${1:-} in
+  --list)
+    if [[ ${2:-} == --tsv ]]; then list; else list | column -t -s $'\t'; fi ;;
+  -h|--help) usage ;;
+  "")
+    if noctalia msg status >/dev/null 2>&1; then noctalia msg panel-open launcher "/keys " >/dev/null
+    else list | column -t -s $'\t'; fi ;;
+  *) die "unknown option: $1" ;;
+esac

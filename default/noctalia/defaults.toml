@@ -36,7 +36,7 @@ builtin_ids = ["ghostty", "alacritty", "kitty", "foot", "wezterm", "gtk3", "gtk4
 
 # Distro plugins ship read-only in /usr/share; Noctalia loads them from there.
 [plugins]
-enabled = ["@DISTRO_ID@/crashes", "@DISTRO_ID@/agents"]
+enabled = ["@DISTRO_ID@/crashes", "@DISTRO_ID@/agents", "@DISTRO_ID@/utilities"]
 
 [[plugins.source]]
 name = "@DISTRO_ID@"
@@ -44,8 +44,71 @@ kind = "path"
 location = "/usr/share/@DISTRO_ID@/default/noctalia-plugins"
 enabled = true
 
-# AI usage and the crash indicator sit before the notification bell (each hides
-# itself when it has nothing to show). Otherwise Noctalia's default bar.
+# The bar: workspaces on the left; in the centre the clock and weather with a
+# group of one-click utilities just before them; status icons on the right,
+# each opening its own panel. The crescent on the far left opens the system
+# menu (right-click: apps).
+[widget.menu]
+type = "custom_button"
+custom_image = "/usr/share/icons/hicolor/symbolic/apps/@DISTRO_ID@-logo-symbolic.svg"
+custom_image_colorize = true
+tooltip = "Menu (SUPER+ALT+Space)"
+
+[widget.menu.actions]
+left = "exec @DISTRO_ID@ menu"
+right = "panel-toggle launcher"
+
+[widget.workspaces]
+style = "regular"
+show_labels = true
+labels_only_when_occupied = false
+
+[widget.stay-awake]
+type = "caffeine"
+
+[widget.silence]
+type = "@DISTRO_ID@/utilities:silence"
+
+[widget.reminders]
+type = "@DISTRO_ID@/utilities:reminders"
+
+[widget.recorder]
+type = "@DISTRO_ID@/utilities:recorder"
+
+[widget.dictate]
+type = "@DISTRO_ID@/utilities:dictate"
+
+[widget.clock]
+format = "{:%a %H:%M}"
+tooltip_format = "{:%A, %B %d, %Y}"
+
+[widget.weather]
+show_condition = false
+
+[widget.media]
+hide_when_no_media = true
+max_length = 180
+
+[widget.tray]
+drawer = true
+
+[widget.notifications]
+hide_when_no_unread = true
+
+[widget.network]
+show_label = false
+
+[widget.volume]
+show_label = false
+
+[widget.brightness]
+show_label = false
+
+[widget.battery]
+show_label = false
+hide_when_full = false
+
+# Each hides itself when it has nothing to show.
 [widget.crashes]
 type = "@DISTRO_ID@/crashes:indicator"
 
@@ -53,6 +116,12 @@ type = "@DISTRO_ID@/crashes:indicator"
 type = "@DISTRO_ID@/agents:usage"
 
 [bar.default]
-start  = ["launcher", "wallpaper", "workspaces"]
-center = ["clock"]
-end    = ["media", "tray", "ai-usage", "crashes", "notifications", "clipboard", "network", "bluetooth", "volume", "brightness", "battery", "control-center", "session"]
+start  = ["menu", "workspaces"]
+center = ["stay-awake", "nightlight", "silence", "reminders", "recorder", "dictate", "clock", "weather"]
+end    = ["media", "tray", "ai-usage", "crashes", "notifications", "network", "bluetooth", "volume", "brightness", "battery", "session"]
+
+# Weather in the bar. The location is set from your time zone at first login
+# (just the city name is looked up); change it under Settings → Location.
+[weather]
+enabled = true
+unit = "metric"
