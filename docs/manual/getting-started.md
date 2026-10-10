@@ -4,10 +4,10 @@ Working name: Lunarc (see decision record 0016); the command is `lunarc`.
 
 ## Installing
 
-1. Put the ISO (`lunarc-YYYY.MM.DD-x86_64.iso`) on a USB stick, e.g. with Ventoy, and boot it. UEFI only; turn off Secure Boot.
-2. Connect to the internet: Ethernet works on its own; for Wi-Fi run `iwctl`.
-3. Run `install-lunarc` and answer the questions: disk (erased), user name and password, computer name, time zone, disk encryption (recommended), automatic login.
-4. Reboot and remove the stick.
+1. Put the ISO (`lunarc-YYYY.MM.DD-x86_64.iso`) on a USB stick, e.g. with Ventoy, and boot it. UEFI only; turn off Secure Boot. "Lunarc live (copy to RAM)" in the boot menu lets you remove the stick once it has started.
+2. It starts the live desktop: try it freely; nothing is written to disk. Wi-Fi is in the bar's network menu.
+3. To install, open **Install Lunarc** from the launcher (SUPER+Space) and answer the questions: disk (erased), user name and password, computer name, time zone, disk encryption (recommended), automatic login. (Without the desktop: Ctrl+Alt+F2 gives a root shell; run `install-lunarc` there.)
+4. Restart and remove the stick.
 
 Graphics drivers are picked from the hardware: AMD, Intel and NVIDIA (GTX 16xx / RTX 20xx and newer).
 

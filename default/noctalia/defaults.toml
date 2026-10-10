@@ -5,6 +5,7 @@
 font_family = "Inter"
 polkit_agent = true          # Noctalia's own password prompt, themed like the rest
 telemetry_enabled = false
+setup_wizard_enabled = false  # the distro applies its own theme and settings at first login
 
 # Screensaver after 5 minutes idle, lock at 10, screens off a minute later.
 [idle]

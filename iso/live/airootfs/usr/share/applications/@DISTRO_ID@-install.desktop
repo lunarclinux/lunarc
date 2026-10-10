@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Install @DISTRO_NAME@
+Comment=Install @DISTRO_NAME@ on this computer
+Exec=/usr/local/bin/live-install
+Icon=@DISTRO_ID@-logo
+Terminal=false
+Categories=System;
+Keywords=install;installer;setup;disk;

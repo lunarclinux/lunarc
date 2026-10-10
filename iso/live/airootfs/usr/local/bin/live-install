@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Opens the installer fullscreen in Ghostty (the live Hyprland config makes
+# the @DISTRO_ID@.installer window fullscreen). The window stays open at the end
+# so the result can be read.
+set -euo pipefail
+run=(ghostty --class=@DISTRO_ID@.installer --confirm-close-surface=false -e bash -c '
+  sudo /usr/local/bin/install-@DISTRO_ID@
+  status=$?
+  echo
+  if [[ $status -eq 0 ]]; then echo "Done. Restart the computer and remove the USB stick to start @DISTRO_NAME@."
+  else echo "The installer stopped (exit $status). Nothing after the failed step was done."; fi
+  read -rsn1 -p "Press any key to close this window."')
+if command -v uwsm >/dev/null && [[ -n ${WAYLAND_DISPLAY:-} ]]; then exec uwsm app -- "${run[@]}"; fi
+exec "${run[@]}"

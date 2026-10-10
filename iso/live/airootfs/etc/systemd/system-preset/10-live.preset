@@ -1,0 +1,8 @@
+# Live system: NetworkManager handles the network (Noctalia's network panel
+# uses it), so releng's systemd-networkd and iwd stay off. Package installs
+# apply presets after the live files are copied, so removing the links alone
+# isn't enough.
+disable systemd-networkd.service
+disable systemd-networkd*.socket
+disable systemd-networkd-wait-online.service
+disable iwd.service

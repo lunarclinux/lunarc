@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# Builds the installer ISO from Arch's releng profile. Run as root on an Arch
+# Builds the live ISO from Arch's releng profile. Run as root on an Arch
 # system with archiso installed, from a source tree whose packages are built
 # (pkg/build), e.g. an unpacked copy in a VM:
 #
 #   sudo iso/build [output dir]        default output: iso/out/
 #
-# The ISO is the official live environment plus this distro's installer and
-# package repository; `install-<id>` on the live system starts the installer.
+# The ISO boots into the full desktop as a passwordless live user; nothing is
+# written to disk until "Install <name>" is opened from the launcher. The text
+# installer stays available: `install-<id>` on the second console (Ctrl+Alt+F2)
+# or in any terminal. Live-only files are in iso/live/airootfs.
 set -euo pipefail
 [[ $EUID -eq 0 ]] || { echo "iso/build: run as root" >&2; exit 1; }
 root=$(cd "$(dirname "$0")/.." && pwd)
@@ -17,23 +19,129 @@ repo=$root/pkg/out/repo
 
 work=$(mktemp -d /var/tmp/$DISTRO_ID-iso.XXXXXX)
 trap 'rm -rf "$work"' EXIT
+# pacman downloads as an unprivileged user, even from file:// repositories.
+chmod 755 "$work"
 profile=$work/profile
 cp -r /usr/share/archiso/configs/releng "$profile"
+airootfs=$profile/airootfs
+subst() { sed -i "s/@DISTRO_ID@/$DISTRO_ID/g; s/@DISTRO_NAME@/$DISTRO_NAME/g" "$@"; }
 
-# Identity and boot: UEFI only, like the installer.
+# Identity and boot: UEFI only, like the installer. The image is zstd rather
+# than releng's xz: it boots faster, and mksquashfs failed with xz on the
+# larger desktop image.
 date_stamp=$(date --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y%m)
 sed -i \
   -e "s|^iso_name=.*|iso_name=\"$DISTRO_ID\"|" \
   -e "s|^iso_label=.*|iso_label=\"${DISTRO_ID^^}_$date_stamp\"|" \
   -e "s|^iso_publisher=.*|iso_publisher=\"$DISTRO_NAME\"|" \
-  -e "s|^iso_application=.*|iso_application=\"$DISTRO_NAME installer\"|" \
+  -e "s|^iso_application=.*|iso_application=\"$DISTRO_NAME live system\"|" \
   -e "/^bootmodes=/,/)/c\\bootmodes=('uefi.systemd-boot')" \
+  -e "/^airootfs_image_tool_options=/c\\airootfs_image_tool_options=('-comp' 'zstd' '-Xcompression-level' '19' '-b' '1M')" \
   "$profile/profiledef.sh"
-sed -i "s|^file_permissions=(|file_permissions=(\n  [\"/usr/local/bin/install-$DISTRO_ID\"]=\"0:0:755\"|" "$profile/profiledef.sh"
-sed -i "s|^title .*Arch Linux install medium|title    $DISTRO_NAME installer|" "$profile"/efiboot/loader/entries/*.conf
+perms=""
+for path in "/usr/local/bin/install-$DISTRO_ID" /usr/local/bin/live-user-setup /usr/local/bin/live-install /usr/local/bin/live-welcome; do
+  perms+="\n  [\"$path\"]=\"0:0:755\""
+done
+perms+="\n  [\"/etc/sudoers.d\"]=\"0:0:750\"\n  [\"/etc/sudoers.d/zz-live\"]=\"0:0:440\""
+sed -i "s|^file_permissions=(|file_permissions=($perms|" "$profile/profiledef.sh"
 
-# The installer (source tree and built packages) in /root/installer.
-dest=$profile/airootfs/root/installer
+# Boot menu: the live system, a copy-to-RAM variant (the USB stick can be
+# removed once booted) and releng's speech entry; the console gets the theme's
+# palette, and the writable layer room for a desktop session. No zram swap on
+# the live system: the installer must only ever be offered real disks.
+entries=$profile/efiboot/loader/entries
+palette=$(<"$root/default/boot/console-palette")
+main=$entries/$(sed -n 's/^default *//p' "$profile/efiboot/loader/loader.conf")
+for f in "$entries"/*.conf; do
+  grep -q '^options' "$f" || continue   # memtest
+  sed -i \
+    -e "s|^title .* with speech\$|title    $DISTRO_NAME live, with speech|" \
+    -e "s|^title .*install medium.*\$|title    $DISTRO_NAME live|" \
+    -e "s|^\(options .*\)\$|\1 cow_spacesize=4G systemd.zram=0 $palette|" "$f"
+done
+sed -i 's|^\(options .*\)$|\1 quiet loglevel=3|' "$main"
+sed -e "s|^title .*|title    $DISTRO_NAME live (copy to RAM)|" -e 's|^sort-key .*|sort-key 015|' \
+  -e 's|^\(options .*\)$|\1 copytoram=y|' "$main" > "${main%.conf}-copytoram.conf"
+sed -i 's/^timeout .*/timeout 5/' "$profile/efiboot/loader/loader.conf"
+
+# Packages: the desktop, default apps and this distro's own packages on top of
+# releng, plus graphics drivers for whatever machine boots it (no proprietary
+# NVIDIA on the live system; nouveau and NVK cover it until installed).
+{
+  echo
+  echo "# $DISTRO_NAME live desktop"
+  sed -e 's/#.*//' -e '/^[[:space:]]*$/d' "$root"/packages/{desktop,shell,apps}.packages
+  printf '%s\n' "$DISTRO_ID" "$DISTRO_ID-settings" "$DISTRO_ID-keyring" \
+    networkmanager pipewire-jack noto-fonts \
+    mesa vulkan-radeon vulkan-intel vulkan-nouveau intel-media-driver
+} >> "$profile/packages.x86_64"
+
+# The distro's packages come from the built repository. Signatures are checked
+# against a keyring made just for this build (GPGDir), so the build machine's
+# own keyring is left alone. The live system trusts the key at boot: the
+# keyring package is installed and pacman-init populates every keyring.
+cp -r "$repo" "$work/repo"; chmod 755 "$work/repo"; chmod 644 "$work/repo"/*
+# mkarchiso uses the build machine's package cache; an older build of one of
+# these packages with the same version would fail its checksum there.
+for pkg in "$work/repo"/*.pkg.tar.*; do
+  rm -f "/var/cache/pacman/pkg/${pkg##*/}"
+done
+gpgdir=$work/gnupg
+pacman-key --gpgdir "$gpgdir" --init >/dev/null 2>&1
+pacman-key --gpgdir "$gpgdir" --populate archlinux >/dev/null 2>&1
+if [[ -f $work/repo/$DISTRO_REPO.db.sig ]]; then
+  pacman-key --gpgdir "$gpgdir" --add "$root/pkg/keyring/signing-key.asc" >/dev/null 2>&1
+  pacman-key --gpgdir "$gpgdir" --lsign-key "$(<"$root/pkg/keyring/fingerprint")" >/dev/null 2>&1
+  siglevel=Required
+else
+  echo "iso/build: WARNING: packages are not signed; the ISO installs them unverified" >&2
+  siglevel="Optional TrustAll"
+fi
+sed -i "s|^\[options\]|[options]\nGPGDir = $gpgdir|" "$profile/pacman.conf"
+printf '\n[%s]\nSigLevel = %s\nServer = file://%s\n' "$DISTRO_REPO" "$siglevel" "$work/repo" >> "$profile/pacman.conf"
+
+# Live-only files (user creation, autologin, the Install launcher entry, the
+# welcome notice), with the name filled in.
+cp -a "$root/iso/live/airootfs/." "$airootfs/"
+while IFS= read -r -d '' file; do
+  subst "$file"
+  if [[ $file == *@DISTRO_ID@* ]]; then mv "$file" "${file//@DISTRO_ID@/$DISTRO_ID}"; fi
+done < <(find "$airootfs/usr/local" "$airootfs/usr/share/applications" "$airootfs/etc/systemd" \
+           "$airootfs/etc/sudoers.d" -type f -print0)
+
+# Login screen: the installed system's greeter, plus logging the live user in.
+mkdir -p "$airootfs/etc/greetd"
+{
+  sed "s/@DISTRO_ID@/$DISTRO_ID/g; s/@DISTRO_NAME@/$DISTRO_NAME/g" "$root/etc/greetd/config.toml"
+  printf '\n# Live system: log the live user straight in.\n[initial_session]\ncommand = "uwsm start -e -D Hyprland hyprland.desktop"\nuser = "live"\n'
+} > "$airootfs/etc/greetd/live.toml"
+
+# Services: NetworkManager (Noctalia's network panel uses it) replaces releng's
+# systemd-networkd and iwd; the desktop starts at boot; root's shell moves to
+# the second console.
+units=$airootfs/etc/systemd/system
+rm -f "$units"/multi-user.target.wants/{iwd,systemd-networkd}.service \
+  "$units"/sockets.target.wants/systemd-networkd.socket \
+  "$units"/network-online.target.wants/systemd-networkd-wait-online.service \
+  "$units"/dbus-org.freedesktop.network1.service
+rm -rf "$units"/systemd-networkd-wait-online.service.d "$units"/getty@tty1.service.d \
+  "$airootfs"/etc/systemd/network "$airootfs"/etc/systemd/networkd.conf.d
+mkdir -p "$units"/{multi-user,network-online,getty}.target.wants
+lib=/usr/lib/systemd/system
+for unit in NetworkManager bluetooth power-profiles-daemon; do
+  ln -sf "$lib/$unit.service" "$units/multi-user.target.wants/$unit.service"
+done
+ln -sf "$lib/NetworkManager-dispatcher.service" "$units/dbus-org.freedesktop.nm-dispatcher.service"
+ln -sf "$lib/NetworkManager-wait-online.service" "$units/network-online.target.wants/NetworkManager-wait-online.service"
+ln -sf /etc/systemd/system/live-user.service "$units/multi-user.target.wants/live-user.service"
+ln -sf "$lib/greetd.service" "$units/display-manager.service"
+ln -sf "$lib/graphical.target" "$units/default.target"
+ln -sf "$lib/getty@.service" "$units/getty.target.wants/getty@tty2.service"
+
+echo "$DISTRO_ID" > "$airootfs/etc/hostname"
+
+# The text installer (source tree and built packages) in /root/installer.
+dest=$airootfs/root/installer
 mkdir -p "$dest"
 # Only tracked files: a working checkout can hold untracked local files that
 # must never end up on a published ISO.
@@ -45,17 +153,20 @@ else
 fi
 mkdir -p "$dest/pkg/out" && cp -r "$repo" "$dest/pkg/out/repo"
 
-cat > "$profile/airootfs/usr/local/bin/install-$DISTRO_ID" <<SCRIPT
+cat > "$airootfs/usr/local/bin/install-$DISTRO_ID" <<SCRIPT
 #!/usr/bin/env bash
 # Starts the $DISTRO_NAME installer (see /root/installer).
 # mkarchiso resets file modes in the live filesystem, so run it through bash.
 exec bash /root/installer/install/install.sh "\$@"
 SCRIPT
 
-cat >> "$profile/airootfs/etc/motd" <<MOTD
+cat > "$airootfs/etc/motd" <<MOTD
 
-To install $DISTRO_NAME, connect to the internet (Ethernet works automatically;
-Wi-Fi: iwctl) and run:  install-$DISTRO_ID
+This is the $DISTRO_NAME live system (root shell on the second console).
+
+To install, connect to the internet (Ethernet works automatically; Wi-Fi:
+nmtui) and run:  install-$DISTRO_ID
+The desktop is on the first console (Ctrl+Alt+F1).
 
 MOTD
 

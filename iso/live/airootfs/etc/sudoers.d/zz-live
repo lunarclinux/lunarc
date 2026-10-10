@@ -1,0 +1,3 @@
+# Live system only: the live user runs sudo without a password. Named to sort
+# after the distro's wheel rule (the last matching rule wins).
+live ALL=(ALL:ALL) NOPASSWD: ALL

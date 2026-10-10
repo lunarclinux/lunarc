@@ -1,0 +1,13 @@
+# Creates the passwordless live user before the login screen starts.
+[Unit]
+Description=Create the live user
+After=local-fs.target systemd-sysusers.service
+Before=greetd.service display-manager.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/live-user-setup
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,13 @@
+# Live system: tells the live user how installing works.
+[Unit]
+Description=Live system welcome
+ConditionUser=live
+After=graphical-session.target noctalia.service @DISTRO_ID@-first-login.service
+PartOf=graphical-session.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/live-welcome
+
+[Install]
+WantedBy=graphical-session.target
