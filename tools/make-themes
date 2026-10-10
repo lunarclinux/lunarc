@@ -1,0 +1,259 @@
+#!/usr/bin/env python3
+"""Writes palette.json and theme.toml for the generated themes.
+
+Each theme below lists its colours once per variant (dark/light); this script
+expands them into Noctalia's palette roles and terminal colours. Moonlit,
+Ember, Tide and Paper are hand-written and not touched.
+
+  tools/make-themes            # rewrite every generated theme
+  tools/make-themes nord       # just one
+
+Colours of the upstream-based themes come from each project's published
+palette (licences in docs/decisions/0025-theme-collection.md).
+"""
+import json
+import pathlib
+import sys
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent / "themes"
+ANSI = ["black", "red", "green", "yellow", "blue", "magenta", "cyan", "white"]
+
+
+def variant(bg, container, hover, outline, fg, muted, primary, on_primary,
+            secondary, on_secondary, tertiary, on_tertiary, error, on_error,
+            cursor, selection, normal, bright):
+    """One variant in Noctalia's palette format. normal/bright: 8 colours each."""
+    return {
+        "mPrimary": primary, "mOnPrimary": on_primary,
+        "mSecondary": secondary, "mOnSecondary": on_secondary,
+        "mTertiary": tertiary, "mOnTertiary": on_tertiary,
+        "mError": error, "mOnError": on_error,
+        "mSurface": bg, "mOnSurface": fg,
+        "mSurfaceVariant": container, "mOnSurfaceVariant": muted,
+        "mOutline": outline, "mShadow": "#000000",
+        "mHover": hover, "mOnHover": fg,
+        "terminal": {
+            "background": bg, "foreground": fg,
+            "cursor": cursor, "cursorText": bg,
+            "selectionBg": selection, "selectionFg": fg,
+            "normal": dict(zip(ANSI, normal)),
+            "bright": dict(zip(ANSI, bright)),
+        },
+    }
+
+
+THEMES = {
+    # --- Based on open-licensed palettes -------------------------------------
+    "catppuccin": dict(
+        name="Catppuccin",
+        description="Soft pastels: mauve, blue and teal on deep slate (Mocha). Light variant: Latte.",
+        mode="dark",
+        credit="Catppuccin (Mocha and Latte)", license="MIT", url="https://github.com/catppuccin/catppuccin",
+        dark=variant("#1e1e2e", "#313244", "#45475a", "#585b70", "#cdd6f4", "#a6adc8",
+                     "#cba6f7", "#11111b", "#89b4fa", "#11111b", "#94e2d5", "#11111b", "#f38ba8", "#11111b",
+                     "#f5e0dc", "#585b70",
+                     ["#45475a", "#f38ba8", "#a6e3a1", "#f9e2af", "#89b4fa", "#f5c2e7", "#94e2d5", "#a6adc8"],
+                     ["#585b70", "#f37799", "#89d88b", "#ebd391", "#74a8fc", "#f2aede", "#6bd7ca", "#bac2de"]),
+        light=variant("#eff1f5", "#e6e9ef", "#ccd0da", "#bcc0cc", "#4c4f69", "#6c6f85",
+                      "#8839ef", "#ffffff", "#1e66f5", "#ffffff", "#179299", "#ffffff", "#d20f39", "#ffffff",
+                      "#dc8a78", "#acb0be",
+                      ["#5c5f77", "#d20f39", "#40a02b", "#df8e1d", "#1e66f5", "#ea76cb", "#179299", "#acb0be"],
+                      ["#6c6f85", "#de293e", "#49af3d", "#eea02d", "#456eff", "#fe85d8", "#2d9fa8", "#bcc0cc"]),
+    ),
+    "gruvbox": dict(
+        name="Gruvbox",
+        description="Retro warmth: yellow, aqua and orange on brown-black. Has a light variant.",
+        mode="dark",
+        credit="Gruvbox", license="MIT", url="https://github.com/gruvbox-community/gruvbox",
+        dark=variant("#282828", "#3c3836", "#45403d", "#504945", "#ebdbb2", "#a89984",
+                     "#fabd2f", "#282828", "#8ec07c", "#282828", "#fe8019", "#282828", "#fb4934", "#282828",
+                     "#ebdbb2", "#504945",
+                     ["#282828", "#cc241d", "#98971a", "#d79921", "#458588", "#b16286", "#689d6a", "#a89984"],
+                     ["#928374", "#fb4934", "#b8bb26", "#fabd2f", "#83a598", "#d3869b", "#8ec07c", "#ebdbb2"]),
+        light=variant("#fbf1c7", "#ebdbb2", "#e0cfa5", "#d5c4a1", "#3c3836", "#7c6f64",
+                      "#b57614", "#fbf1c7", "#427b58", "#fbf1c7", "#af3a03", "#fbf1c7", "#9d0006", "#fbf1c7",
+                      "#3c3836", "#d5c4a1",
+                      ["#fbf1c7", "#cc241d", "#98971a", "#d79921", "#458588", "#b16286", "#689d6a", "#7c6f64"],
+                      ["#928374", "#9d0006", "#79740e", "#b57614", "#076678", "#8f3f71", "#427b58", "#3c3836"]),
+    ),
+    "nord": dict(
+        name="Nord",
+        description="Arctic calm: frost blues and aurora green on polar night.",
+        mode="dark",
+        credit="Nord", license="MIT", url="https://github.com/nordtheme/nord",
+        dark=variant("#2e3440", "#3b4252", "#434c5e", "#4c566a", "#d8dee9", "#9aa3b5",
+                     "#88c0d0", "#2e3440", "#81a1c1", "#2e3440", "#a3be8c", "#2e3440", "#bf616a", "#2e3440",
+                     "#d8dee9", "#434c5e",
+                     ["#3b4252", "#bf616a", "#a3be8c", "#ebcb8b", "#81a1c1", "#b48ead", "#88c0d0", "#e5e9f0"],
+                     ["#4c566a", "#bf616a", "#a3be8c", "#ebcb8b", "#81a1c1", "#b48ead", "#8fbcbb", "#eceff4"]),
+    ),
+    "tokyo-night": dict(
+        name="Tokyo Night",
+        description="City lights: electric blue and violet on midnight navy. Has a light variant.",
+        mode="dark",
+        credit="Tokyo Night", license="MIT", url="https://github.com/tokyo-night/tokyo-night-vscode-theme",
+        dark=variant("#1a1b26", "#292e42", "#2f3549", "#414868", "#c0caf5", "#9aa5ce",
+                     "#7aa2f7", "#16161e", "#bb9af7", "#16161e", "#7dcfff", "#16161e", "#f7768e", "#16161e",
+                     "#c0caf5", "#33467c",
+                     ["#15161e", "#f7768e", "#9ece6a", "#e0af68", "#7aa2f7", "#bb9af7", "#7dcfff", "#a9b1d6"],
+                     ["#414868", "#f7768e", "#9ece6a", "#e0af68", "#7aa2f7", "#bb9af7", "#7dcfff", "#c0caf5"]),
+        light=variant("#e6e7ed", "#d6d8df", "#dcdee3", "#c1c2c7", "#343b58", "#707280",
+                      "#2959aa", "#ffffff", "#7b43ba", "#ffffff", "#006c86", "#ffffff", "#8c4351", "#ffffff",
+                      "#363c4d", "#c1c2c7",
+                      ["#343b58", "#8c4351", "#33635c", "#8f5e15", "#2959aa", "#7b43ba", "#006c86", "#707280"],
+                      ["#707280", "#8c4351", "#33635c", "#8f5e15", "#2959aa", "#7b43ba", "#006c86", "#343b58"]),
+    ),
+    "rose-pine": dict(
+        name="Rosé Pine",
+        description="Muted dusk: iris, rose and foam on deep purple. Light variant: Dawn.",
+        mode="dark",
+        credit="Rosé Pine (main and Dawn)", license="MIT", url="https://github.com/rose-pine/rose-pine-theme",
+        dark=variant("#191724", "#26233a", "#2a2837", "#403d52", "#e0def4", "#908caa",
+                     "#c4a7e7", "#191724", "#ebbcba", "#191724", "#9ccfd8", "#191724", "#eb6f92", "#191724",
+                     "#524f67", "#403d52",
+                     ["#26233a", "#eb6f92", "#31748f", "#f6c177", "#9ccfd8", "#c4a7e7", "#ebbcba", "#e0def4"],
+                     ["#6e6a86", "#eb6f92", "#31748f", "#f6c177", "#9ccfd8", "#c4a7e7", "#ebbcba", "#e0def4"]),
+        light=variant("#faf4ed", "#f2e9e1", "#ebe2da", "#dfdad9", "#575279", "#797593",
+                      "#907aa9", "#ffffff", "#d7827e", "#ffffff", "#286983", "#ffffff", "#b4637a", "#ffffff",
+                      "#cecacd", "#dfdad9",
+                      ["#f2e9e1", "#b4637a", "#286983", "#ea9d34", "#56949f", "#907aa9", "#d7827e", "#575279"],
+                      ["#9893a5", "#b4637a", "#286983", "#ea9d34", "#56949f", "#907aa9", "#d7827e", "#575279"]),
+    ),
+    "everforest": dict(
+        name="Everforest",
+        description="Forest floor: soft greens and warm sand, easy on the eyes. Has a light variant.",
+        mode="dark",
+        credit="Everforest (medium)", license="MIT", url="https://github.com/sainnhe/everforest",
+        dark=variant("#2d353b", "#343f44", "#3d484d", "#475258", "#d3c6aa", "#9da9a0",
+                     "#a7c080", "#2d353b", "#7fbbb3", "#2d353b", "#dbbc7f", "#2d353b", "#e67e80", "#2d353b",
+                     "#d3c6aa", "#475258",
+                     ["#343f44", "#e67e80", "#a7c080", "#dbbc7f", "#7fbbb3", "#d699b6", "#83c092", "#d3c6aa"],
+                     ["#7a8478", "#e67e80", "#a7c080", "#dbbc7f", "#7fbbb3", "#d699b6", "#83c092", "#d3c6aa"]),
+        light=variant("#fdf6e3", "#f4f0d9", "#efebd4", "#d8d3ba", "#5c6a72", "#829181",
+                      "#8da101", "#2d353b", "#3a94c5", "#ffffff", "#dfa000", "#2d353b", "#f85552", "#ffffff",
+                      "#5c6a72", "#e6e2cc",
+                      ["#5c6a72", "#f85552", "#8da101", "#dfa000", "#3a94c5", "#df69ba", "#35a77c", "#e6e2cc"],
+                      ["#829181", "#f85552", "#8da101", "#dfa000", "#3a94c5", "#df69ba", "#35a77c", "#fdf6e3"]),
+    ),
+    "kanagawa": dict(
+        name="Kanagawa",
+        description="Ink and woodblock: crystal blue, violet and carp yellow on sumi ink. Light variant: Lotus.",
+        mode="dark",
+        credit="Kanagawa (Wave and Lotus)", license="MIT", url="https://github.com/rebelot/kanagawa.nvim",
+        dark=variant("#1f1f28", "#2a2a37", "#363646", "#54546d", "#dcd7ba", "#a6a69c",
+                     "#7e9cd8", "#1f1f28", "#957fb8", "#1f1f28", "#e6c384", "#1f1f28", "#ff5d62", "#1f1f28",
+                     "#c8c093", "#2d4f67",
+                     ["#16161d", "#c34043", "#76946a", "#c0a36e", "#7e9cd8", "#957fb8", "#6a9589", "#c8c093"],
+                     ["#727169", "#e82424", "#98bb6c", "#e6c384", "#7fb4ca", "#938aa9", "#7aa89f", "#dcd7ba"]),
+        light=variant("#f2ecbc", "#e7dba0", "#e5ddb0", "#c9c39a", "#545464", "#716e61",
+                      "#4d699b", "#ffffff", "#624c83", "#ffffff", "#cc6d00", "#ffffff", "#c84053", "#ffffff",
+                      "#43436c", "#c9cbd1",
+                      ["#1f1f28", "#c84053", "#6f894e", "#77713f", "#4d699b", "#b35b79", "#597b75", "#545464"],
+                      ["#8a8980", "#d7474b", "#6e915f", "#836f4a", "#6693bf", "#624c83", "#5e857a", "#43436c"]),
+    ),
+    "dracula": dict(
+        name="Dracula",
+        description="Classic vampire: purple, pink and cyan on charcoal.",
+        mode="dark",
+        credit="Dracula", license="MIT", url="https://github.com/dracula/dracula-theme",
+        dark=variant("#282a36", "#303241", "#3a3d4e", "#44475a", "#f8f8f2", "#b4b9d0",
+                     "#bd93f9", "#282a36", "#ff79c6", "#282a36", "#8be9fd", "#282a36", "#ff5555", "#282a36",
+                     "#f8f8f2", "#44475a",
+                     ["#21222c", "#ff5555", "#50fa7b", "#f1fa8c", "#bd93f9", "#ff79c6", "#8be9fd", "#f8f8f2"],
+                     ["#6272a4", "#ff6e6e", "#69ff94", "#ffffa5", "#d6acff", "#ff92df", "#a4ffff", "#ffffff"]),
+    ),
+    "solarized": dict(
+        name="Solarized",
+        description="Precision colours: yellow, blue and cyan on deep teal. Has a light variant.",
+        mode="dark",
+        credit="Solarized", license="MIT", url="https://github.com/altercation/solarized",
+        dark=variant("#002b36", "#073642", "#0a404e", "#586e75", "#93a1a1", "#839496",
+                     "#b58900", "#002b36", "#268bd2", "#fdf6e3", "#2aa198", "#002b36", "#dc322f", "#fdf6e3",
+                     "#93a1a1", "#073642",
+                     ["#073642", "#dc322f", "#859900", "#b58900", "#268bd2", "#d33682", "#2aa198", "#eee8d5"],
+                     ["#586e75", "#cb4b16", "#859900", "#b58900", "#268bd2", "#6c71c4", "#2aa198", "#fdf6e3"]),
+        light=variant("#fdf6e3", "#eee8d5", "#e6dfc8", "#93a1a1", "#586e75", "#657b83",
+                      "#b58900", "#fdf6e3", "#268bd2", "#fdf6e3", "#2aa198", "#fdf6e3", "#dc322f", "#fdf6e3",
+                      "#586e75", "#eee8d5",
+                      ["#073642", "#dc322f", "#859900", "#b58900", "#268bd2", "#d33682", "#2aa198", "#eee8d5"],
+                      ["#586e75", "#cb4b16", "#859900", "#b58900", "#268bd2", "#6c71c4", "#2aa198", "#fdf6e3"]),
+    ),
+    "one": dict(
+        name="One",
+        description="Editor favourite: blue, purple and green on grey (One Dark). Light variant: One Light.",
+        mode="dark",
+        credit="One Dark / One Light", license="MIT", url="https://github.com/joshdick/onedark.vim",
+        dark=variant("#282c34", "#2c313a", "#353b45", "#3e4452", "#abb2bf", "#828997",
+                     "#61afef", "#1e2127", "#c678dd", "#1e2127", "#98c379", "#1e2127", "#e06c75", "#1e2127",
+                     "#528bff", "#3e4452",
+                     ["#1e2127", "#e06c75", "#98c379", "#e5c07b", "#61afef", "#c678dd", "#56b6c2", "#abb2bf"],
+                     ["#5c6370", "#e06c75", "#98c379", "#d19a66", "#61afef", "#c678dd", "#56b6c2", "#ffffff"]),
+        light=variant("#fafafa", "#f0f0f1", "#e5e5e6", "#d3d3d4", "#383a42", "#696c77",
+                      "#4078f2", "#ffffff", "#a626a4", "#ffffff", "#50a14f", "#ffffff", "#e45649", "#ffffff",
+                      "#526fff", "#e5e5e6",
+                      ["#383a42", "#e45649", "#50a14f", "#c18401", "#4078f2", "#a626a4", "#0184bc", "#a0a1a7"],
+                      ["#696c77", "#e45649", "#50a14f", "#c18401", "#4078f2", "#a626a4", "#0184bc", "#fafafa"]),
+    ),
+    # --- Originals ----------------------------------------------------------
+    "eclipse": dict(
+        name="Eclipse",
+        description="Totality: corona gold and ice blue on true black. High contrast.",
+        mode="dark",
+        dark=variant("#060607", "#121214", "#1b1b1f", "#2a2a30", "#f2efe6", "#a8a59c",
+                     "#f5c542", "#060607", "#ff8a4c", "#060607", "#9ecbff", "#060607", "#ff5c5c", "#060607",
+                     "#f5c542", "#2a2a30",
+                     ["#121214", "#ff6b6b", "#9be38f", "#f5c542", "#8fb8ff", "#d6a2ff", "#7fe3e0", "#e8e5dc"],
+                     ["#3a3a42", "#ff9494", "#b9f0ae", "#ffe08a", "#b5cfff", "#e6c2ff", "#a8f0ee", "#ffffff"]),
+    ),
+    "harvest": dict(
+        name="Harvest",
+        description="Harvest moon: pumpkin orange and rose over a deep plum night.",
+        mode="dark",
+        dark=variant("#1a1220", "#261b2e", "#2f2238", "#3f2f4a", "#f1e4d0", "#b9a89a",
+                     "#f0a35e", "#1a1220", "#e48a9a", "#1a1220", "#c9b46a", "#1a1220", "#ff6f61", "#1a1220",
+                     "#f0a35e", "#3f2f4a",
+                     ["#261b2e", "#f07a6e", "#a8c97f", "#f0c36e", "#8eaee8", "#d79ad8", "#7fc6c0", "#e9dcc8"],
+                     ["#4a3a56", "#f6a097", "#c2dca1", "#f6d99a", "#b2c8f0", "#e6bce6", "#a6dad5", "#fff6e8"]),
+    ),
+    "earthshine": dict(
+        name="Earthshine",
+        description="Soft daylight: steel blue and lavender on pale blue-grey. Has a dark variant.",
+        mode="light",
+        light=variant("#e9eef3", "#dbe3eb", "#d0d9e3", "#b3bfcc", "#1e2a38", "#4d5b6b",
+                      "#2f6aa3", "#ffffff", "#6457b8", "#ffffff", "#23787f", "#ffffff", "#b3261e", "#ffffff",
+                      "#2f6aa3", "#d0d9e3",
+                      ["#1e2a38", "#b3261e", "#3c7a4a", "#8a6a14", "#2f6aa3", "#6457b8", "#23787f", "#cfd8e2"],
+                      ["#4d5b6b", "#c9453c", "#4f915a", "#a27f22", "#4a84bd", "#7c70cc", "#2f9199", "#f7f9fb"]),
+        dark=variant("#141b24", "#1d2632", "#24303e", "#344255", "#dde5ee", "#9aa8b8",
+                     "#8fb7e3", "#0f1620", "#a99cf0", "#0f1620", "#7fc6cc", "#0f1620", "#f28b82", "#0f1620",
+                     "#8fb7e3", "#344255",
+                     ["#1d2632", "#f28b82", "#9fd49a", "#e6c97a", "#8fb7e3", "#a99cf0", "#7fc6cc", "#dde5ee"],
+                     ["#344255", "#f6a9a2", "#b7e2b2", "#f0dca5", "#b0cdee", "#c4bbf5", "#a2d9dd", "#ffffff"]),
+    ),
+}
+
+
+def write(name, spec):
+    folder = ROOT / name
+    folder.mkdir(exist_ok=True)
+    palette = {key: spec[key] for key in ("dark", "light") if key in spec}
+    (folder / "palette.json").write_text(json.dumps(palette, indent=2) + "\n")
+    lines = [f'name = "{spec["name"]}"', f'description = "{spec["description"]}"', f'mode = "{spec["mode"]}"']
+    if "credit" in spec:
+        lines += [f'credit = "{spec["credit"]}"', f'license = "{spec["license"]}"', f'url = "{spec["url"]}"']
+    else:
+        lines += ['credit = "Original"']
+    (folder / "theme.toml").write_text("\n".join(lines) + "\n")
+
+
+def main():
+    wanted = sys.argv[1:] or list(THEMES)
+    for name in wanted:
+        if name not in THEMES:
+            sys.exit(f"make-themes: no generated theme called {name}")
+        write(name, THEMES[name])
+        print(f"themes/{name}")
+
+
+if __name__ == "__main__":
+    main()

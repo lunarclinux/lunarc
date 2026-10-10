@@ -1,0 +1,6 @@
+name = "Kanagawa"
+description = "Ink and woodblock: crystal blue, violet and carp yellow on sumi ink. Light variant: Lotus."
+mode = "dark"
+credit = "Kanagawa (Wave and Lotus)"
+license = "MIT"
+url = "https://github.com/rebelot/kanagawa.nvim"

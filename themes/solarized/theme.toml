@@ -1,0 +1,6 @@
+name = "Solarized"
+description = "Precision colours: yellow, blue and cyan on deep teal. Has a light variant."
+mode = "dark"
+credit = "Solarized"
+license = "MIT"
+url = "https://github.com/altercation/solarized"

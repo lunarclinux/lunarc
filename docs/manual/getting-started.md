@@ -51,6 +51,8 @@ SUPER+ALT+Space (or `/m` in the launcher). Type part of a name and press Enter t
 | Command | Does |
 |---|---|
 | `lunarc theme list` / `set <name> [dark\|light]` | Switch the desktop theme (colours, wallpaper, terminal, apps) |
+| `lunarc theme preview` | Colour swatches of every theme, in the terminal |
+| `lunarc theme wallpaper next` / `prev` / `set <n>` | Cycle the current theme's wallpapers (each theme remembers its pick) |
 | `lunarc terminal set ghostty\|alacritty\|kitty\|wezterm\|foot` | Change the terminal (installs it if needed) |
 | `lunarc agent set claude\|codex\|gemini\|opencode` | Choose the AI coding agent |
 | `lunarc agent launch` / `prompt "<text>"` | Open the agent in a terminal |

@@ -1,0 +1,6 @@
+name = "One"
+description = "Editor favourite: blue, purple and green on grey (One Dark). Light variant: One Light."
+mode = "dark"
+credit = "One Dark / One Light"
+license = "MIT"
+url = "https://github.com/joshdick/onedark.vim"
