@@ -3,11 +3,14 @@
 # with the live ISO), installs a git ref over SSH, reboots into the installed
 # system and runs checks.
 #
-#   vm/test-install [--vm distro-clean] [--from l0-complete] [--ref HEAD] [--keep] [--iso VOLUME] [--encrypt] [--rollback]
+#   vm/test-install [--vm distro-clean] [--from l0-complete] [--ref HEAD] [--keep] [--iso VOLUME] [--encrypt] [--rollback] [--alongside]
 #
 # --encrypt installs onto LUKS and types the passphrase at boot (virsh send-key).
 # --rollback ends by rolling back a package install and rebooting into the
 # restored system (not with --encrypt).
+# --alongside first lays out a pretend Windows (EFI partition with Windows Boot
+# Manager files, an NTFS partition, a firmware entry), installs into the free
+# space beside it and checks none of it changed (decision record 0035).
 #
 # --iso boots the VM from an installer ISO in libvirt's default pool (built by
 # iso/build) and runs the installer bundled in it, instead of copying a git ref.
@@ -16,7 +19,7 @@
 set -euo pipefail
 export LIBVIRT_DEFAULT_URI=qemu:///system
 here=$(cd "$(dirname "$0")" && pwd); repo=$(dirname "$here")
-vm=distro-clean from=l0-complete ref=HEAD keep=0 iso="" encrypt=0 rollback=0
+vm=distro-clean from=l0-complete ref=HEAD keep=0 iso="" encrypt=0 rollback=0 alongside=0
 while [[ $# -gt 0 ]]; do
   case $1 in
     --vm) vm=$2; shift 2 ;; --from) from=$2; shift 2 ;;
@@ -24,6 +27,7 @@ while [[ $# -gt 0 ]]; do
     --iso) iso=$2; shift 2 ;;
     --encrypt) encrypt=1; shift ;;
     --rollback) rollback=1; shift ;;
+    --alongside) alongside=1; shift ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -85,10 +89,46 @@ if (( encrypt )); then
   crypt_args="--encrypt /root/luks"
 fi
 
+# A pretend Windows on the disk: its EFI partition (Windows Boot Manager files
+# and firmware entry), the Microsoft reserved partition and an NTFS volume,
+# leaving the rest of the disk free. Fingerprinted before and after.
+name=$(. "$repo/distro.conf"; echo "$DISTRO_NAME")
+along_args=""
+windows_fingerprint='sfdisk --dump /dev/vda | grep -E "^/dev/vda[123] "; sha256sum < /dev/vda1; head -c 268435456 /dev/vda3 | sha256sum'
+if (( alongside )); then
+  log "laying out a pretend Windows"
+  "$here/ssh" "$vm" -- bash -s -- "$name" <<'WINDOWS' || { log "WINDOWS LAYOUT FAILED"; exit 1; }
+set -euo pipefail
+name=$1 d=/dev/vda
+wipefs -af "$d" >/dev/null; sgdisk --zap-all "$d" >/dev/null
+sgdisk -n1:0:+260M -t1:ef00 -c1:"EFI system partition" \
+       -n2:0:+16M -t2:0c01 -c2:"Microsoft reserved partition" \
+       -n3:0:+12G -t3:0700 -c3:"Basic data partition" "$d" >/dev/null
+partprobe "$d"; udevadm settle
+mkfs.fat -F32 -n SYSTEM "${d}1" >/dev/null
+mkfs.ntfs -Q -L Windows "${d}3" >/dev/null
+mkdir -p /tmp/win
+mount "${d}1" /tmp/win
+mkdir -p /tmp/win/EFI/Microsoft/Boot /tmp/win/EFI/Boot
+head -c 512K /dev/urandom > /tmp/win/EFI/Microsoft/Boot/bootmgfw.efi
+cp /tmp/win/EFI/Microsoft/Boot/bootmgfw.efi /tmp/win/EFI/Boot/bootx64.efi
+umount /tmp/win
+mount -t ntfs3 "${d}3" /tmp/win 2>/dev/null || mount -t ntfs-3g "${d}3" /tmp/win
+echo "not to be touched" > /tmp/win/marker.txt
+umount /tmp/win
+# Windows' firmware entry; entries left by earlier runs go first.
+efibootmgr | sed -n "s/^Boot\([0-9A-Fa-f]\{4\}\)\*\{0,1\} \(Windows Boot Manager\|$name\)\b.*/\1/p" \
+  | while read -r n; do efibootmgr -q -b "$n" -B; done
+efibootmgr -q --create --disk "$d" --part 1 --label "Windows Boot Manager" --loader '\EFI\Microsoft\Boot\bootmgfw.efi'
+WINDOWS
+  windows_before=$("$here/ssh" "$vm" -- "$windows_fingerprint")
+  along_args="--alongside"
+fi
+
 log "installing"
 started=$SECONDS
 "$here/ssh" "$vm" -- "$installer --disk /dev/vda --user $user \
-  --password-file /root/pw --ssh-key /root/tester.pub --timezone America/Chicago --autologin $crypt_args --yes" \
+  --password-file /root/pw --ssh-key /root/tester.pub --timezone America/Chicago --autologin $crypt_args $along_args --yes" \
   || { log "INSTALL FAILED"; exit 1; }
 log "install took $((SECONDS - started))s; rebooting into the installed system"
 
@@ -140,6 +180,14 @@ check "root is btrfs subvolume @"      'findmnt -no FSTYPE,OPTIONS / | grep -qE 
 check "separate subvolumes mounted"    'for m in /home /var/log /var/cache/pacman/pkg /.snapshots; do findmnt -n $m >/dev/null || exit 1; done'
 check "booted by Limine (fallback path)" "echo '$password' | sudo -S -p '' sh -c 'test -f /boot/EFI/BOOT/BOOTX64.EFI && tr -d \\\\000 < /sys/firmware/efi/efivars/LoaderInfo-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f | grep -q Limine'"
 check "zram swap active"               'swapon --show=NAME --noheadings | grep -q zram'
+if (( alongside )); then
+  sudo_pw="echo '$password' | sudo -S -p ''"
+  check "alongside: Windows partitions unchanged" "[ \"\$($sudo_pw sh -c '$windows_fingerprint')\" = '$windows_before' ]"
+  check "alongside: installed into the free space" "lsblk -lno PARTN,PARTLABEL /dev/vda | grep -qx ' *4 $name boot' && lsblk -lno PARTN,PARTLABEL /dev/vda | grep -qx ' *5 $name system' && findmnt -no SOURCE /boot | grep -qx /dev/vda4"
+  check "alongside: firmware starts us first, Windows kept" "o=\$($sudo_pw efibootmgr); first=\$(sed -n 's/^BootOrder: \\([0-9A-F]*\\).*/\\1/p' <<<\"\$o\"); grep -q \"^Boot\$first\\*\\{0,1\\} $name\" <<<\"\$o\" && grep -q 'Windows Boot Manager' <<<\"\$o\" && cur=\$(sed -n 's/^BootCurrent: //p' <<<\"\$o\") && [ \"\$cur\" = \"\$first\" ]"
+  check "alongside: boot menu has Windows" "$sudo_pw sh -c 'grep -q \"^entry: Windows Boot Manager\\|^ *entry: Windows Boot Manager\" /boot/limine.conf && grep -q \"guid(.*):/EFI/Microsoft/Boot/bootmgfw.efi\" /boot/limine.conf'"
+  check "alongside: Limine copies kept up to date" "$sudo_pw sh -c 'cmp -s /usr/share/limine/BOOTX64.EFI /boot/EFI/$id/BOOTX64.EFI && cmp -s /usr/share/limine/BOOTX64.EFI /boot/EFI/BOOT/BOOTX64.EFI && grep -q \"/boot/EFI/$id/BOOTX64.EFI\" /usr/share/libalpm/hooks/$id-limine-update.hook && grep -qx BOOT_MODE=alongside /etc/$id/boot.conf'"
+fi
 check "NetworkManager connected"       'nmcli -t -f STATE general | grep -q "^connected"'
 check "internet reachable"             'curl -sfI https://archlinux.org -o /dev/null'
 check "time synchronised service on"   'systemctl is-active --quiet systemd-timesyncd'
@@ -391,6 +439,11 @@ if (( rollback )) && (( ! encrypt )); then
   check "rollback: snapshots still there"  "echo '$password' | sudo -S -p '' snapper -c root list | grep -q tree"
 fi
 
+# The pretend Windows' and our firmware entries would outlive the disk they
+# point at; remove them (not with --keep, which leaves everything as it is).
+if (( alongside && ! keep )); then
+  "$here/ssh" "$vm" "$user" -- "echo '$password' | sudo -S -p '' sh -c 'efibootmgr | sed -n \"s/^Boot\\([0-9A-Fa-f]\\{4\\}\\)\\*\\{0,1\\} \\(Windows Boot Manager\\|$name\\)\\b.*/\\1/p\" | while read -r n; do efibootmgr -q -b \$n -B; done'" || true
+fi
 if (( keep )); then log "leaving $vm running"; else "$here/ssh" "$vm" "$user" -- "echo '$password' | sudo -S -p '' poweroff" || true; fi
 (( fail )) && { log "FAILED"; exit 1; }
 log "all checks passed"
