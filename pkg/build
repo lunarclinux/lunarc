@@ -12,16 +12,24 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 ref=${1:-HEAD}
 out=$root/pkg/out
-rm -rf "$out"; mkdir -p "$out/repo" "$out/src"
-git -C "$root" archive "$ref" | tar -x -C "$out/src"
-source "$out/src/distro.conf"
+rm -rf "$out"; mkdir -p "$out/repo"
+# Packages record the folder they were built in (.BUILDINFO), and the repository
+# is published, so build in a fixed, neutral place rather than under $HOME.
+# mktemp: a private folder, never a predictable shared path.
+work=$(mktemp -d "${TMPDIR:-/tmp}/distro-pkgbuild.XXXXXX")
+mkdir -p "$work/src"
+trap 'rm -rf "$work"' EXIT
+git -C "$root" archive "$ref" | tar -x -C "$work/src"
+source "$work/src/distro.conf"
+# Shown as the packager in `pacman -Qi`; no personal name or address.
+export PACKAGER="$DISTRO_NAME Project"
 
 ver=$(git -C "$root" describe --tags --long --match 'l*-complete' "$ref" 2>/dev/null \
   | sed -E 's/^l([0-9]+)-complete-([0-9]+)-g[0-9a-f]+$/0.\1.\2/')
 [[ $ver =~ ^0\.[0-9]+\.[0-9]+$ ]] || ver=0.0.0
 
 # Signing: makepkg and repo-add call gpg, which reads GNUPGHOME.
-fpr=$(<"$out/src/pkg/keyring/fingerprint")
+fpr=$(<"$work/src/pkg/keyring/fingerprint")
 signing_home=${SIGNING_GNUPGHOME:-$HOME/.local/share/$DISTRO_ID-signing/gnupg}
 sign=()
 if [[ -d $signing_home ]] && GNUPGHOME=$signing_home gpg --batch --list-secret-keys "$fpr" >/dev/null 2>&1; then
@@ -38,21 +46,21 @@ for vendored in "$root"/pkg/*/; do
   vendored=${vendored%/}
   case ${vendored##*/} in main|settings|keyring|out) continue ;; esac
   [[ -f $vendored/PKGBUILD ]] || continue
-  build=$out/build-${vendored##*/}; mkdir -p "$build"
+  build=$work/${vendored##*/}; mkdir -p "$build"
   cp "$vendored/PKGBUILD" "$build/"
   (cd "$build" && PKGDEST=$out/repo makepkg -f --nodeps --noconfirm "${sign[@]}" >/dev/null)
 done
 
 # The distro's own packages.
 for part in keyring settings main; do
-  build=$out/build-$part; mkdir -p "$build"
-  cp "$out/src/pkg/$part/PKGBUILD" "$build/"
+  build=$work/$part; mkdir -p "$build"
+  cp "$work/src/pkg/$part/PKGBUILD" "$build/"
   # An install script is named after its package; fill in the name.
-  for script in "$out/src/pkg/$part"/*.install; do
+  for script in "$work/src/pkg/$part"/*.install; do
     if [[ -f $script ]]; then sed "s/@DISTRO_ID@/$DISTRO_ID/g" "$script" > "$build/$DISTRO_ID-$part.install"; fi
   done
   # --nodeps: the desktop doesn't need to be installed on the build machine.
-  (cd "$build" && DISTRO_SRC=$out/src PKGVER=$ver PKGDEST=$out/repo makepkg -f --nodeps --noconfirm "${sign[@]}" >/dev/null)
+  (cd "$build" && DISTRO_SRC=$work/src PKGVER=$ver PKGDEST=$out/repo makepkg -f --nodeps --noconfirm "${sign[@]}" >/dev/null)
 done
 
 db=$out/repo/$DISTRO_REPO.db.tar.gz
