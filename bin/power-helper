@@ -1,0 +1,151 @@
+#!/usr/bin/env bash
+# Root side of `<distro id> power`: the few power settings that need root.
+# Run through sudo or pkexec; every argument is checked, nothing else is run.
+#
+#   power-helper charge-limit <50-100|off>   save and apply the battery charge limit
+#   power-helper charge-limit-apply          re-apply the saved limit (boot, resume)
+#   power-helper hibernate-enable            swap file for hibernation + resume arguments
+#   power-helper hibernate-disable           undo hibernate-enable
+set -euo pipefail
+(( EUID == 0 )) || { echo "power-helper: must run as root" >&2; exit 1; }
+# shellcheck source=/dev/null
+source "$(dirname "$(readlink -f "$0")")/distro.conf"
+
+etc=/etc/$DISTRO_ID
+limit_file=$etc/charge-limit
+limine=/boot/limine.conf
+swap_dir=/swap
+swap_file=$swap_dir/swapfile
+
+die() { echo "power-helper: $*" >&2; exit 1; }
+
+# Batteries whose firmware accepts a charge limit.
+limit_batteries() {
+  local bat
+  for bat in /sys/class/power_supply/BAT*; do
+    if [[ -w $bat/charge_control_end_threshold ]]; then echo "$bat"; fi
+  done
+}
+
+# Write the end threshold (and a start threshold a little below it where the
+# hardware has one, so the battery isn't topped up after every small drop).
+apply_limit() { # apply_limit <percent>
+  local end=$1 start bat any=0
+  start=$(( end > 60 ? end - 5 : 50 ))
+  while read -r bat; do
+    [[ -n $bat ]] || continue
+    any=1
+    # Some firmware refuses an end below the current start: lower start first.
+    if [[ -w $bat/charge_control_start_threshold ]]; then
+      echo 0 > "$bat/charge_control_start_threshold" 2>/dev/null || true
+    fi
+    echo "$end" > "$bat/charge_control_end_threshold"
+    if [[ -w $bat/charge_control_start_threshold ]] && (( end < 100 )); then
+      echo "$start" > "$bat/charge_control_start_threshold" 2>/dev/null || true
+    fi
+  done < <(limit_batteries)
+  (( any )) || die "this laptop's battery doesn't support a charge limit"
+}
+
+root_is_encrypted() {
+  local source
+  source=$(findmnt -no SOURCE / | sed 's/\[.*//')
+  [[ -n $source ]] || return 1
+  lsblk -no TYPE "$source" 2>/dev/null | grep -qx crypt
+}
+
+# Rewrite every Limine "cmdline:" line without resume= / resume_offset=,
+# adding the given arguments (if any).
+limine_resume() { # limine_resume [args]
+  [[ -f $limine ]] || die "no $limine"
+  cp "$limine" "$limine.bak"
+  awk -v add="$1" '
+    /^[[:space:]]*cmdline:/ {
+      n = split($0, w, " "); line = ""
+      for (i = 1; i <= n; i++) if (w[i] !~ /^resume(_offset)?=/) line = line (line == "" ? "" : " ") w[i]
+      match($0, /^[[:space:]]*/); indent = substr($0, 1, RLENGTH)
+      sub(/^[[:space:]]*/, "", line)
+      if (add != "") line = line " " add
+      print indent line; next
+    }
+    { print }' "$limine.bak" > "$limine"
+}
+
+hibernate_enable() {
+  [[ $(findmnt -no FSTYPE /) == btrfs ]] || die "hibernation needs the btrfs root the installer creates"
+  root_is_encrypted || die "hibernation is only offered on encrypted installs: the hibernation image holds everything in memory, including passwords and keys, and must not be written to an unencrypted disk"
+  local dev uuid top size_gb offset
+  dev=$(findmnt -no SOURCE / | sed 's/\[.*//')
+  uuid=$(findmnt -no UUID /)
+  # Its own subvolume, so snapshots of the system never include the swap file.
+  if [[ ! -f $swap_file ]]; then
+    top=$(mktemp -d)
+    mount -o subvolid=5 "$dev" "$top"
+    if [[ ! -d $top/@swap ]]; then btrfs subvolume create "$top/@swap" >/dev/null; fi
+    umount "$top"; rmdir "$top"
+    mkdir -p "$swap_dir"
+    if ! grep -qE "[[:space:]]${swap_dir}[[:space:]]" /etc/fstab; then
+      printf '\n# Hibernation swap file (%s power hibernate)\nUUID=%s %s btrfs subvol=/@swap,noatime 0 0\n' "$DISTRO_ID" "$uuid" "$swap_dir" >> /etc/fstab
+    fi
+    mountpoint -q "$swap_dir" || mount "$swap_dir"
+    # Room for everything in memory: the size of the RAM, rounded up.
+    size_gb=$(( ($(awk '/^MemTotal:/ {print $2}' /proc/meminfo) + 1048575) / 1048576 ))
+    btrfs filesystem mkswapfile --size "${size_gb}g" "$swap_file" >/dev/null
+  fi
+  # Lowest priority: day-to-day swapping stays in compressed memory (zram).
+  if ! grep -qE "^${swap_file}[[:space:]]" /etc/fstab; then
+    printf '%s none swap defaults,pri=0 0 0\n' "$swap_file" >> /etc/fstab
+  fi
+  swapon --show=NAME --noheadings | grep -qx "$swap_file" || swapon -p 0 "$swap_file"
+  offset=$(btrfs inspect-internal map-swapfile -r "$swap_file")
+  [[ $offset =~ ^[0-9]+$ ]] || die "couldn't read the swap file's offset"
+  # The systemd initramfs resumes from resume= (no extra hook needed); it runs
+  # after the disk is unlocked, so the image is read from the encrypted volume.
+  limine_resume "resume=UUID=$uuid resume_offset=$offset"
+  echo "hibernate: on (swap file ${swap_file}, $(du -h --apparent-size "$swap_file" | cut -f1))"
+}
+
+hibernate_disable() {
+  if swapon --show=NAME --noheadings | grep -qx "$swap_file"; then swapoff "$swap_file"; fi
+  sed -i "\|^${swap_file}[[:space:]]|d; \|^# Hibernation swap file|d; \|[[:space:]]${swap_dir}[[:space:]]btrfs|d" /etc/fstab
+  if mountpoint -q "$swap_dir"; then
+    rm -f "$swap_file"
+    umount "$swap_dir"
+  fi
+  rmdir "$swap_dir" 2>/dev/null || true
+  local dev top
+  dev=$(findmnt -no SOURCE / | sed 's/\[.*//')
+  top=$(mktemp -d)
+  if mount -o subvolid=5 "$dev" "$top" 2>/dev/null; then
+    if [[ -d $top/@swap ]]; then btrfs subvolume delete "$top/@swap" >/dev/null; fi
+    umount "$top"
+  fi
+  rmdir "$top"
+  limine_resume ""
+  echo "hibernate: off"
+}
+
+case ${1:-} in
+  charge-limit)
+    value=${2:-}
+    if [[ $value == off ]]; then
+      rm -f "$limit_file"
+      apply_limit 100
+      echo "charge limit: off"
+    elif [[ $value =~ ^[0-9]+$ ]] && (( value >= 50 && value <= 100 )); then
+      apply_limit "$value"
+      install -d "$etc"
+      echo "$value" > "$limit_file"
+      echo "charge limit: $value%"
+    else
+      die "charge-limit takes a number from 50 to 100, or off"
+    fi ;;
+  charge-limit-apply)
+    if [[ -f $limit_file ]]; then
+      value=$(<"$limit_file")
+      if [[ $value =~ ^[0-9]+$ ]] && (( value >= 50 && value <= 100 )); then apply_limit "$value"; fi
+    fi ;;
+  hibernate-enable) hibernate_enable ;;
+  hibernate-disable) hibernate_disable ;;
+  *) die "unknown action: ${1:-}" ;;
+esac

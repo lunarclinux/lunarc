@@ -31,6 +31,7 @@ case $part in
     put "$src/bin/lib.sh" "$dest/usr/lib/$id/lib.sh"
     put "$src/bin/ui.sh" "$dest/usr/lib/$id/ui.sh"
     put "$src/bin/agent-usage.jq" "$dest/usr/lib/$id/agent-usage.jq"
+    put "$src/bin/power-helper" "$dest/usr/lib/$id/power-helper" 755
     put "$src/distro.conf" "$dest/usr/lib/$id/distro.conf"
     put "$src/repo.conf" "$dest/usr/lib/$id/repo.conf"
     for cmd in "$src"/bin/commands/*; do put "$cmd" "$dest/usr/lib/$id/commands/${cmd##*/}" 755; done
@@ -65,11 +66,18 @@ case $part in
     put "$src/etc/systemd/user/lock-watch.service" "$units/$id-lock-watch.service"
     put "$src/etc/systemd/user/setup-reminder.service" "$units/$id-setup-reminder.service"
     put "$src/etc/systemd/user/setup-reminder.timer" "$units/$id-setup-reminder.timer"
+    put "$src/etc/systemd/user/battery-watch.service" "$units/$id-battery-watch.service"
     install -d "$units/graphical-session.target.wants"
     for unit in noctalia.service "$id-first-login.service" "$id-crash-watch.service" "$id-migrate.service" "$id-lock-watch.service" \
-      "$id-setup-reminder.timer"; do
+      "$id-setup-reminder.timer" "$id-battery-watch.service"; do
       ln -s "../$unit" "$units/graphical-session.target.wants/$unit"
     done
+
+    # Battery charge limit: re-applied at boot and after sleep (`power charge-limit`).
+    put "$src/etc/systemd/system/charge-limit.service" "$dest/usr/lib/systemd/system/$id-charge-limit.service"
+    install -d "$dest/usr/lib/systemd/system/multi-user.target.wants"
+    ln -s "../$id-charge-limit.service" "$dest/usr/lib/systemd/system/multi-user.target.wants/$id-charge-limit.service"
+    put "$src/etc/systemd/system-sleep/charge-limit" "$dest/usr/lib/systemd/system-sleep/$id-charge-limit" 755
 
     # pacman hook keeping Limine current at the UEFI fallback path.
     put "$src/etc/pacman.d/hooks/limine-update.hook" "$dest/usr/share/libalpm/hooks/$id-limine-update.hook"

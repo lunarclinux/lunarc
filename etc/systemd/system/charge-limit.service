@@ -1,0 +1,13 @@
+# Re-applies the battery charge limit set with `@DISTRO_ID@ power charge-limit`
+# (firmware forgets it at power-off on many laptops).
+[Unit]
+Description=Battery charge limit
+ConditionPathExists=/etc/@DISTRO_ID@/charge-limit
+ConditionPathExistsGlob=/sys/class/power_supply/BAT*
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/@DISTRO_ID@/power-helper charge-limit-apply
+
+[Install]
+WantedBy=multi-user.target
