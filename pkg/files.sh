@@ -80,6 +80,7 @@ case $part in
     # rewrite the boot menu's entries after snap-pac's zz-snap-pac-post ("zzz-").
     put "$src/etc/pacman.d/hooks/boot-snapshots-save.hook" "$dest/usr/share/libalpm/hooks/10-$id-boot-snapshots-save.hook"
     put "$src/etc/pacman.d/hooks/boot-snapshots-refresh.hook" "$dest/usr/share/libalpm/hooks/zzz-$id-boot-snapshots.hook"
+    put "$src/etc/mkinitcpio.conf.d/snapshots.conf" "$dest/etc/mkinitcpio.conf.d/$id-snapshots.conf"
     put "$src/etc/systemd/system/snapper-cleanup-boot-entries.conf" \
       "$dest/usr/lib/systemd/system/snapper-cleanup.service.d/$id-boot-entries.conf"
     # Branding: the crescent-c icon (full colour and symbolic) and the boot
