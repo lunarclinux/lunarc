@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# Boots the live ISO in a VM and checks the live desktop: the live user is
+# logged in to Hyprland and Noctalia, the Install entry is there and opens the
+# installer fullscreen. Installing from the ISO is covered by
+# `vm/test-install --iso distro-installer.iso`.
+#
+#   vm/test-live [--vm distro-clean] [--from l0-complete] [--iso distro-installer.iso] [--keep]
+#
+# Needs vm/make-seed (the cloud-init seed gives root SSH on the live system).
+set -euo pipefail
+export LIBVIRT_DEFAULT_URI=qemu:///system
+here=$(cd "$(dirname "$0")" && pwd); repo=$(dirname "$here")
+vm=distro-clean from=l0-complete iso=distro-installer.iso keep=0
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --vm) vm=$2; shift 2 ;; --from) from=$2; shift 2 ;;
+    --iso) iso=$2; shift 2 ;; --keep) keep=1; shift ;;
+    *) echo "unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+id=$(. "$repo/distro.conf"; echo "$DISTRO_ID")
+log() { printf '\033[1m[test-live]\033[0m %s\n' "$*"; }
+on_vm() { "$here/ssh" "$vm" -- "$@"; }
+
+[[ $(virsh domstate "$vm") == "shut off" ]] || virsh destroy "$vm" >/dev/null
+log "restoring $vm to $from and booting $iso"
+virsh snapshot-revert "$vm" "$from"
+virsh change-media "$vm" sda "/var/lib/libvirt/images/$iso" --config >/dev/null
+virsh start "$vm" >/dev/null
+deadline=$((SECONDS + 300))
+until on_vm true 2>/dev/null; do
+  (( SECONDS < deadline )) || { log "timed out waiting for SSH"; exit 1; }
+  sleep 5
+done
+log "live system reachable"
+
+# Commands in the live user's desktop session.
+session='u=$(id -u live); export XDG_RUNTIME_DIR=/run/user/$u WAYLAND_DISPLAY=wayland-1;
+  export HYPRLAND_INSTANCE_SIGNATURE=$(ls $XDG_RUNTIME_DIR/hypr 2>/dev/null | head -1);'
+as_live() { "$here/ssh" "$vm" -- 'runuser -u live -- bash -s' <<<"$session $1"; }
+
+failures=0
+check() { # check <description> <command run as root on the VM>
+  local out
+  if out=$(on_vm "$2" 2>&1); then printf '  \033[32mok\033[0m   %s\n' "$1"
+  else printf '  \033[31mFAIL\033[0m %s\n' "$1"; printf '         %s\n' "$out" | tail -5; failures=$((failures + 1)); fi
+}
+wait_for() { # wait_for <seconds> <command>: retry until it succeeds
+  printf 'for i in $(seq %d); do %s && exit 0; sleep 1; done; exit 1' "$1" "$2"
+}
+
+log "checks"
+check "system names itself"            ". /etc/os-release; [ \"\$ID\" = $id ] && [ \"\$ID_LIKE\" = arch ]"
+check "live user exists, no password"  "id live && passwd -S live | grep -q ' NP '"
+check "live user has sudo"             "runuser -u live -- sudo -n true"
+check "login screen running"           "systemctl is-active --quiet greetd"
+check "live user logged in to Hyprland" "$(wait_for 90 'pgrep -u live -x Hyprland >/dev/null')"
+check "Noctalia running"               "$(wait_for 60 'pgrep -u live -x noctalia >/dev/null')"
+check "NetworkManager manages the network" "systemctl is-active --quiet NetworkManager && ! systemctl is-active --quiet systemd-networkd && nmcli -t -f STATE general | grep -q connected"
+check "first-login setup ran (theme)"  "$(wait_for 60 "test -f /home/live/.local/state/$id/first-login-done")"
+check "lock disabled on the live system" "grep -A1 'idle.behavior.lock' /home/live/.config/noctalia/config.toml | grep -q 'enabled = false'"
+check "live welcome shown"             "$(wait_for 30 "runuser -u live -- env XDG_RUNTIME_DIR=/run/user/\$(id -u live) systemctl --user show -p Result live-welcome.service | grep -q success")"
+check "Install entry in the launcher"  "grep -q '^Name=Install ' /usr/share/applications/$id-install.desktop"
+check "root shell on the second console" "systemctl is-active --quiet getty@tty2"
+check "text installer present"         "test -f /usr/local/bin/install-$id && test -f /root/installer/install/install.sh"
+check "distro packages trusted"        "$(wait_for 60 "pacman-key --list-keys \$(cat /root/installer/pkg/keyring/fingerprint) >/dev/null 2>&1")"
+
+shots=~/.local/share/arch-distro-vm/screenshots; mkdir -p "$shots"
+screenshot() { # screenshot <label>
+  local shot=$shots/$vm-$(date +%Y%m%d-%H%M%S)-live-$1.png
+  if as_live 'grim -' > "$shot" 2>/dev/null && [[ -s $shot ]]; then log "screenshot: $shot"
+  else rm -f "$shot"; log "screenshot failed"; fi
+}
+sleep 5
+screenshot desktop
+
+# The Install entry's command, run in the session as the launcher would.
+as_live 'setsid -f /usr/local/bin/live-install >/dev/null 2>&1' || true
+if as_live "$(wait_for 20 "hyprctl clients -j | jq -e '.[] | select(.class == \"$id.installer\") | .fullscreen > 0' >/dev/null")"; then
+  printf '  \033[32mok\033[0m   %s\n' "installer opens fullscreen"
+else
+  printf '  \033[31mFAIL\033[0m %s\n' "installer opens fullscreen"; as_live 'hyprctl clients -j | jq -c ".[] | {class, fullscreen}"' || true
+  failures=$((failures + 1))
+fi
+sleep 3
+screenshot installer
+on_vm "pkill -f 'ghostty --class=$id.installer'" || true
+
+if (( keep )); then log "leaving $vm running"; else virsh destroy "$vm" >/dev/null; fi
+if (( failures )); then log "$failures check(s) FAILED"; exit 1; fi
+log "all checks passed"
