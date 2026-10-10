@@ -142,10 +142,10 @@ ln -sf "$lib/getty@.service" "$units/getty.target.wants/getty@tty2.service"
 # Don't hold boot on the network. Without a connection (a laptop whose Wi-Fi
 # isn't set up yet) releng's clock-sync wait never finishes and NetworkManager's
 # online wait takes 60 s, so graphical.target is never reached and the session
-# start (uwsm) sat out its own 60 s timeout. Bound both; with a connection the
-# clock still syncs before the keyring is set up.
+# start (uwsm) sat out its own 60 s timeout. Bound both (the clock is right on
+# most machines anyway; it still syncs once a network is up).
 mkdir -p "$units"/systemd-time-wait-sync.service.d "$units"/NetworkManager-wait-online.service.d
-printf '[Service]\nTimeoutStartSec=15\n' > "$units"/systemd-time-wait-sync.service.d/live.conf
+printf '[Service]\nTimeoutStartSec=5\n' > "$units"/systemd-time-wait-sync.service.d/live.conf
 printf '[Service]\nEnvironment=NM_ONLINE_TIMEOUT=10\n' > "$units"/NetworkManager-wait-online.service.d/live.conf
 
 echo "$DISTRO_ID" > "$airootfs/etc/hostname"
