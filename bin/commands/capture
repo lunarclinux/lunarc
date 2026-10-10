@@ -57,9 +57,10 @@ screenshot() {
   if [[ $mode == screen ]]; then grim -o "$(focused_output)" "$file"
   else grim -g "$geometry" "$file"; fi
   if (( edit )) && command -v satty >/dev/null; then
-    satty --filename "$file" --output-filename "$file" --copy-command wl-copy --early-exit
+    satty --filename "$file" --output-filename "$file" --copy-command wl-copy --early-exit >/dev/null 2>&1
   else
-    wl-copy --type image/png < "$file"
+    # wl-copy stays running to serve the clipboard; keep it off our stdout.
+    wl-copy --type image/png < "$file" >/dev/null 2>&1
   fi
   printf '%s\n' "$file"
   if [[ -t 1 ]]; then return; fi
@@ -134,19 +135,22 @@ case ${1:-} in
     if is_recording; then stop_recording; else record "$@"; fi ;;
   status) if is_recording; then echo recording; else echo idle; fi ;;
   color)
-    hex=$(hyprpicker -a -f hex 2>/dev/null || true)
-    if [[ -n $hex ]]; then note "Colour copied" "$hex"; printf '%s\n' "$hex"; fi ;;
+    hex=$(hyprpicker -f hex 2>/dev/null || true)
+    if [[ -n $hex ]]; then
+      printf '%s' "$hex" | wl-copy >/dev/null 2>&1
+      note "Colour copied" "$hex"; printf '%s\n' "$hex"
+    fi ;;
   text)
     geometry=$(pick_region); [[ -n $geometry ]] || exit 0
     text=$(grim -g "$geometry" - | tesseract - - 2>/dev/null | sed -e '/^[[:space:]]*$/d')
     if [[ -z $text ]]; then note "No text found"; exit 1; fi
-    printf '%s' "$text" | wl-copy
+    printf '%s' "$text" | wl-copy >/dev/null 2>&1
     note "Text copied" "$(head -c 200 <<<"$text")" ;;
   qr)
     geometry=$(pick_region); [[ -n $geometry ]] || exit 0
     code=$(grim -g "$geometry" - | zbarimg -q --raw - 2>/dev/null || true)
     if [[ -z $code ]]; then note "No QR code found"; exit 1; fi
-    printf '%s' "$code" | wl-copy
+    printf '%s' "$code" | wl-copy >/dev/null 2>&1
     note "QR code copied" "$code" ;;
   -h|--help|"") usage ;;
   *) die "unknown capture command: $1" ;;
