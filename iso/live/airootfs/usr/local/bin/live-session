@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Starts the live desktop. The session manager (uwsm) waits for boot to finish
+# and only says "graphical.target is queued"; wait here instead, briefly, and
+# say in plain words what boot is still doing.
+friendly() { # friendly <unit>
+  case $1 in
+    systemd-time-wait-sync.service) echo "the clock to sync" ;;
+    NetworkManager-wait-online.service|network-online.target) echo "a network connection" ;;
+    pacman-init.service) echo "the package keyring" ;;
+    live-user.service) echo "the live user" ;;
+    *) systemctl show -P Description "$1" 2>/dev/null || echo "$1" ;;
+  esac
+}
+for _ in $(seq 40); do
+  systemctl is-active --quiet graphical.target && break
+  unit=$(systemctl list-jobs --no-legend --plain 2>/dev/null | awk '$4 == "running" { print $2; exit }')
+  printf '\r\033[KStarting @DISTRO_NAME@: waiting for %s' "$(friendly "${unit:-graphical.target}")"
+  sleep 0.25
+done
+printf '\r\033[K'
+exec uwsm start -e -D Hyprland hyprland.desktop

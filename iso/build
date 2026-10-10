@@ -40,7 +40,7 @@ sed -i \
   -e "/^airootfs_image_tool_options=/c\\airootfs_image_tool_options=('-comp' 'zstd' '-Xcompression-level' '19' '-b' '1M')" \
   "$profile/profiledef.sh"
 perms=""
-for path in "/usr/local/bin/install-$DISTRO_ID" /usr/local/bin/live-user-setup /usr/local/bin/live-install /usr/local/bin/live-welcome; do
+for path in "/usr/local/bin/install-$DISTRO_ID" /usr/local/bin/live-user-setup /usr/local/bin/live-install /usr/local/bin/live-welcome /usr/local/bin/live-session; do
   perms+="\n  [\"$path\"]=\"0:0:755\""
 done
 perms+="\n  [\"/etc/sudoers.d\"]=\"0:0:750\"\n  [\"/etc/sudoers.d/zz-live\"]=\"0:0:440\""
@@ -114,7 +114,7 @@ done < <(find "$airootfs/usr/local" "$airootfs/usr/share/applications" "$airootf
 mkdir -p "$airootfs/etc/greetd"
 {
   sed "s/@DISTRO_ID@/$DISTRO_ID/g; s/@DISTRO_NAME@/$DISTRO_NAME/g" "$root/etc/greetd/config.toml"
-  printf '\n# Live system: log the live user straight in.\n[initial_session]\ncommand = "uwsm start -e -D Hyprland hyprland.desktop"\nuser = "live"\n'
+  printf '\n# Live system: log the live user straight in.\n[initial_session]\ncommand = "/usr/local/bin/live-session"\nuser = "live"\n'
 } > "$airootfs/etc/greetd/live.toml"
 
 # Services: NetworkManager (Noctalia's network panel uses it) replaces releng's
