@@ -152,6 +152,9 @@ first_login() {
     notify-send -a "$DISTRO_NAME" "Welcome to $DISTRO_NAME" \
       "SUPER+ALT+Space: menu. SUPER+Space: apps. SUPER+Return: terminal. SUPER+K: all shortcuts. SUPER+L: lock." 2>/dev/null || true
   else
+    # Applying the theme makes Noctalia tell every Ghostty to reload (SIGUSR2);
+    # a Ghostty still starting up dies from it, so let that pass first.
+    sleep 4
     open_window
   fi
 }
