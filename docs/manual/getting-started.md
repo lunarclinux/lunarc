@@ -64,6 +64,8 @@ SUPER+ALT+Space (or `/m` in the launcher). Type part of a name and press Enter t
 | `lunarc shell defaults on\|off` / `shell set bash\|zsh\|fish` | Shell defaults (prompt, `z`, `ll`, Ctrl+R search) and your login shell |
 | `lunarc dev docker` / `dev lang node` / `dev db add postgres` | Docker, language runtimes (mise) and local databases |
 | `lunarc app list` / `search <word>` / `install <app>` | Browse and install apps: browsers, editors, AI (Claude, ChatGPT, Ollama, Hermes), games (Steam, Lutris, Heroic), chat and more |
+| `lunarc app export apps.txt` / `import apps.txt` | Save your apps and a few settings to a file, then install them all on another computer |
+| `lunarc setup` / `setup backups` | The first-login choices again / set up backups |
 | `lunarc update` / `update check` | Update everything safely / see what's waiting (see Updating) |
 | `lunarc capture screenshot\|record\|stop\|color\|text\|qr` | Screenshots (`~/Pictures/Screenshots`), recordings (`~/Videos/Recordings`), colour picker, copy text or a QR code from the screen |
 | `lunarc remind "stretch" in 20m` / `at 15:30` / `list` / `cancel <id>` | Reminders (also the alarm icon in the bar) |
@@ -74,6 +76,14 @@ SUPER+ALT+Space (or `/m` in the launcher). Type part of a name and press Enter t
 | `lunarc screensaver effects` / `preview [effect]` | List the screensaver's effects / play one now (any key closes it) |
 
 Settings for these live in `~/.config/lunarc/settings` (`key = value`); defaults are in `/usr/share/lunarc/default/settings`.
+
+## Backups
+
+At the first login a setup window helps you set up backups with Pika Backup (installed by default): pick an external drive, a network share or online storage, and Pika opens on its setup screen. Keep **Encryption** on and save the password in your password manager; then set **Schedule** to Daily. Skipped it? You'll get one reminder a few days later, or open **Setup › Backups** from the menu (SUPER+ALT+Space) any time.
+
+Other backup tools: `lunarc app list backup` (KopiaUI also runs on Windows and macOS, handy with a dual boot).
+
+Moving to a new computer: `lunarc app export apps.txt` lists what you've installed (catalog apps, packages, AUR, Flatpak) and your theme, terminal, agent and keyboard layouts. On the new machine, restore your files from the backup, then `lunarc app import apps.txt`.
 
 ## Updating
 
