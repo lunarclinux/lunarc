@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# summary: List and switch desktop themes
+# summary: List and switch desktop themes and wallpapers
 set -euo pipefail
 source "$DISTRO_LIB/lib.sh"
 
@@ -10,16 +10,22 @@ usage() {
   cat <<USAGE
 Usage: $DISTRO_ID theme <command>
 
-  list                       available themes (* marks the current one)
+  list [--plain]             available themes (* marks the current one);
+                             --plain prints "name<TAB>description" for scripts
   current                    the current theme
   set <theme> [dark|light]   switch theme; the mode defaults to the theme's own
   mode <dark|light>          switch the current theme between dark and light
+  preview [theme]            colour swatches for every theme (or one) in the terminal
+  wallpaper [list]           the current theme's wallpapers (* marks the one in use)
+  wallpaper next|prev        cycle through them
+  wallpaper set <n>          use wallpaper number n
 USAGE
 }
 
 meta() { awk -F' *= *' -v k="$2" '$1 == k { sub(/^[^=]*= */, ""); gsub(/^"|"$/, ""); print; exit }' "$themes/$1/theme.toml"; }
 # Palette files keep "dark" and "light" as top-level keys, indented two spaces.
 has_variant() { grep -qE "^  \"$2\":" "$themes/$1/palette.json"; }
+theme_names() { local dir; for dir in "$themes"/*/; do dir=${dir%/}; printf '%s\n' "${dir##*/}"; done; }
 
 # Noctalia only reads palettes from its own config folder, so each distro theme is linked there.
 link_palettes() {
@@ -33,34 +39,75 @@ link_palettes() {
 
 apply_mode() { # apply_mode <dark|light>
   local mode=$1 icons=Papirus-Dark gtk=adw-gtk3-dark
-  [[ $mode == light ]] && { icons=Papirus-Light; gtk=adw-gtk3; }
+  if [[ $mode == light ]]; then icons=Papirus-Light; gtk=adw-gtk3; fi
   noctalia msg theme-mode-set "$mode" >/dev/null
   gsettings set org.gnome.desktop.interface icon-theme "$icons"
   gsettings set org.gnome.desktop.interface gtk-theme "$gtk"
   local qt=${XDG_CONFIG_HOME:-$HOME/.config}/qt6ct/qt6ct.conf
-  [[ -f $qt ]] && sed -i "s/^icon_theme=.*/icon_theme=$icons/" "$qt"
+  if [[ -f $qt ]]; then sed -i "s/^icon_theme=.*/icon_theme=$icons/" "$qt"; fi
   set_setting theme.mode "$mode"
+}
+
+# A theme's wallpapers, in order (files are numbered: 1-name.svg, 2-name.svg, …).
+wallpapers() { # wallpapers <theme>
+  local dir=$themes/$1/wallpapers
+  [[ -d $dir ]] || return 0
+  find "$dir" -maxdepth 1 -type f \( -name '*.svg' -o -name '*.png' -o -name '*.jpg' -o -name '*.webp' \) -printf '%f\n' | sort -V
+}
+
+wallpaper_index() { # wallpaper_index <theme>: the remembered choice, 1 if none
+  local n count
+  n=$(setting "wallpaper.$1" 1)
+  count=$(wallpapers "$1" | wc -l)
+  if [[ ! $n =~ ^[0-9]+$ ]] || (( n < 1 || n > count )); then n=1; fi
+  printf '%s\n' "$n"
+}
+
+apply_wallpaper() { # apply_wallpaper <theme> <n>
+  local file
+  file=$(wallpapers "$1" | sed -n "${2}p")
+  [[ -n $file ]] || return 0
+  noctalia msg wallpaper-set "$themes/$1/wallpapers/$file" >/dev/null
+  set_setting "wallpaper.$1" "$2"
+}
+
+# Truecolour swatches: two spaces of background per colour.
+swatch() { local h=${1#\#}; printf '\e[48;2;%d;%d;%dm  \e[0m' "0x${h:0:2}" "0x${h:2:2}" "0x${h:4:2}"; }
+
+preview() { # preview <theme>
+  local name=$1 mode colours c
+  mode=$(meta "$name" mode)
+  mapfile -t colours < <(jq -r --arg m "$mode" '.[$m] | .mSurface, .mSurfaceVariant, .mOnSurface, .mPrimary, .mSecondary, .mTertiary, .mError,
+      (.terminal.normal | .black, .red, .green, .yellow, .blue, .magenta, .cyan, .white)' "$themes/$name/palette.json")
+  printf '%-12s ' "$name"
+  for c in "${colours[@]:0:7}"; do swatch "$c"; done
+  printf ' '
+  for c in "${colours[@]:7}"; do swatch "$c"; done
+  printf '  %s\n' "$(meta "$name" description)"
 }
 
 case ${1:-} in
   list)
     cur=$(setting theme)
-    for dir in "$themes"/*/; do
-      name=$(basename "$dir")
-      mark=" "; [[ $name == "$cur" ]] && mark="*"
-      printf '%s %-10s %s\n' "$mark" "$name" "$(meta "$name" description)"
-    done ;;
+    while IFS= read -r name; do
+      if [[ ${2:-} == --plain ]]; then
+        printf '%s\t%s\n' "$name" "$(meta "$name" description)"
+      else
+        mark=" "; if [[ $name == "$cur" ]]; then mark="*"; fi
+        printf '%s %-12s %s\n' "$mark" "$name" "$(meta "$name" description)"
+      fi
+    done < <(theme_names) ;;
   current) printf '%s (%s)\n' "$(setting theme)" "$(setting theme.mode)" ;;
   set)
     name=${2:-}; [[ -n $name && -d $themes/$name ]] || die "unknown theme '${name}'; see '$DISTRO_ID theme list'"
     mode=${3:-$(meta "$name" mode)}
     [[ $mode == dark || $mode == light ]] || die "mode must be dark or light"
-    has_variant "$name" "$mode" || { info "$name has no $mode variant; using its default"; mode=$(meta "$name" mode); }
+    if ! has_variant "$name" "$mode"; then info "$name has no $mode variant; using its default"; mode=$(meta "$name" mode); fi
     shell_ready || die "the desktop shell isn't running"
     link_palettes
     noctalia msg color-scheme-set custom "$DISTRO_ID-$name" >/dev/null
     apply_mode "$mode"
-    [[ -f $themes/$name/wallpaper.svg ]] && noctalia msg wallpaper-set "$themes/$name/wallpaper.svg" >/dev/null
+    apply_wallpaper "$name" "$(wallpaper_index "$name")"
     set_setting theme "$name"
     info "theme: $name ($mode)" ;;
   mode)
@@ -70,6 +117,39 @@ case ${1:-} in
     shell_ready || die "the desktop shell isn't running"
     apply_mode "$mode"
     info "theme: $name ($mode)" ;;
+  preview)
+    if [[ -n ${2:-} ]]; then
+      [[ -d $themes/$2 ]] || die "unknown theme '$2'"
+      preview "$2"
+    else
+      while IFS= read -r name; do preview "$name"; done < <(theme_names)
+    fi ;;
+  wallpaper)
+    name=$(setting theme)
+    mapfile -t files < <(wallpapers "$name")
+    (( ${#files[@]} )) || die "$name has no wallpapers"
+    n=$(wallpaper_index "$name")
+    case ${2:-list} in
+      list)
+        for i in "${!files[@]}"; do
+          mark=" "; if (( i + 1 == n )); then mark="*"; fi
+          printf '%s %d  %s\n' "$mark" $((i + 1)) "${files[i]%.*}"
+        done ;;
+      next|prev)
+        shell_ready || die "the desktop shell isn't running"
+        if [[ $2 == next ]]; then n=$(( n % ${#files[@]} + 1 )); else n=$(( (n + ${#files[@]} - 2) % ${#files[@]} + 1 )); fi
+        apply_wallpaper "$name" "$n"
+        info "wallpaper $n of ${#files[@]}: ${files[n - 1]%.*}" ;;
+      set)
+        want=${3:-}
+        if [[ ! $want =~ ^[0-9]+$ ]] || (( want < 1 || want > ${#files[@]} )); then
+          die "pick a number from 1 to ${#files[@]}"
+        fi
+        shell_ready || die "the desktop shell isn't running"
+        apply_wallpaper "$name" "$want"
+        info "wallpaper $want of ${#files[@]}: ${files[want - 1]%.*}" ;;
+      *) die "unknown wallpaper command: $2" ;;
+    esac ;;
   -h|--help|"") usage ;;
   *) die "unknown theme command: $1" ;;
 esac

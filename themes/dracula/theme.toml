@@ -1,0 +1,6 @@
+name = "Dracula"
+description = "Classic vampire: purple, pink and cyan on charcoal."
+mode = "dark"
+credit = "Dracula"
+license = "MIT"
+url = "https://github.com/dracula/dracula-theme"

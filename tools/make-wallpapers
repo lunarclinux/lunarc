@@ -1,0 +1,455 @@
+#!/usr/bin/env python3
+"""Draws each theme's wallpapers as SVG, in the theme's own colours.
+
+Wallpapers live in themes/<theme>/wallpapers/, numbered in the order
+`<id> theme wallpaper next` cycles through them. A file this script didn't
+draw (a theme's hand-made first wallpaper) is kept; generated files are
+rewritten every run, so the output only changes when this script does.
+
+  tools/make-wallpapers              # every theme
+  tools/make-wallpapers nord eclipse # some
+  tools/make-wallpapers --png DIR    # also render PNG previews into DIR (rsvg-convert)
+
+Styles: horizon, orbits, nebula, phases, crescent, moonarc, aurora, pines, eclipse.
+"""
+import json
+import math
+import pathlib
+import random
+import subprocess
+import sys
+import zlib
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent / "themes"
+W, H = 3840, 2160
+
+# Which styles each theme gets, after any hand-made wallpaper it already has.
+PLAN = {
+    "moonlit": ["nebula", "crescent", "orbits"],
+    "ember": ["horizon", "phases"],
+    "tide": ["crescent", "aurora"],
+    "paper": ["orbits", "phases"],
+    "catppuccin": ["nebula", "orbits", "crescent"],
+    "gruvbox": ["horizon", "phases", "crescent"],
+    "nord": ["aurora", "horizon", "orbits"],
+    "tokyo-night": ["nebula", "crescent", "moonarc"],
+    "rose-pine": ["horizon", "nebula", "phases"],
+    "everforest": ["pines", "phases", "orbits"],
+    "kanagawa": ["horizon", "crescent", "phases"],
+    "dracula": ["nebula", "crescent", "orbits"],
+    "solarized": ["orbits", "phases", "horizon"],
+    "one": ["orbits", "crescent", "nebula"],
+    "eclipse": ["eclipse", "crescent", "phases"],
+    "harvest": ["pines", "moonarc", "crescent"],
+    "earthshine": ["horizon", "orbits", "phases"],
+}
+HANDMADE = {"moonlit": "moonarc", "ember": "horizon", "tide": "sea", "paper": "lines"}
+
+
+# --- colour helpers ---------------------------------------------------------
+def rgb(h):
+    h = h.lstrip("#")
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def hexc(c):
+    return "#%02x%02x%02x" % tuple(max(0, min(255, round(v))) for v in c)
+
+
+def mix(a, b, t):
+    a, b = rgb(a), rgb(b)
+    return hexc(tuple(x + (y - x) * t for x, y in zip(a, b)))
+
+
+def luminance(h):
+    r, g, b = (v / 255 for v in rgb(h))
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+class Theme:
+    def __init__(self, name):
+        meta = (ROOT / name / "theme.toml").read_text()
+        mode = "dark"
+        for line in meta.splitlines():
+            if line.startswith("mode"):
+                mode = line.split("=", 1)[1].strip().strip('"')
+        pal = json.loads((ROOT / name / "palette.json").read_text())[mode]
+        self.name, self.mode = name, mode
+        self.dark = mode == "dark"
+        self.bg = pal["mSurface"]
+        self.fg = pal["mOnSurface"]
+        self.container = pal["mSurfaceVariant"]
+        self.outline = pal["mOutline"]
+        self.muted = pal["mOnSurfaceVariant"]
+        self.primary = pal["mPrimary"]
+        self.secondary = pal["mSecondary"]
+        self.tertiary = pal["mTertiary"]
+        # The deepest tone: a little darker than the background (lighter-on-light for light themes).
+        self.deep = mix(self.bg, "#000000", 0.35) if self.dark else mix(self.bg, "#ffffff", 0.5)
+        self.ink = mix(self.bg, "#000000", 0.55) if self.dark else mix(self.bg, self.fg, 0.18)
+        # The moon: pale for dark themes, the accent for light ones.
+        self.moon = mix(self.fg, "#ffffff", 0.25) if self.dark else self.primary
+        # A big moon over a landscape: the accent when it is warm (gold, orange),
+        # otherwise moonlight with a touch of the accent (a green moon looks odd).
+        r_, g_, b_ = rgb(self.primary)
+        warm = r_ >= b_ + 40 and r_ >= g_ - 10
+        self.landmoon = self.primary if warm or not self.dark else mix(self.moon, self.primary, 0.3)
+
+
+# --- SVG building blocks ----------------------------------------------------
+def svg(defs, body):
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}">'
+            f'<defs>{"".join(defs)}</defs>{"".join(body)}</svg>\n')
+
+
+def vgrad(gid, stops):
+    s = "".join(f'<stop offset="{o}" stop-color="{c}"/>' for o, c in stops)
+    return f'<linearGradient id="{gid}" x1="0" y1="0" x2="0" y2="1">{s}</linearGradient>'
+
+
+def rgrad(gid, color, opacity, fx=None):
+    return (f'<radialGradient id="{gid}"><stop offset="0" stop-color="{color}" stop-opacity="{opacity}"/>'
+            f'<stop offset="1" stop-color="{color}" stop-opacity="0"/></radialGradient>')
+
+
+def blur(fid, sd):
+    return (f'<filter id="{fid}" x="-60%" y="-60%" width="220%" height="220%">'
+            f'<feGaussianBlur stdDeviation="{sd}"/></filter>')
+
+
+def stars(rnd, t, n, top=0, bottom=H, color=None, scale=1.0):
+    if not t.dark:
+        return []
+    out = []
+    for _ in range(n):
+        x, y = rnd.uniform(0, W), rnd.uniform(top, bottom)
+        r = rnd.choice([1.2, 1.5, 1.8, 2.1, 2.4, 3.0]) * scale
+        bright = rnd.random() < 0.08
+        col = color or (t.primary if rnd.random() < 0.12 else t.fg)
+        op = rnd.uniform(0.75, 1.0) if bright else rnd.uniform(0.25, 0.6)
+        if bright:
+            r *= 1.6
+        out.append(f'<circle cx="{x:.0f}" cy="{y:.0f}" r="{r:.1f}" fill="{col}" opacity="{op:.2f}"/>')
+    return out
+
+
+def phase(cx, cy, r, f, waxing, lit, dark):
+    """A moon at illuminated fraction f (0 new .. 1 full)."""
+    out = [f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="{r:.1f}" fill="{dark}"/>']
+    if f >= 0.995:
+        out.append(f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="{r:.1f}" fill="{lit}"/>')
+    elif f > 0.01:
+        rx = r * abs(1 - 2 * f)
+        top, bot = cy - r, cy + r
+        if waxing:
+            s2 = 0 if f < 0.5 else 1
+            d = f"M {cx:.1f} {top:.1f} A {r:.1f} {r:.1f} 0 0 1 {cx:.1f} {bot:.1f} A {rx:.1f} {r:.1f} 0 0 {s2} {cx:.1f} {top:.1f} Z"
+        else:
+            s2 = 1 if f < 0.5 else 0
+            d = f"M {cx:.1f} {top:.1f} A {r:.1f} {r:.1f} 0 0 0 {cx:.1f} {bot:.1f} A {rx:.1f} {r:.1f} 0 0 {s2} {cx:.1f} {top:.1f} Z"
+        out.append(f'<path d="{d}" fill="{lit}"/>')
+    return out
+
+
+def ridge(rnd, base, amp, waves, color, opacity=1.0):
+    """A smooth hill line across the screen, filled down to the bottom."""
+    pts = []
+    phase1, phase2 = rnd.uniform(0, 6.28), rnd.uniform(0, 6.28)
+    for i in range(0, 41):
+        x = W * i / 40
+        y = base + amp * (0.6 * math.sin(x / W * math.pi * waves + phase1)
+                          + 0.4 * math.sin(x / W * math.pi * waves * 2.3 + phase2))
+        pts.append((x, y))
+    d = f"M 0 {H} L {pts[0][0]:.0f} {pts[0][1]:.0f} "
+    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+        mx = (x0 + x1) / 2
+        d += f"Q {x0:.0f} {y0:.0f} {mx:.0f} {(y0 + y1) / 2:.0f} "
+    d += f"L {W} {pts[-1][1]:.0f} L {W} {H} Z"
+    op = "" if opacity == 1.0 else f' opacity="{opacity}"'
+    return f'<path d="{d}" fill="{color}"{op}/>', pts
+
+
+def sky(t, top_mix=0.0, horizon_tint=None, horizon_amount=0.25):
+    top = mix(t.deep, t.bg, top_mix)
+    low = mix(t.bg, horizon_tint or t.secondary, horizon_amount)
+    return vgrad("sky", [(0, top), (0.55, t.bg), (1, low)]), f'<rect width="{W}" height="{H}" fill="url(#sky)"/>'
+
+
+# --- styles -----------------------------------------------------------------
+def horizon(t, rnd):
+    g, bgrect = sky(t, horizon_amount=0.3 if t.dark else 0.18)
+    defs = [g, rgrad("glow", t.landmoon, 0.45 if t.dark else 0.35)]
+    body = [bgrect] + stars(rnd, t, 260, bottom=H * 0.7)
+    mx, my, r = W * rnd.uniform(0.58, 0.72), H * 0.58, 260
+    body.append(f'<circle cx="{mx:.0f}" cy="{my:.0f}" r="{r * 3.2:.0f}" fill="url(#glow)"/>')
+    body.append(f'<circle cx="{mx:.0f}" cy="{my:.0f}" r="{r}" fill="{t.landmoon}"/>')
+    far = mix(t.bg, t.secondary, 0.22) if t.dark else mix(t.bg, t.secondary, 0.25)
+    mid = mix(t.bg, t.deep, 0.5) if t.dark else mix(t.bg, t.tertiary, 0.25)
+    near = t.ink if t.dark else mix(t.bg, t.primary, 0.3)
+    for base, amp, waves, col in ((H * 0.70, 70, 2.2, far), (H * 0.78, 60, 3.1, mid), (H * 0.88, 50, 1.7, near)):
+        path, _ = ridge(rnd, base, amp, waves, col)
+        body.append(path)
+    return svg(defs, body)
+
+
+def orbits(t, rnd):
+    defs = [rgrad("vig", t.secondary, 0.16 if t.dark else 0.12), rgrad("glow", t.moon, 0.3)]
+    body = [f'<rect width="{W}" height="{H}" fill="{t.bg}"/>',
+            f'<ellipse cx="{W * 0.38:.0f}" cy="{H * 0.55:.0f}" rx="{W * 0.6:.0f}" ry="{H * 0.8:.0f}" fill="url(#vig)"/>']
+    body += stars(rnd, t, 220)
+    cx, cy = W * 0.38, H * 0.55
+    line = mix(t.bg, t.fg, 0.22 if t.dark else 0.3)
+    body.append(f'<g transform="rotate(-14 {cx:.0f} {cy:.0f})">')
+    for i, (rx, ry) in enumerate(((560, 190), (900, 310), (1300, 450), (1760, 610))):
+        body.append(f'<ellipse cx="{cx:.0f}" cy="{cy:.0f}" rx="{rx}" ry="{ry}" fill="none" stroke="{line}" stroke-width="3" opacity="{0.9 - i * 0.12:.2f}"/>')
+        a = rnd.uniform(0, 2 * math.pi)
+        px, py = cx + rx * math.cos(a), cy + ry * math.sin(a)
+        col = (t.primary, t.tertiary, t.secondary, t.fg)[i]
+        pr = (22, 30, 18, 14)[i]
+        body.append(f'<circle cx="{px:.0f}" cy="{py:.0f}" r="{pr}" fill="{col}"/>')
+    body.append("</g>")
+    body.append(f'<circle cx="{cx:.0f}" cy="{cy:.0f}" r="420" fill="url(#glow)"/>')
+    body += phase(cx, cy, 150, 0.62, True, t.moon, mix(t.bg, t.container, 0.8))
+    return svg(defs, body)
+
+
+def nebula(t, rnd):
+    """A soft band of light across the sky, like the Milky Way, with dust lanes."""
+    ang = -24
+    x0, y0, x1, y1 = -0.1 * W, 0.86 * H, 1.1 * W, 0.18 * H
+    cols = [t.secondary, t.tertiary, t.primary]
+    defs = [blur("dust", 60), blur("soft", 24), blur("band", 50)]
+    for i, col in enumerate(cols):
+        defs.append(rgrad(f"g{i}", col, 0.55 if t.dark else 0.4))
+    defs.append(rgrad("core", mix(t.fg, t.primary, 0.25), 0.5 if t.dark else 0.3))
+    body = [f'<rect width="{W}" height="{H}" fill="{t.deep if t.dark else t.bg}"/>']
+    along = lambda u: (x0 + (x1 - x0) * u, y0 + (y1 - y0) * u)
+    body.append('<g filter="url(#band)">')
+    for _ in range(54):
+        u = rnd.uniform(0, 1)
+        x, y = along(u)
+        y += rnd.gauss(0, 170)
+        rx, ry = rnd.uniform(380, 900), rnd.uniform(170, 380)
+        g = rnd.randrange(len(cols))
+        body.append(f'<ellipse cx="{x:.0f}" cy="{y:.0f}" rx="{rx:.0f}" ry="{ry:.0f}" fill="url(#g{g})" '
+                    f'opacity="{rnd.uniform(0.3, 0.62):.2f}" transform="rotate({ang + rnd.uniform(-10, 10):.0f} {x:.0f} {y:.0f})"/>')
+    for _ in range(6):
+        x, y = along(rnd.uniform(0.25, 0.75))
+        body.append(f'<ellipse cx="{x:.0f}" cy="{y:.0f}" rx="{rnd.uniform(220, 420):.0f}" ry="{rnd.uniform(90, 150):.0f}" fill="url(#core)" '
+                    f'transform="rotate({ang} {x:.0f} {y:.0f})"/>')
+    body.append("</g>")
+    # Dark dust lanes along the middle of the band.
+    body.append('<g filter="url(#dust)">')
+    for _ in range(9):
+        u = rnd.uniform(0.05, 0.95)
+        x, y = along(u)
+        y += rnd.gauss(0, 40)
+        body.append(f'<ellipse cx="{x:.0f}" cy="{y:.0f}" rx="{rnd.uniform(180, 420):.0f}" ry="{rnd.uniform(26, 60):.0f}" '
+                    f'fill="{t.deep if t.dark else t.bg}" opacity="{rnd.uniform(0.45, 0.75):.2f}" transform="rotate({ang + rnd.uniform(-6, 6):.0f} {x:.0f} {y:.0f})"/>')
+    body.append("</g>")
+    if t.dark:
+        body += stars(rnd, t, 380, scale=0.9)
+        # Denser stars along the band.
+        for _ in range(520):
+            x, y = along(rnd.uniform(0, 1))
+            y += rnd.gauss(0, 170)
+            body.append(f'<circle cx="{x:.0f}" cy="{y:.0f}" r="{rnd.choice([1.6, 2.0, 2.6]):.1f}" fill="{t.fg}" opacity="{rnd.uniform(0.3, 0.8):.2f}"/>')
+        for _ in range(7):
+            x, y = rnd.uniform(0, W), rnd.uniform(0, H)
+            s_ = rnd.uniform(14, 26)
+            body.append(f'<circle cx="{x:.0f}" cy="{y:.0f}" r="{s_ * 2.2:.0f}" fill="{t.fg}" opacity="0.12" filter="url(#soft)"/>')
+            body.append(f'<path d="M {x:.0f} {y - s_:.0f} Q {x:.0f} {y:.0f} {x + s_:.0f} {y:.0f} Q {x:.0f} {y:.0f} {x:.0f} {y + s_:.0f} '
+                        f'Q {x:.0f} {y:.0f} {x - s_:.0f} {y:.0f} Q {x:.0f} {y:.0f} {x:.0f} {y - s_:.0f} Z" fill="{t.fg}" opacity="0.9"/>')
+    else:
+        for _ in range(160):
+            x, y = along(rnd.uniform(0, 1))
+            y += rnd.gauss(0, 220)
+            body.append(f'<circle cx="{x:.0f}" cy="{y:.0f}" r="{rnd.uniform(1.5, 3):.1f}" fill="{t.muted}" opacity="{rnd.uniform(0.15, 0.4):.2f}"/>')
+    return svg(defs, body)
+
+
+def phases(t, rnd):
+    body = [f'<rect width="{W}" height="{H}" fill="{t.bg}"/>']
+    body += stars(rnd, t, 140)
+    n, r, gap = 9, 82, 300
+    total = (n - 1) * gap
+    x0, y = (W - total) / 2, H * 0.5
+    line = mix(t.bg, t.fg, 0.16 if t.dark else 0.22)
+    body.append(f'<line x1="{x0 - 260:.0f}" y1="{y + 230:.0f}" x2="{x0 + total + 260:.0f}" y2="{y + 230:.0f}" stroke="{line}" stroke-width="3"/>')
+    shade = mix(t.bg, t.container, 0.9) if t.dark else mix(t.bg, t.outline, 0.5)
+    for i in range(n):
+        f = 1 - abs(i - (n - 1) / 2) / ((n - 1) / 2)  # new at the ends, full in the middle
+        waxing = i <= (n - 1) / 2
+        lit = t.primary if i == (n - 1) // 2 else t.moon if t.dark else mix(t.fg, t.bg, 0.15)
+        body += phase(x0 + i * gap, y, r, max(f, 0.0), waxing, lit, shade)
+    return svg([], body)
+
+
+def crescent(t, rnd):
+    defs = [rgrad("glow", t.primary, 0.32 if t.dark else 0.25),
+            f'<mask id="cut"><rect width="{W}" height="{H}" fill="#fff"/>'
+            f'<circle cx="{W * 0.78:.0f}" cy="{H * 0.40:.0f}" r="780" fill="#000"/></mask>']
+    g, bgrect = sky(t, horizon_tint=t.secondary, horizon_amount=0.18)
+    defs.insert(0, g)
+    body = [bgrect] + stars(rnd, t, 380)
+    cx, cy = W * 0.70, H * 0.48
+    body.append(f'<circle cx="{cx:.0f}" cy="{cy:.0f}" r="1500" fill="url(#glow)"/>')
+    body.append(f'<circle cx="{cx:.0f}" cy="{cy:.0f}" r="820" fill="{t.primary}" mask="url(#cut)"/>')
+    sx, sy = W * 0.86, H * 0.47
+    body.append(f'<path d="M {sx:.0f} {sy - 60:.0f} Q {sx:.0f} {sy:.0f} {sx + 60:.0f} {sy:.0f} Q {sx:.0f} {sy:.0f} {sx:.0f} {sy + 60:.0f} '
+                f'Q {sx:.0f} {sy:.0f} {sx - 60:.0f} {sy:.0f} Q {sx:.0f} {sy:.0f} {sx:.0f} {sy - 60:.0f} Z" fill="{t.fg}" opacity="0.9"/>')
+    return svg(defs, body)
+
+
+def moonarc(t, rnd):
+    g, bgrect = sky(t, horizon_amount=0.25)
+    defs = [g, rgrad("glow", t.primary, 0.35)]
+    body = [bgrect] + stars(rnd, t, 300, bottom=H * 0.85)
+    cx, cy, R = W / 2, H * 0.95, 1560
+    line = mix(t.bg, t.fg, 0.35)
+    body.append(f'<path d="M {cx - R:.0f} {cy:.0f} A {R} {R} 0 0 1 {cx + R:.0f} {cy:.0f}" fill="none" stroke="{line}" '
+                f'stroke-width="5" stroke-dasharray="1 26" stroke-linecap="round"/>')
+    shade = mix(t.bg, t.container, 0.9)
+    steps = 7
+    for i in range(steps):
+        a = math.pi * (0.9 - 0.8 * i / (steps - 1))
+        x, y = cx + R * math.cos(a), cy - R * math.sin(a)
+        f = 1 - abs(i - 3) / 3.4
+        r = 96 if i == 3 else 70
+        if i == 3:
+            body.append(f'<circle cx="{x:.0f}" cy="{y:.0f}" r="330" fill="url(#glow)"/>')
+        body += phase(x, y, r, f, i < 3, t.primary if i == 3 else t.moon, shade)
+    path, _ = ridge(rnd, H * 0.86, 45, 2.0, t.ink if t.dark else mix(t.bg, t.primary, 0.25))
+    body.append(path)
+    return svg(defs, body)
+
+
+def aurora(t, rnd):
+    """Curtains of light hanging over dark hills."""
+    defs = [blur("b", 14), blur("glow", 60), vgrad("sky", [(0, t.deep), (1, t.bg)])]
+    body = [f'<rect width="{W}" height="{H}" fill="url(#sky)"/>'] + stars(rnd, t, 420, bottom=H * 0.8)
+    for i, col in enumerate((t.tertiary, t.primary if t.primary != t.tertiary else t.secondary)):
+        defs.append(f'<linearGradient id="c{i}" x1="0" y1="1" x2="0" y2="0">'
+                    f'<stop offset="0" stop-color="{col}" stop-opacity="0.75"/><stop offset="0.35" stop-color="{col}" stop-opacity="0.35"/>'
+                    f'<stop offset="1" stop-color="{col}" stop-opacity="0"/></linearGradient>')
+        base, amp = H * (0.56 - 0.1 * i), 120 + 40 * i
+        p1, p2 = rnd.uniform(0, 6.28), rnd.uniform(0, 6.28)
+        bottom, top = [], []
+        for k in range(0, 97):
+            x = W * k / 96
+            y = base + amp * math.sin(x / W * math.pi * 2.2 + p1) + 40 * math.sin(x / W * math.pi * 7 + p2)
+            h = 380 + 220 * (0.5 + 0.5 * math.sin(x / W * math.pi * 3.1 + p2)) + rnd.uniform(-40, 40)
+            bottom.append((x, y))
+            top.append((x, y - h))
+        d = "M " + " L ".join(f"{x:.0f} {y:.0f}" for x, y in bottom) + " L " + " L ".join(f"{x:.0f} {y:.0f}" for x, y in reversed(top)) + " Z"
+        body.append(f'<path d="{d}" fill="url(#c{i})" opacity="{0.85 - i * 0.2:.2f}" filter="url(#glow)"/>')
+        # Vertical rays give the curtain its texture.
+        body.append(f'<g filter="url(#b)" opacity="{0.7 - i * 0.2:.2f}">')
+        for (bx, by), (_, ty) in zip(bottom[::1], top[::1]):
+            for _ in range(2):
+                x = bx + rnd.uniform(-20, 20)
+                l = (by - ty) * rnd.uniform(0.5, 1.05)
+                body.append(f'<rect x="{x:.0f}" y="{by - l:.0f}" width="{rnd.uniform(4, 12):.0f}" height="{l:.0f}" fill="url(#c{i})"/>')
+        body.append("</g>")
+    path, _ = ridge(rnd, H * 0.84, 60, 2.6, t.ink)
+    body.append(path)
+    return svg(defs, body)
+
+
+def pines(t, rnd):
+    g, bgrect = sky(t, horizon_tint=t.primary, horizon_amount=0.22)
+    defs = [g, rgrad("glow", t.landmoon, 0.4)]
+    body = [bgrect] + stars(rnd, t, 240, bottom=H * 0.6)
+    mx, my = W * 0.3, H * 0.33
+    body.append(f'<circle cx="{mx:.0f}" cy="{my:.0f}" r="700" fill="url(#glow)"/>')
+    body.append(f'<circle cx="{mx:.0f}" cy="{my:.0f}" r="210" fill="{t.landmoon}"/>')
+    layers = ((H * 0.74, mix(t.bg, t.secondary, 0.18), 0.8), (H * 0.82, mix(t.bg, t.deep, 0.6), 1.0), (H * 0.92, t.ink, 1.25))
+    for base, col, size in layers:
+        path, pts = ridge(rnd, base, 40, 1.8, col)
+        body.append(path)
+        x = rnd.uniform(0, 80)
+        while x < W:
+            # ground height under this tree
+            i = min(int(x / W * 40), 39)
+            gy = pts[i][1] + (pts[i + 1][1] - pts[i][1]) * ((x / W * 40) - i)
+            h = rnd.uniform(140, 300) * size
+            w = h * 0.36
+            tiers = 3
+            d = ""
+            for k in range(tiers):
+                top = gy - h + k * h * 0.22
+                bottom = gy - h * 0.18 - (tiers - 1 - k) * h * 0.18
+                ww = w * (0.55 + 0.25 * k)
+                d += f"M {x:.0f} {top:.0f} L {x + ww:.0f} {bottom:.0f} L {x - ww:.0f} {bottom:.0f} Z "
+            d += f"M {x - 6 * size:.0f} {gy - h * 0.2:.0f} h {12 * size:.0f} V {gy + 4:.0f} h {-12 * size:.0f} Z"
+            body.append(f'<path d="{d}" fill="{col}"/>')
+            x += rnd.uniform(60, 220) * size
+    return svg(defs, body)
+
+
+def eclipse(t, rnd):
+    cx, cy, r = W * 0.5, H * 0.45, 330
+    defs = [blur("b", 26), blur("b2", 90),
+            f'<radialGradient id="corona"><stop offset="0.55" stop-color="{t.primary}" stop-opacity="0.7"/>'
+            f'<stop offset="0.75" stop-color="{t.primary}" stop-opacity="0.18"/><stop offset="1" stop-color="{t.primary}" stop-opacity="0"/></radialGradient>']
+    body = [f'<rect width="{W}" height="{H}" fill="{t.deep}"/>'] + stars(rnd, t, 380)
+    body.append(f'<circle cx="{cx:.0f}" cy="{cy:.0f}" r="{r * 2.2:.0f}" fill="url(#corona)" filter="url(#b2)"/>')
+    body.append('<g filter="url(#b)">')
+    for _ in range(64):
+        a = rnd.uniform(0, 2 * math.pi)
+        l = rnd.uniform(1.15, 2.1) * r
+        x1, y1 = cx + r * 0.98 * math.cos(a), cy + r * 0.98 * math.sin(a)
+        x2, y2 = cx + l * math.cos(a), cy + l * math.sin(a)
+        body.append(f'<line x1="{x1:.0f}" y1="{y1:.0f}" x2="{x2:.0f}" y2="{y2:.0f}" stroke="{mix(t.primary, t.fg, rnd.uniform(0, 0.6))}" '
+                    f'stroke-width="{rnd.uniform(4, 12):.0f}" opacity="{rnd.uniform(0.25, 0.6):.2f}" stroke-linecap="round"/>')
+    body.append("</g>")
+    body.append(f'<circle cx="{cx:.0f}" cy="{cy:.0f}" r="{r}" fill="#000000"/>')
+    body.append(f'<circle cx="{cx:.0f}" cy="{cy:.0f}" r="{r + 3}" fill="none" stroke="{mix(t.primary, "#ffffff", 0.5)}" stroke-width="4" opacity="0.85"/>')
+    # The diamond ring: one bright bead on the rim.
+    a = math.radians(-38)
+    bx, by = cx + r * math.cos(a), cy + r * math.sin(a)
+    body.append(f'<circle cx="{bx:.0f}" cy="{by:.0f}" r="70" fill="#ffffff" opacity="0.5" filter="url(#b)"/>')
+    body.append(f'<circle cx="{bx:.0f}" cy="{by:.0f}" r="16" fill="#ffffff"/>')
+    return svg(defs, body)
+
+
+STYLES = dict(horizon=horizon, orbits=orbits, nebula=nebula, phases=phases, crescent=crescent,
+              moonarc=moonarc, aurora=aurora, pines=pines, eclipse=eclipse)
+
+
+def build(name, png_dir=None):
+    t = Theme(name)
+    folder = ROOT / name / "wallpapers"
+    folder.mkdir(exist_ok=True)
+    start = 1
+    if name in HANDMADE:
+        start = 2
+    # Remove old generated files so renumbering never leaves strays.
+    for old in folder.glob("*.svg"):
+        if not (name in HANDMADE and old.name.startswith("1-")):
+            old.unlink()
+    for i, style in enumerate(PLAN.get(name, []), start):
+        rnd = random.Random(zlib.crc32(f"{name}/{style}".encode()))
+        path = folder / f"{i}-{style}.svg"
+        path.write_text(STYLES[style](t, rnd))
+        print(path.relative_to(ROOT.parent))
+    if png_dir:
+        out = pathlib.Path(png_dir)
+        out.mkdir(parents=True, exist_ok=True)
+        for f in sorted(folder.glob("*.svg")):
+            subprocess.run(["rsvg-convert", "-w", "1280", "-h", "720", str(f), "-o", str(out / f"{name}-{f.stem}.png")], check=True)
+
+
+def main():
+    args = sys.argv[1:]
+    png = None
+    if "--png" in args:
+        i = args.index("--png")
+        png = args[i + 1]
+        del args[i:i + 2]
+    for name in args or sorted(PLAN):
+        build(name, png)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,6 @@
+name = "Gruvbox"
+description = "Retro warmth: yellow, aqua and orange on brown-black. Has a light variant."
+mode = "dark"
+credit = "Gruvbox"
+license = "MIT"
+url = "https://github.com/gruvbox-community/gruvbox"

@@ -228,6 +228,14 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     screenshot tide
     check "switch to paper (light)"       "$hypr $id theme set paper >/dev/null && sleep 2 && noctalia msg theme-mode-get | grep -q light && [ \"\$(gsettings get org.gnome.desktop.interface icon-theme)\" = \"'Papirus-Light'\" ]"
     screenshot paper
+    check "all themes listed"             "[ \$($id theme list --plain | wc -l) -ge 17 ] && $id theme list --plain | grep -qP '^catppuccin\t'"
+    check "switch to catppuccin"          "$hypr $id theme set catppuccin >/dev/null && sleep 2 && grep -q 'cba6f7' ~/.config/hypr/noctalia.lua && grep -qi '1e1e2e' ~/.config/ghostty/themes/noctalia"
+    check "wallpaper cycles"              "$hypr $id theme wallpaper next | grep -q '^wallpaper 2 of ' && grep -q '^wallpaper.catppuccin = 2' ~/.config/$id/settings && $id theme wallpaper set 1 >/dev/null"
+    screenshot catppuccin
+    check "switch to eclipse"             "$hypr $id theme set eclipse >/dev/null && sleep 2 && grep -q 'f5c542' ~/.config/hypr/noctalia.lua"
+    screenshot eclipse
+    check "earthshine opens light"        "$hypr $id theme set earthshine >/dev/null && sleep 2 && noctalia msg theme-mode-get | grep -q light"
+    screenshot earthshine
 
     # Layer 5: crash inbox, agents, updates.
     "$here/ssh" "$vm" "$user" -- "$hypr $id theme set moonlit >/dev/null" || true

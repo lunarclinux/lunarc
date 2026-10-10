@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Renders the boot menu's wallpaper (Limine reads PNG, not SVG) from the
-# default theme's wallpaper. Run after changing themes/moonlit/wallpaper.svg.
+# default theme's wallpaper. Run after changing themes/moonlit/wallpapers/1-moonarc.svg.
 # Needs rsvg-convert (librsvg).
 #
 #   tools/make-boot-wallpaper
@@ -8,5 +8,5 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 out=$root/default/boot/wallpaper.png
 mkdir -p "$(dirname "$out")"
-rsvg-convert -w 1920 -h 1080 "$root/themes/moonlit/wallpaper.svg" -o "$out"
+rsvg-convert -w 1920 -h 1080 "$root/themes/moonlit/wallpapers/1-moonarc.svg" -o "$out"
 ls -l "$out"

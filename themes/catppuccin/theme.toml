@@ -1,0 +1,6 @@
+name = "Catppuccin"
+description = "Soft pastels: mauve, blue and teal on deep slate (Mocha). Light variant: Latte."
+mode = "dark"
+credit = "Catppuccin (Mocha and Latte)"
+license = "MIT"
+url = "https://github.com/catppuccin/catppuccin"
