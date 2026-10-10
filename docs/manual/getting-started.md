@@ -66,6 +66,7 @@ SUPER+ALT+Space (or `/m` in the launcher). Type part of a name and press Enter t
 | `lunarc app list` / `search <word>` / `install <app>` | Browse and install apps: browsers, editors, AI (Claude, ChatGPT, Ollama, Hermes), games (Steam, Lutris, Heroic), chat and more |
 | `lunarc app export apps.txt` / `import apps.txt` | Save your apps and a few settings to a file, then install them all on another computer |
 | `lunarc setup` / `setup backups` | The first-login choices again / set up backups |
+| `lunarc power status` / `charge-limit` / `hibernate` | Battery charge limit, hibernation, low-battery alerts |
 | `lunarc update` / `update check` | Update everything safely / see what's waiting (see Updating) |
 | `lunarc update firmware` | Check for firmware updates (only when you run it) |
 | `lunarc privacy` | Privacy switches: weather lookup, encrypted DNS, network check (see "What Lunarc connects to", `privacy.md`) |
@@ -126,6 +127,14 @@ wrong password, and fades after a few seconds. The computer also locks after 5
 minutes idle and before it sleeps. If the lock screen ever hangs, press
 CTRL+ALT+L to start it again. To use Noctalia's lock screen instead, set
 `lock.style = noctalia` in `~/.config/lunarc/settings`.
+
+## Laptop power
+
+- **Lid closed with an external monitor:** the laptop's screen turns off and you keep working on the external one. With no external monitor, closing the lid sleeps (and locks).
+- **Battery charge limit:** `lunarc power charge-limit 80` stops charging at 80%, which keeps the battery healthier if the laptop is plugged in most of the time; `off` charges to 100%. Not every laptop's firmware supports it; the command says so.
+- **Low battery:** a warning at 20%, a persistent alert at 10%, and a last one at 5% (at 2% the laptop hibernates if hibernation is on, otherwise it shuts down).
+- **Hibernate:** `lunarc power hibernate enable` (encrypted installs only, since the hibernation image is a copy of everything in memory). Then Power › Hibernate in the menu, or `lunarc power hibernate now`.
+- `lunarc power status` shows all of this at a glance.
 
 ## Passwords, lock-outs and staying awake
 
