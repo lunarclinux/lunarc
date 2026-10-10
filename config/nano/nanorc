@@ -1,0 +1,15 @@
+# nano, for people who type nano: syntax colours, line numbers, mouse,
+# and Ctrl+S to save. micro is the default editor ($EDITOR).
+include "/usr/share/nano/*.nanorc"
+include "/usr/share/nano/extra/*.nanorc"
+set linenumbers
+set mouse
+set softwrap
+set atblanks
+set indicator
+set tabsize 4
+set tabstospaces
+set autoindent
+set constantshow
+set zap
+bind ^S savefile main

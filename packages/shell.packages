@@ -17,3 +17,17 @@ debuginfod
 
 # AUR helper for `<id> app install` (community apps such as Claude Desktop, Zen, Heroic).
 yay
+
+# Terminal editor (default, nano-like keys; nano itself is in base) and the
+# everyday command-line kit behind the shell defaults: prompt, z, ls, fuzzy
+# search, cat with colours, find, grep, tldr.
+micro
+starship
+zoxide
+eza
+fzf
+bat
+fd
+ripgrep
+tealdeer
+bash-completion

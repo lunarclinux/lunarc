@@ -1,0 +1,44 @@
+# Distro shell defaults for bash: history, prompt, smarter cd, ls and search.
+# ~/.bashrc sources this; `@DISTRO_ID@ shell defaults off` removes that line.
+# Every tool is optional: a missing one is skipped.
+[[ $- == *i* ]] || return 0
+
+# History: large, shared between terminals, no duplicates.
+HISTSIZE=50000
+HISTFILESIZE=100000
+HISTCONTROL=ignoreboth:erasedups
+shopt -s histappend checkwinsize
+PROMPT_COMMAND+=('history -a')
+
+has() { command -v "$1" >/dev/null 2>&1; }
+
+if has eza; then
+  alias ls='eza --group-directories-first'
+  alias ll='eza -l --git --group-directories-first'
+  alias la='eza -la --git --group-directories-first'
+  alias lt='eza --tree --level=2 --group-directories-first'
+fi
+
+# fzf: Ctrl+R history, Ctrl+T files, Alt+C directories; colours from the terminal (the theme).
+if has fzf; then
+  export FZF_DEFAULT_OPTS="--color=16 --height=40% --layout=reverse --border"
+  if has fd; then
+    export FZF_DEFAULT_COMMAND='fd --type f --hidden --exclude .git'
+    export FZF_CTRL_T_COMMAND=$FZF_DEFAULT_COMMAND
+    export FZF_ALT_C_COMMAND='fd --type d --hidden --exclude .git'
+  fi
+  eval "$(fzf --bash)"
+fi
+
+# bat follows the terminal's colours; `cat` is left alone.
+export BAT_THEME=ansi
+
+# z <part of a path> jumps to a directory you've visited; zi picks from a list.
+if has zoxide; then eval "$(zoxide init bash)"; fi
+
+# Language runtimes installed with mise (`@DISTRO_ID@ app install node`, ...).
+if has mise; then eval "$(mise activate bash)"; fi
+
+if has starship; then eval "$(starship init bash)"; fi
+
+unset -f has

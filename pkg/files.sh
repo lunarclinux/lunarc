@@ -45,8 +45,12 @@ case $part in
       put "$entry" "$dest/usr/share/$id/xdg/applications/${entry##*/}"
     done
     install -d "$dest/usr/lib/environment.d"
-    printf 'XDG_DATA_DIRS=/usr/share/%s/xdg:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}\n' "$id" \
-      > "$dest/usr/lib/environment.d/50-$id.conf"
+    {
+      printf 'XDG_DATA_DIRS=/usr/share/%s/xdg:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}\n' "$id"
+      # micro is the default editor (git, sudoedit and others follow EDITOR);
+      # override in ~/.config/environment.d/. Truecolour for its theme.
+      printf 'EDITOR=micro\nVISUAL=micro\nMICRO_TRUECOLOR=1\n'
+    } > "$dest/usr/lib/environment.d/50-$id.conf"
 
     # User services, enabled for every user through static wants links.
     units=$dest/usr/lib/systemd/user
@@ -73,6 +77,8 @@ case $part in
     put "$src/etc/pacman.d/hooks/os-release.hook" "$dest/usr/share/libalpm/hooks/$id-os-release.hook"
     # ~/.local/bin on PATH for shells.
     put "$src/etc/profile.d/local-bin.sh" "$dest/etc/profile.d/$id-local-bin.sh"
+    # The same editor default for shells outside the desktop session (TTY, SSH).
+    put "$src/etc/profile.d/editor.sh" "$dest/etc/profile.d/$id-editor.sh"
     ;;
   settings)
     install -d -m750 "$dest/etc/sudoers.d"   # sudo's own package creates it 750

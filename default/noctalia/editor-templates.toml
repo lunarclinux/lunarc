@@ -1,0 +1,8 @@
+# Distro templates for apps Noctalia doesn't theme itself. Loaded with the
+# other distro defaults (this whole folder is included).
+
+# micro, the default terminal editor: a colour scheme from the active theme.
+# Its settings.json selects "noctalia".
+[theme.templates.user.micro]
+input_path = "/usr/share/@DISTRO_ID@/default/templates/micro.micro"
+output_path = "$XDG_CONFIG_HOME/micro/colorschemes/noctalia.micro"

@@ -7,6 +7,8 @@
 #   gpu       one Arch package per GPU vendor: amd:<pkg> nvidia:<pkg> intel:<pkg> other:<pkg>
 #   web       a web app: opens the URL in its own Chromium window
 #   agent     a coding agent, installed by `<id> agent install`
+#   mise      a language runtime for your user, installed with mise (`<id> dev lang`)
+#   dev       a setup done by `<id> dev`: docker, or db:<postgres|mariadb|redis>
 # Defaults (installed with the system) are in packages/apps.packages; they are
 # marked "default" in the note so `<id> app list` can show them.
 
@@ -26,12 +28,34 @@ xournalpp        | documents | Xournal++ (handwriting, PDF notes) | repo | xourn
 calculator       | utilities | Calculator             | repo     | gnome-calculator            | default
 
 # Code
+micro            | code      | micro (terminal editor, nano-like keys) | repo | micro             | default
+nano             | code      | nano                   | repo     | nano                        |
+msedit           | code      | Edit (Microsoft's terminal editor) | repo | msedit             |
 code             | code      | Code - OSS (VS Code)   | repo     | code                        |
 vscode           | code      | Visual Studio Code (Microsoft build) | aur | visual-studio-code-bin |
 zed              | code      | Zed                    | repo     | zed                         |
 neovim           | code      | Neovim                 | repo     | neovim                      |
 helix            | code      | Helix                  | repo     | helix                       |
 godot            | code      | Godot                  | repo     | godot                       |
+
+# Developer tools and runtimes
+mise             | dev       | mise (language versions) | repo   | mise                        |
+node             | dev       | Node.js (LTS, via mise) | mise    | node@lts                    |
+python           | dev       | Python (via mise)      | mise     | python@latest               |
+go               | dev       | Go (via mise)          | mise     | go@latest                   |
+rust             | dev       | Rust (via mise)        | mise     | rust@latest                 |
+ruby             | dev       | Ruby (via mise)        | mise     | ruby@latest                 |
+java             | dev       | Java 21 LTS (via mise) | mise     | java@21                     |
+bun              | dev       | Bun (via mise)         | mise     | bun@latest                  |
+docker           | dev       | Docker (with Compose and Buildx) | dev | docker                  |
+lazydocker       | dev       | lazydocker (Docker in the terminal) | repo | lazydocker         |
+lazygit          | dev       | lazygit (git in the terminal) | repo | lazygit                   |
+github-cli       | dev       | GitHub CLI (gh)        | repo     | github-cli                  |
+postgres         | dev       | PostgreSQL (in Docker) | dev      | db:postgres                 |
+mariadb          | dev       | MariaDB (in Docker)    | dev      | db:mariadb                  |
+redis            | dev       | Redis (in Docker)      | dev      | db:redis                    |
+zsh              | dev       | zsh (then: @DISTRO_ID@ shell set zsh) | repo | zsh             |
+fish             | dev       | fish (then: @DISTRO_ID@ shell set fish) | repo | fish          |
 
 # Pictures, video, audio
 loupe            | media     | Image Viewer (Loupe)   | repo     | loupe                       | default
