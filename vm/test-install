@@ -253,7 +253,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     screenshot setup-welcome
     check "setup goes on to backups"      "$hypr hyprctl dispatch 'hl.dsp.focus({ window = \"class:^$id.setup\$\" })' >/dev/null; sleep 0.5; wtype -k Return; sleep 1.5; true"
     screenshot setup-backups
-    check "backups step opens Pika's setup" "$hypr pkill -f -- '^(/usr/bin/)?ghostty --class=$id[.]setup'; gapplication launch org.gnome.World.PikaBackup; sleep 1; gapplication action org.gnome.World.PikaBackup setup; for i in \$(seq 20); do hyprctl clients -j | jq -e '.[] | select(.class | test(\"PikaBackup\"))' >/dev/null && exit 0; sleep 1; done; exit 1"
+    check "backups step opens Pika's setup" "$hypr pkill -f -- '^(/usr/bin/)?ghostty --class=${id}[.]setup'; gapplication launch org.gnome.World.PikaBackup; sleep 1; gapplication action org.gnome.World.PikaBackup setup; for i in \$(seq 20); do hyprctl clients -j | jq -e '.[] | select(.class | test(\"PikaBackup\"))' >/dev/null && exit 0; sleep 1; done; exit 1"
     screenshot pika-setup
     check "\"Later\" schedules one reminder" "$hypr pkill -x pika-backup; rm -rf ~/.local/state/$id/setup; $id setup welcome --skip && test -f ~/.local/state/$id/setup/finished && grep -qx skipped ~/.local/state/$id/setup/backups && due=\$(cat ~/.local/state/$id/setup/remind-at) && [ \$(( due - \$(date +%s) )) -gt 250000 ] && systemctl --user is-active --quiet $id-setup-reminder.timer"
     check "reminder waits until it's due" "$id setup remind-backups && ! test -f ~/.local/state/$id/setup/reminded"
