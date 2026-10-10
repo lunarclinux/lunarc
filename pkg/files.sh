@@ -68,9 +68,10 @@ case $part in
     put "$src/etc/systemd/user/setup-reminder.timer" "$units/$id-setup-reminder.timer"
     put "$src/etc/systemd/user/battery-watch.service" "$units/$id-battery-watch.service"
     put "$src/etc/systemd/user/idle-watch.service" "$units/$id-idle-watch.service"
+    put "$src/etc/systemd/user/snapshot-notice.service" "$units/$id-snapshot-notice.service"
     install -d "$units/graphical-session.target.wants"
     for unit in noctalia.service "$id-first-login.service" "$id-crash-watch.service" "$id-migrate.service" "$id-lock-watch.service" \
-      "$id-setup-reminder.timer" "$id-battery-watch.service" "$id-idle-watch.service"; do
+      "$id-setup-reminder.timer" "$id-battery-watch.service" "$id-idle-watch.service" "$id-snapshot-notice.service"; do
       ln -s "../$unit" "$units/graphical-session.target.wants/$unit"
     done
 
@@ -83,6 +84,14 @@ case $part in
     # pacman hook keeping Limine current at the UEFI fallback path.
     put "$src/etc/pacman.d/hooks/limine-update.hook" "$dest/usr/share/libalpm/hooks/$id-limine-update.hook"
     put "$src/etc/pacman.d/hooks/migrate.hook" "$dest/usr/share/libalpm/hooks/$id-migrate.hook"
+    # Bootable snapshots (decision record 0036): keep the old kernel before
+    # mkinitcpio's 60-mkinitcpio-remove deletes it ("10-" sorts first), and
+    # rewrite the boot menu's entries after snap-pac's zz-snap-pac-post ("zzz-").
+    put "$src/etc/pacman.d/hooks/boot-snapshots-save.hook" "$dest/usr/share/libalpm/hooks/10-$id-boot-snapshots-save.hook"
+    put "$src/etc/pacman.d/hooks/boot-snapshots-refresh.hook" "$dest/usr/share/libalpm/hooks/zzz-$id-boot-snapshots.hook"
+    put "$src/etc/mkinitcpio.conf.d/snapshots.conf" "$dest/etc/mkinitcpio.conf.d/$id-snapshots.conf"
+    put "$src/etc/systemd/system/snapper-cleanup-boot-entries.conf" \
+      "$dest/usr/lib/systemd/system/snapper-cleanup.service.d/$id-boot-entries.conf"
     # Branding: the crescent-c icon (full colour and symbolic) and the boot
     # menu wallpaper, which a hook copies to /boot.
     put "$src/default/branding/logo.svg" "$dest/usr/share/icons/hicolor/scalable/apps/$id-logo.svg"

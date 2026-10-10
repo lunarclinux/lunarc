@@ -3,9 +3,11 @@
 # with the live ISO), installs a git ref over SSH, reboots into the installed
 # system and runs checks.
 #
-#   vm/test-install [--vm distro-clean] [--from l0-complete] [--ref HEAD] [--keep] [--iso VOLUME] [--encrypt] [--rollback]
+#   vm/test-install [--vm distro-clean] [--from l0-complete] [--ref HEAD] [--keep] [--iso VOLUME] [--encrypt] [--rollback] [--bootsnap]
 #
 # --encrypt installs onto LUKS and types the passphrase at boot (virsh send-key).
+# --bootsnap starts the pre-update snapshot of a package install from the boot
+# menu, checks it, keeps it (rollback from inside it) and restarts normally.
 # --rollback ends by rolling back a package install and rebooting into the
 # restored system (not with --encrypt).
 #
@@ -16,7 +18,7 @@
 set -euo pipefail
 export LIBVIRT_DEFAULT_URI=qemu:///system
 here=$(cd "$(dirname "$0")" && pwd); repo=$(dirname "$here")
-vm=distro-clean from=l0-complete ref=HEAD keep=0 iso="" encrypt=0 rollback=0
+vm=distro-clean from=l0-complete ref=HEAD keep=0 iso="" encrypt=0 rollback=0 bootsnap=0
 while [[ $# -gt 0 ]]; do
   case $1 in
     --vm) vm=$2; shift 2 ;; --from) from=$2; shift 2 ;;
@@ -24,6 +26,7 @@ while [[ $# -gt 0 ]]; do
     --iso) iso=$2; shift 2 ;;
     --encrypt) encrypt=1; shift ;;
     --rollback) rollback=1; shift ;;
+    --bootsnap) bootsnap=1; shift ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -169,6 +172,7 @@ if "$here/ssh" "$vm" "$user" -- "pacman -Q $id >/dev/null 2>&1"; then
   check "package repository enabled, signed" "grep -A2 '^\\[$id\\]\$' /etc/pacman.conf | grep -qx 'SigLevel = Required' && grep -A2 '^\\[$id\\]\$' /etc/pacman.conf | grep -qx 'Server = $repo_url'"
   check "snapshots configured (@snapshots)" "[ \"\$(findmnt -no FSROOT /.snapshots)\" = /@snapshots ] && echo '$password' | sudo -S -p '' snapper -c root get-config | grep TIMELINE_CREATE | grep -qw no"
   check "a package install takes snapshots" "echo '$password' | sudo -S -p '' pacman -S --noconfirm tree >/dev/null && echo '$password' | sudo -S -p '' snapper -c root --csvout list --columns type,description | grep -q '^pre,.*tree' && echo '$password' | sudo -S -p '' snapper -c root --csvout list --columns type | grep -qx post"
+  check "boot menu lists the snapshot"   "n=\$(echo '$password' | sudo -S -p '' snapper -c root --csvout list --columns number,type,description | awk -F, '\$2 == \"pre\" && /tree/ { print \$1 }' | tail -1) && echo '$password' | sudo -S -p '' grep -q \"^//Before update, .* (#\$n)\$\" /boot/limine.conf && echo '$password' | sudo -S -p '' grep -q \"rootflags=subvol=@snapshots/\$n/snapshot .*systemd.volatile=overlay\" /boot/limine.conf"
   check "rollback dry run shows the plan" "n=\$(echo '$password' | sudo -S -p '' snapper -c root --csvout list --columns number,type,description | awk -F, '\$2 == \"pre\" && /tree/ { print \$1 }' | tail -1) && echo '$password' | sudo -S -p '' $id update rollback-apply \$n --dry-run | grep -q 'Plan:'"
   check "distro icon installed"         "test -f /usr/share/icons/hicolor/scalable/apps/$id-logo.svg && test -f /usr/share/icons/hicolor/symbolic/apps/$id-logo-symbolic.svg"
   check "os-release names the icon"     "grep -qx 'LOGO=$id-logo' /etc/os-release"
@@ -393,6 +397,28 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
 
   # Last: logging out of the autologin session should bring up the login screen.
   check "logging out shows the login screen" "$hypr"' uwsm stop >/dev/null 2>&1; for i in $(seq 20); do pgrep -x tuigreet >/dev/null && exit 0; sleep 1; done; exit 1'
+fi
+
+# Optional: start the snapshot taken before the `tree` install from the boot
+# menu (default_entry set for one boot), check it's that snapshot under a RAM
+# overlay with the desktop up, keep it from inside, restart normally.
+if (( bootsnap )) && (( ! encrypt )); then
+  log "starting the pre-update snapshot from the boot menu"
+  "$here/ssh" "$vm" "$user" -- "n=\$(echo '$password' | sudo -S -p '' snapper -c root --csvout list --columns number,type,description | awk -F, '\$2 == \"pre\" && /tree/ { print \$1 }' | tail -1); echo '$password' | sudo -S -p '' $id boot snapshots next \$n && echo '$password' | sudo -S -p '' systemctl reboot" || fail=1
+  sleep 15; wait_ssh "$user" 300
+  check "snapshot boot: started that snapshot" "grep -q '$id.snapshot=' /proc/cmdline && [ \"\$(findmnt -no FSTYPE /)\" = overlay ]"
+  check "snapshot boot: the install isn't there" "! command -v tree"
+  check "snapshot boot: desktop up"      'for i in $(seq 30); do pgrep -u "$USER" -x Hyprland >/dev/null && exit 0; sleep 1; done; exit 1'
+  check "snapshot boot: boots cleanly"   'state=$(systemctl is-system-running); echo $state; [ "$state" = running ]'
+  check "snapshot boot: updates refused"  "! $id update 2>&1 </dev/null | grep -q '^:: Synchronizing' && $id update 2>&1 </dev/null | grep -q 'running snapshot'"
+  check "snapshot boot: notice offered"  "systemctl --user is-active --quiet $id-snapshot-notice.service || systemctl --user show -p ExecMainStatus $id-snapshot-notice.service | grep -q ."
+  log "keeping the snapshot and restarting"
+  "$here/ssh" "$vm" "$user" -- "n=\$(grep -o '$id.snapshot=[0-9]*' /proc/cmdline | cut -d= -f2); echo '$password' | sudo -S -p '' $id boot snapshots next --clear && echo '$password' | sudo -S -p '' $id update rollback-apply \$n && echo '$password' | sudo -S -p '' systemctl reboot" || fail=1
+  sleep 15; wait_ssh "$user" 300
+  check "kept snapshot: the install is undone" "! command -v tree"
+  check "kept snapshot: normal boot of @"  "! grep -q '$id.snapshot=' /proc/cmdline && [ \"\$(findmnt -no FSROOT /)\" = /@ ]"
+  check "kept snapshot: menu still has snapshots" "echo '$password' | sudo -S -p '' grep -q '^//Before update' /boot/limine.conf"
+  rollback=0
 fi
 
 # Optional: undo the `tree` install by rolling back, restart, and check the

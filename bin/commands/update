@@ -148,6 +148,18 @@ snapshots() {
   sudo snapper -c root list
   info ""
   info "Undo an update: $DISTRO_ID update rollback <number>"
+  info ""
+  sudo "/usr/bin/$DISTRO_ID" boot snapshots list || true
+}
+
+# The snapshot this boot started from (0 for the normal system); set by the
+# boot menu's snapshot entries (see `boot snapshots`).
+booted_snapshot() {
+  local word
+  for word in $(</proc/cmdline); do
+    if [[ $word == "$DISTRO_ID.snapshot="* ]]; then printf '%s\n' "${word#*=}"; return; fi
+  done
+  echo 0
 }
 
 # --- Rolling back (runs as root) ----------------------------------------------
@@ -167,7 +179,9 @@ kernel_of() { # kernel_of <root> <pkgbase>: the modules version installed for it
 
 mount_top() { # mount_top: mounts the whole btrfs filesystem, prints where
   local dev top
-  dev=$(findmnt -no SOURCE / | sed 's/\[.*\]$//')
+  # The btrfs device: from /.snapshots, which is also mounted when the root is
+  # a snapshot under a RAM overlay (where / isn't btrfs).
+  dev=$(findmnt -no SOURCE /.snapshots | sed 's/\[.*\]$//')
   top=$(mktemp -d /run/rollback.XXXXXX)
   mount -o subvolid=5 "$dev" "$top"
   printf '%s\n' "$top"
@@ -176,8 +190,12 @@ mount_top() { # mount_top: mounts the whole btrfs filesystem, prints where
 rollback_apply() { # rollback_apply <n> <dry-run 0|1>
   local n=$1 dry=$2 top snap stamp new old sub b base ver desc date
   [[ $EUID -eq 0 ]] || die "rolling back needs root"
-  [[ $(findmnt -no FSTYPE /) == btrfs ]] || die "the system isn't on btrfs"
-  [[ $(findmnt -no FSROOT /) == /@ ]] || die "the running system isn't the @ subvolume (already rolled back? restart first)"
+  if [[ $(booted_snapshot) == 0 ]]; then
+    [[ $(findmnt -no FSTYPE /) == btrfs ]] || die "the system isn't on btrfs"
+    [[ $(findmnt -no FSROOT /) == /@ ]] || die "the running system isn't the @ subvolume (already rolled back? restart first)"
+  else
+    [[ $(findmnt -no FSTYPE /.snapshots) == btrfs ]] || die "can't find the snapshots"
+  fi
   top=$(mount_top)
   # shellcheck disable=SC2064
   trap "umount -R '$top' 2>/dev/null; rmdir '$top' 2>/dev/null" EXIT
@@ -191,7 +209,7 @@ rollback_apply() { # rollback_apply <n> <dry-run 0|1>
   info "Snapshot $n (${date:-unknown date} UTC): ${desc:-no description}"
   info "Plan:"
   info "  1. copy snapshot $n into a new writable system"
-  info "  2. keep the system you're running as @old-$stamp ('$DISTRO_ID update rollback --clean' removes it later)"
+  info "  2. keep the current system (@) as @old-$stamp ('$DISTRO_ID update rollback --clean' removes it later)"
   info "  3. make the copy the system that starts next time"
   for b in /boot/vmlinuz-*; do
     [[ -f $b ]] || continue
@@ -235,7 +253,9 @@ rollback_apply() { # rollback_apply <n> <dry-run 0|1>
   sync
   info ""
   info "Rolled back to snapshot $n. Restart to start the restored system."
-  info "The system you're running now is kept as @old-$stamp."
+  info "The previous system is kept as @old-$stamp."
+  # The boot menu's snapshot entries are rewritten from the restored system at
+  # its first update; the old ones still point at snapshots that exist.
 }
 
 rollback_clean() {
@@ -258,6 +278,10 @@ rollback_clean() {
   done
   info "Deleted."
 }
+
+if [[ ${1:-} == "" || ${1:-} == --all ]] && [[ $(booted_snapshot) != 0 ]]; then
+  die "you're running snapshot $(booted_snapshot) (changes are kept in memory only). Keep it first: $DISTRO_ID boot snapshots keep, then restart"
+fi
 
 case ${1:-} in
   "") update_all "" ;;

@@ -115,6 +115,8 @@ A newer Hyprland release than the one Lunarc's settings were tested with is held
 
 If an update breaks something: `lunarc update snapshots` lists the snapshots, and `lunarc update rollback <number>` puts the system back as it was in that snapshot, then you restart. Your files, `/home` and logs are not touched. The replaced system is kept until `lunarc update rollback --clean`.
 
+If an update stops the computer from starting: in the boot menu, open **Snapshots** and pick the state from before that update. It starts normally, but changes you make there are kept in memory only. To make it the system again, click **Keep this version** in the notification (or run `lunarc boot snapshots keep`), then restart. `lunarc boot snapshots` lists what's in the menu; `lunarc boot snapshots next <number>` starts one at the next restart without the menu.
+
 Lunarc's packages come from https://pkgs.lunarclinux.com and must be signed by the Lunarc key.
 
 ## Editing files in the terminal
