@@ -106,6 +106,13 @@ bitwarden        | passwords | Bitwarden              | repo     | bitwarden    
 keepassxc        | passwords | KeePassXC              | repo     | keepassxc                   |
 proton-pass      | passwords | Proton Pass            | aur      | proton-pass-bin             |
 
+# Backups (encrypted by default)
+pika-backup      | backup    | Pika Backup            | repo     | pika-backup                 | default
+kopia            | backup    | KopiaUI (Linux, Windows, macOS) | aur | kopia-ui-bin kopia-bin  |
+vorta            | backup    | Vorta (Borg, more options) | repo | vorta                       |
+restic           | backup    | restic (command line)  | repo     | restic                      | advanced
+rclone           | backup    | rclone (cloud storage sync) | repo | rclone                     | advanced
+
 # System
 btop             | system    | btop (system monitor)  | repo     | btop                        | default
 mission-center   | system    | Mission Center         | repo     | mission-center              |

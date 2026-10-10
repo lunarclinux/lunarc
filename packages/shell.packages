@@ -10,6 +10,8 @@ python-terminaltexteffects
 
 # CLI and crash inbox
 jq
+# The setup screens (same look as the installer)
+gum
 fastfetch
 pacman-contrib
 gdb

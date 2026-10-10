@@ -1,0 +1,10 @@
+# One reminder to set up backups, a few days after "Later" in the setup window.
+# Does nothing unless that reminder is due; never shown twice.
+[Unit]
+Description=Backup set-up reminder
+After=graphical-session.target
+
+[Service]
+Type=oneshot
+TimeoutStartSec=6h
+ExecStart=/usr/bin/@DISTRO_ID@ setup remind-backups

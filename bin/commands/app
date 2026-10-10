@@ -14,6 +14,9 @@ Usage: $DISTRO_ID app <command>
   search <word>         find apps by name or category
   install <app>...      install apps (Arch repos, the AUR, web apps, coding agents)
   remove <app>...       remove apps
+  export [file]         save your apps and a few settings to a file (default: stdout)
+  import <file> [--dry-run] [--yes]
+                        install what's in an exported list and apply its settings
 
 Categories: $(categories | tr '\n' ' ')
 USAGE
@@ -171,6 +174,125 @@ print_rows() { # stdin: rows
   done
 }
 
+# --- Moving to another computer: export and import --------------------------
+
+# Settings worth carrying over. Nothing secret lives in the settings file, and
+# only these keys are exported.
+export_keys=(theme theme.mode terminal agent keyboard.layouts)
+
+# Packages every install gets (the distro's lists), and hardware-specific ones
+# that belong to this machine only.
+default_packages() { sed -e 's/#.*//' -e '/^[[:space:]]*$/d' "$SHARE"/packages/*.packages 2>/dev/null; }
+hardware_package() {
+  [[ $1 =~ ^(nvidia.*|lib32-nvidia.*|vulkan-.*|lib32-vulkan-.*|lib32-mesa|mesa|intel-media-driver|libva-.*|egl-wayland|.*-ucode|linux|linux-.*|sof-firmware|alsa-firmware|.*-firmware.*)$ ]]
+}
+
+# The packages a catalog app installs (so they aren't listed twice).
+catalog_packages() {
+  local id cat name src target note
+  while IFS='|' read -r id cat name src target note; do
+    # shellcheck disable=SC2086 # several packages, space-separated
+    case $src in repo|multilib|aur) printf '%s\n' $target ;; gpu) packages_for gpu "$target" ;; esac
+  done < <(rows)
+}
+
+export_apps() {
+  local id cat name src target note pkg value
+  local -A skip=()
+  while read -r pkg; do skip[$pkg]=1; done < <(default_packages; catalog_packages)
+  printf '# %s app list: `%s app import <this file>` installs it on another computer.\n' "$DISTRO_NAME" "$DISTRO_ID"
+  printf '# Exported %s. Hardware drivers are left out; the installer picks them per machine.\n' "$(date -I)"
+  printf '\n[catalog]\n'
+  while IFS='|' read -r id cat name src target note; do
+    if [[ $note != default ]] && is_installed "$id" "$src" "$target"; then printf '%s\n' "$id"; fi
+  done < <(rows)
+  printf '\n[packages]\n'
+  while read -r pkg; do
+    if [[ -z ${skip[$pkg]:-} ]] && ! hardware_package "$pkg"; then printf '%s\n' "$pkg"; fi
+  done < <(pacman -Qqen)
+  printf '\n[aur]\n'
+  while read -r pkg; do
+    if [[ -z ${skip[$pkg]:-} && $pkg != "$DISTRO_ID"* ]] && ! hardware_package "$pkg"; then printf '%s\n' "$pkg"; fi
+  done < <(pacman -Qqem)
+  printf '\n[flatpak]\n'
+  if command -v flatpak >/dev/null; then flatpak list --app --columns=application 2>/dev/null || true; fi
+  printf '\n[settings]\n'
+  for id in "${export_keys[@]}"; do
+    value=$(setting "$id")
+    if [[ -n $value ]]; then printf '%s = %s\n' "$id" "$value"; fi
+  done
+}
+
+# Lines of one [section] of an exported list.
+section() { # section <file> <name>
+  awk -v s="[$2]" '/^\[/ { on = ($0 == s); next } on && NF && !/^#/' "$1"
+}
+
+import_apps() { # import_apps <file> [--dry-run] [--yes]
+  local file=$1 dry=0 yes=0 arg app pkg key value r
+  local -a catalog=() packages=() aur=() flatpaks=() settings=()
+  shift
+  for arg in "$@"; do
+    case $arg in --dry-run) dry=1 ;; --yes) yes=1 ;; *) die "unknown option: $arg" ;; esac
+  done
+  [[ -f $file ]] || die "no such file: $file"
+  while read -r app; do
+    r=$(row "$app") || true
+    if [[ -z $r ]]; then info "skipping unknown catalog app: $app"; continue; fi
+    IFS='|' read -r _ _ _ src target _ <<<"$r"
+    if ! is_installed "$app" "$src" "$target"; then catalog+=("$app"); fi
+  done < <(section "$file" catalog)
+  while read -r pkg; do
+    if ! pacman -Q "$pkg" >/dev/null 2>&1; then packages+=("$pkg"); fi
+  done < <(section "$file" packages)
+  while read -r pkg; do
+    if ! pacman -Q "$pkg" >/dev/null 2>&1; then aur+=("$pkg"); fi
+  done < <(section "$file" aur)
+  if command -v flatpak >/dev/null; then
+    while read -r app; do
+      if ! flatpak info "$app" >/dev/null 2>&1; then flatpaks+=("$app"); fi
+    done < <(section "$file" flatpak)
+  else
+    mapfile -t flatpaks < <(section "$file" flatpak)
+  fi
+  while IFS= read -r arg; do
+    key=$(trim "${arg%%=*}") value=$(trim "${arg#*=}")
+    if [[ " ${export_keys[*]} " == *" $key "* && $(setting "$key") != "$value" ]]; then settings+=("$key = $value"); fi
+  done < <(section "$file" settings)
+
+  info "From $file:"
+  info "  catalog apps: ${catalog[*]:-(nothing new)}"
+  info "  packages:     ${packages[*]:-(nothing new)}"
+  info "  AUR:          ${aur[*]:-(nothing new)}"
+  info "  Flatpak:      ${flatpaks[*]:-(nothing new)}"
+  info "  settings:     $(IFS=';'; printf '%s' "${settings[*]:-(unchanged)}")"
+  if (( dry )); then return 0; fi
+  if (( ! yes )); then
+    [[ -t 0 ]] || die "add --yes to import without asking"
+    read -rp "Install and apply all of this? [y/N] " r
+    [[ $r == [yY]* ]] || { info "Nothing changed."; return 0; }
+  fi
+  if (( ${#catalog[@]} )); then for app in "${catalog[@]}"; do install_one "$app"; done; fi
+  if (( ${#packages[@]} )); then install_packages "${packages[@]}"; fi
+  if (( ${#aur[@]} )); then aur_install "${aur[@]}"; fi
+  if (( ${#flatpaks[@]} )); then
+    if ! command -v flatpak >/dev/null; then install_packages flatpak; fi
+    flatpak install -y --noninteractive flathub "${flatpaks[@]}"
+  fi
+  for arg in "${settings[@]}"; do
+    key=${arg%% = *} value=${arg#* = }
+    case $key in
+      theme) "/usr/bin/$DISTRO_ID" theme set "$value" ;;
+      theme.mode) "/usr/bin/$DISTRO_ID" theme mode "$value" ;;
+      terminal) "/usr/bin/$DISTRO_ID" terminal set "$value" ;;
+      agent) "/usr/bin/$DISTRO_ID" agent set "$value" ;;
+      keyboard.layouts)
+        for app in ${value//,/ }; do "/usr/bin/$DISTRO_ID" keyboard add "$app" || true; done ;;
+    esac
+  done
+  info "Done."
+}
+
 case ${1:-} in
   list)
     if [[ -n ${2:-} ]]; then rows | awk -F'|' -v c="$2" '$2 == c' | print_rows
@@ -184,6 +306,11 @@ case ${1:-} in
   remove)
     shift; [[ $# -gt 0 ]] || die "remove which app?"
     for app in "$@"; do remove_one "$app"; done ;;
+  export)
+    if [[ -n ${2:-} ]]; then export_apps > "$2"; info "saved to $2"; else export_apps; fi ;;
+  import)
+    [[ -n ${2:-} ]] || die "import which file? (made by: $DISTRO_ID app export <file>)"
+    shift; import_apps "$@" ;;
   -h|--help|"") usage ;;
   *) die "unknown app command: $1" ;;
 esac

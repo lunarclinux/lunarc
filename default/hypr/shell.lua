@@ -40,6 +40,23 @@ hl.window_rule({
     no_anim = true,
 })
 
+-- The setup window (`@DISTRO_ID@ setup`) floats in the middle, like a dialog.
+hl.window_rule({
+    name = "setup",
+    match = { class = "^@DISTRO_ID@\\.setup$" },
+    float = true,
+    size = { 900, 640 },
+})
+
+-- Pika Backup floats too, so it can sit in front of the setup window while the
+-- user finishes setting up a backup there.
+hl.window_rule({
+    name = "pika-backup",
+    match = { class = "^org\\.gnome\\.World\\.PikaBackup$" },
+    float = true,
+    size = { 960, 720 },
+})
+
 -- Noctalia's settings window floats; its surfaces get blur and keep their own animations.
 hl.window_rule({
     name = "noctalia-settings",

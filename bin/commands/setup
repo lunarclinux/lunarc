@@ -1,7 +1,128 @@
 #!/usr/bin/env bash
-# summary: One-time setup steps (run automatically at first login)
+# summary: Set up this computer: backups and other first-login choices
 set -euo pipefail
 source "$DISTRO_LIB/lib.sh"
+source "$DISTRO_LIB/ui.sh"
+
+steps_dir=$SHARE/default/setup/steps.d
+state=$STATE_DIR/setup
+class=$DISTRO_ID.setup
+remind_after=$(( 3 * 24 * 3600 ))
+
+usage() {
+  cat <<USAGE
+Usage: $DISTRO_ID setup [command]
+
+  (none)            open the setup window: backups and other choices
+  backups           open the setup window at the backups step
+  welcome [--skip]  the setup screens (what the window runs); --skip answers
+                    "later" to everything without asking
+  first-login       what runs once at the first desktop login
+
+The steps are in $steps_dir (see its README).
+State is kept in $state.
+USAGE
+}
+
+record() { mkdir -p "$state"; printf '%s\n' "${2:-$(date -Is)}" > "$state/$1"; }
+recorded() { [[ -f $state/$1 ]]; }
+
+# A backup is set up when Pika Backup has a configured backup (or Kopia has a
+# repository).
+backups_configured() {
+  local config=${XDG_CONFIG_HOME:-$HOME/.config}
+  if [[ -s $config/pika-backup/config.json ]] && jq -e 'length > 0' "$config/pika-backup/config.json" >/dev/null 2>&1; then
+    return 0
+  fi
+  [[ -f $config/kopia/repository.config ]]
+}
+
+# "Later": remember it and set up exactly one reminder, a few days from now.
+backups_skipped() {
+  record backups skipped
+  if ! recorded remind-at && ! recorded reminded; then
+    record remind-at "$(( $(date +%s) + remind_after ))"
+  fi
+}
+
+open_pika_setup() {
+  if ! command -v pika-backup >/dev/null; then install_packages pika-backup; fi
+  # Pika Backup is D-Bus activatable: start it, then its "setup" action opens
+  # "Set Up Backup Repository" (the action needs the main window first).
+  if gapplication launch org.gnome.World.PikaBackup >/dev/null 2>&1; then
+    sleep 1
+    gapplication action org.gnome.World.PikaBackup setup >/dev/null 2>&1 || true
+    # In front of the setup window (both float), so its dialog isn't hidden.
+    hyprctl dispatch 'hl.dsp.focus({ window = "class:^org\\.gnome\\.World\\.PikaBackup$" })' >/dev/null 2>&1 || true
+  else
+    setsid -f pika-backup >/dev/null 2>&1
+  fi
+}
+
+# The steps in order, leaving out those that say they don't apply.
+active_steps() {
+  local file
+  for file in "$steps_dir"/*.sh; do
+    [[ -f $file ]] || continue
+    if ( source "$file"; ! declare -F step_applies >/dev/null || step_applies ); then printf '%s\n' "$file"; fi
+  done
+}
+
+welcome() { # welcome [--skip] [--only <step name>]
+  local skip=0 only='' file n=0
+  local -a steps
+  while (( $# )); do
+    case $1 in
+      --skip) skip=1; shift ;;
+      --only) only=$2; shift 2 ;;
+      *) die "unknown option: $1" ;;
+    esac
+  done
+  if [[ -n $only ]]; then
+    mapfile -t steps < <(compgen -G "$steps_dir/*-$only.sh" || true)
+  else
+    mapfile -t steps < <(active_steps)
+  fi
+  ui_init
+  for file in "${steps[@]}"; do
+    n=$(( n + 1 ))
+    if (( skip )); then
+      ( source "$file"; if declare -F step_skip >/dev/null; then step_skip; fi )
+    elif ! ( STEP=$n STEPS=${#steps[@]}; source "$file"; step_run ); then
+      # Closed or Ctrl+C: stop here; the menu can open it again.
+      return 0
+    fi
+  done
+  if [[ -z $only ]]; then record finished; fi
+}
+
+# The setup window: a Ghostty window running the screens above.
+open_window() { # open_window [welcome arguments...]
+  local -a window=(ghostty --class="$class" --title="Set up $DISTRO_NAME" --font-size=12
+    --confirm-close-surface=false --cursor-style-blink=false -e "/usr/bin/$DISTRO_ID" setup welcome "$@")
+  if pgrep -f -- "^(/usr/bin/)?ghostty --class=$class( |\$)" >/dev/null; then return 0; fi
+  # A unit of its own, so it outlives the first-login service that opens it.
+  if ! systemd-run --user --quiet --collect --slice=app-graphical.slice \
+      --unit="$DISTRO_ID-setup-window-$$" -- "${window[@]}" >/dev/null 2>&1; then
+    setsid -f bash -c 'source "$DISTRO_LIB/lib.sh"; launch_app "$@"' _ "${window[@]}" >/dev/null 2>&1
+  fi
+}
+
+# Once, a few days after "Later": a notification with a button that opens the
+# backups step. A timer checks; it is never shown twice.
+remind_backups() {
+  local due action
+  recorded remind-at || return 0
+  recorded reminded && return 0
+  due=$(<"$state/remind-at")
+  (( $(date +%s) >= due )) || return 0
+  record reminded
+  if backups_configured; then return 0; fi
+  action=$(notify-send -a "$DISTRO_NAME" -i drive-harddisk -w -t 0 -A backups="Set up backups" \
+    "Backups aren't set up" \
+    "Your files are only on this computer. Setting up Pika Backup takes a few minutes." 2>/dev/null || true)
+  if [[ $action == backups ]]; then open_window --only backups; fi
+}
 
 # Weather location from the time zone: its city name (only that is looked up
 # online), and imperial units where those are the norm.
@@ -18,18 +139,32 @@ weather_location() {
     "$city" "$unit" >> "$config"
 }
 
-case ${1:-} in
-  first-login)
-    done_file=$STATE_DIR/first-login-done
-    [[ -f $done_file ]] && exit 0
-    # Shell defaults first, so the theme below also renders the prompt and editor colours.
-    "/usr/bin/$DISTRO_ID" shell defaults on >/dev/null || true
-    "/usr/bin/$DISTRO_ID" theme set "$(setting theme moonlit)"
-    weather_location
-    mkdir -p "$STATE_DIR"; date -Is > "$done_file"
+first_login() {
+  local done_file=$STATE_DIR/first-login-done
+  [[ -f $done_file ]] && return 0
+  # Shell defaults first, so the theme below also renders the prompt and editor colours.
+  "/usr/bin/$DISTRO_ID" shell defaults on >/dev/null || true
+  "/usr/bin/$DISTRO_ID" theme set "$(setting theme moonlit)"
+  weather_location
+  mkdir -p "$STATE_DIR"; date -Is > "$done_file"
+  # The live system has nothing to keep; installed systems get the setup window.
+  if [[ -d /run/archiso ]] || recorded finished; then
     notify-send -a "$DISTRO_NAME" "Welcome to $DISTRO_NAME" \
-      "SUPER+ALT+Space: menu. SUPER+Space: apps. SUPER+Return: terminal. SUPER+K: all shortcuts. SUPER+W: close a window. SUPER+L: lock.
-Run '$DISTRO_ID help' in a terminal for the command-line tools." 2>/dev/null || true ;;
-  -h|--help|"") echo "Usage: $DISTRO_ID setup first-login" ;;
-  *) die "unknown setup step: $1" ;;
+      "SUPER+ALT+Space: menu. SUPER+Space: apps. SUPER+Return: terminal. SUPER+K: all shortcuts. SUPER+L: lock." 2>/dev/null || true
+  else
+    # Applying the theme makes Noctalia tell every Ghostty to reload (SIGUSR2);
+    # a Ghostty still starting up dies from it, so let that pass first.
+    sleep 4
+    open_window
+  fi
+}
+
+case ${1:-} in
+  "") open_window ;;
+  backups) open_window --only backups ;;
+  welcome) shift; welcome "$@" ;;
+  remind-backups) remind_backups ;;
+  first-login) first_login ;;
+  -h|--help) usage ;;
+  *) die "unknown setup command: $1" ;;
 esac
