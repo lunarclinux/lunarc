@@ -113,7 +113,10 @@ mkdir -p /tmp/win/EFI/Microsoft/Boot /tmp/win/EFI/Boot
 # A real EFI program stands in for Windows Boot Manager: firmware (OVMF, and
 # real machines) may drop boot entries whose file isn't a valid EFI image,
 # which a real Windows install never has. The live ISO's systemd-boot will do.
-efi=$(ls /usr/lib/systemd/boot/efi/systemd-bootx64.efi /usr/share/limine/BOOTX64.EFI 2>/dev/null | head -1)
+efi=''
+for f in /usr/lib/systemd/boot/efi/systemd-bootx64.efi /run/archiso/bootmnt/EFI/BOOT/BOOTx64.EFI /run/archiso/bootmnt/EFI/BOOT/BOOTX64.EFI; do
+  if [ -f "$f" ]; then efi=$f; break; fi
+done
 [ -n "$efi" ] || { echo "no EFI binary on the live ISO to stand in for Windows" >&2; exit 1; }
 cp "$efi" /tmp/win/EFI/Microsoft/Boot/bootmgfw.efi
 cp /tmp/win/EFI/Microsoft/Boot/bootmgfw.efi /tmp/win/EFI/Boot/bootx64.efi
