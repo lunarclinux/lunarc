@@ -58,6 +58,8 @@ SUPER+ALT+Space (or `/m` in the launcher). Type part of a name and press Enter t
 | `lunarc agent launch` / `prompt "<text>"` | Open the agent in a terminal |
 | `lunarc agent usage` | Tokens per day and model; also in the bar (✦) |
 | `lunarc crash list` / `show` / `diagnose` / `resolve` | The crash list; also the bug icon in the bar |
+| `lunarc shell defaults on\|off` / `shell set bash\|zsh\|fish` | Shell defaults (prompt, `z`, `ll`, Ctrl+R search) and your login shell |
+| `lunarc dev docker` / `dev lang node` / `dev db add postgres` | Docker, language runtimes (mise) and local databases |
 | `lunarc app list` / `search <word>` / `install <app>` | Browse and install apps: browsers, editors, AI (Claude, ChatGPT, Ollama, Hermes), games (Steam, Lutris, Heroic), chat and more |
 | `lunarc update` / `update check` | Update everything / see what's waiting |
 | `lunarc capture screenshot\|record\|stop\|color\|text\|qr` | Screenshots (`~/Pictures/Screenshots`), recordings (`~/Videos/Recordings`), colour picker, copy text or a QR code from the screen |
@@ -68,6 +70,11 @@ SUPER+ALT+Space (or `/m` in the launcher). Type part of a name and press Enter t
 | `lunarc screensaver effects` / `preview [effect]` | List the screensaver's effects / play one now (any key closes it) |
 
 Settings for these live in `~/.config/lunarc/settings` (`key = value`); defaults are in `/usr/share/lunarc/default/settings`.
+
+## Editing files in the terminal
+`micro` is the default editor (`$EDITOR`; git and `sudoedit` use it). It works like a desktop text editor: **Ctrl+S** save, **Ctrl+Q** quit, **Ctrl+C / Ctrl+X / Ctrl+V** copy, cut, paste (the system clipboard), **Ctrl+Z** undo, **Ctrl+F** find, the mouse to select and scroll. A few nano keys work too: **Ctrl+W** find, **Ctrl+K** cut the line, **Ctrl+U** paste. **Ctrl+E** opens micro's command bar (`help keybindings`, `set tabsize 2`); **Alt+G** shows the key list at the bottom. Its colours follow the theme.
+
+nano is installed as well, with colours, line numbers and Ctrl+S to save. Prefer another editor? `lunarc app install msedit` (Microsoft's Edit), `helix` or `neovim`, then set `EDITOR` in `~/.config/environment.d/editor.conf` (for example `EDITOR=nano`).
 
 ## Where things are
 

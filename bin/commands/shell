@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# summary: Shell defaults (prompt, history, smarter cd and ls) and login shell
+set -euo pipefail
+source "$DISTRO_LIB/lib.sh"
+
+defaults_dir=$SHARE/default
+marker="# $DISTRO_NAME shell defaults"
+
+usage() {
+  cat <<USAGE
+Usage: $DISTRO_ID shell <command>
+
+  defaults on|off    add or remove the distro's shell defaults in your shell's rc file
+                     (starship prompt, z, eza for ls, fzf on Ctrl+R / Ctrl+T, history)
+  status             which shell you use and whether the defaults are on
+  set bash|zsh|fish  change your login shell (installs it if needed) and carry the defaults over
+USAGE
+}
+
+login_shell() { basename "$(getent passwd "$USER" | cut -d: -f7)"; }
+
+# rc_file <shell>: the file that loads the defaults; empty for fish (it uses conf.d).
+rc_file() {
+  case $1 in
+    bash) echo "$HOME/.bashrc" ;;
+    zsh) echo "${ZDOTDIR:-$HOME}/.zshrc" ;;
+    fish) echo "" ;;
+    *) die "unsupported shell: $1" ;;
+  esac
+}
+fish_link() { echo "${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/$DISTRO_ID.fish"; }
+
+defaults_on() { # defaults_on <shell>
+  local rc
+  if [[ $1 == fish ]]; then
+    mkdir -p "$(dirname "$(fish_link)")"
+    ln -sfn "$defaults_dir/fish/conf.fish" "$(fish_link)"
+    return
+  fi
+  rc=$(rc_file "$1")
+  touch "$rc"
+  if ! grep -qF "$marker" "$rc"; then
+    printf '\n%s (remove with: %s shell defaults off)\n[[ -r %s ]] && source %s\n' \
+      "$marker" "$DISTRO_ID" "$defaults_dir/$1/rc" "$defaults_dir/$1/rc" >> "$rc"
+  fi
+}
+
+defaults_off() { # defaults_off <shell>
+  local rc
+  if [[ $1 == fish ]]; then rm -f "$(fish_link)"; return; fi
+  rc=$(rc_file "$1")
+  if [[ -f $rc ]]; then
+    # Drop the marker line and the source line after it.
+    sed -i "/^$(printf '%s' "$marker" | sed 's/[]\/$*.^[]/\\&/g')/,+1d" "$rc"
+  fi
+}
+
+defaults_state() { # defaults_state <shell>
+  if [[ $1 == fish ]]; then
+    if [[ -L $(fish_link) ]]; then echo on; else echo off; fi
+    return
+  fi
+  if grep -qsF "$marker" "$(rc_file "$1")"; then echo on; else echo off; fi
+}
+
+case ${1:-} in
+  defaults)
+    sh=$(login_shell)
+    case ${2:-} in
+      on) defaults_on "$sh"; info "shell defaults on for $sh (open a new terminal)" ;;
+      off) defaults_off "$sh"; info "shell defaults off for $sh (open a new terminal)" ;;
+      *) die "usage: $DISTRO_ID shell defaults on|off" ;;
+    esac ;;
+  status)
+    sh=$(login_shell)
+    info "login shell: $sh"
+    info "distro defaults: $(defaults_state "$sh")" ;;
+  set)
+    new=${2:-}
+    case $new in bash|zsh|fish) ;; *) die "usage: $DISTRO_ID shell set bash|zsh|fish" ;; esac
+    path=/usr/bin/$new
+    if [[ ! -x $path ]]; then install_packages "$new"; fi
+    old=$(login_shell)
+    if [[ $old != "$new" ]]; then
+      info "changing your login shell to $new (asks for your password)"
+      chsh -s "$path"
+    fi
+    if [[ $(defaults_state "$old") == on ]]; then defaults_on "$new"; fi
+    info "login shell: $new (takes effect in new terminals; log out and in for everything)" ;;
+  -h|--help|"") usage ;;
+  *) die "unknown shell command: $1" ;;
+esac

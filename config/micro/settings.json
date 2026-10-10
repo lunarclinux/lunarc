@@ -1,0 +1,39 @@
+{
+    "colorscheme": "noctalia",
+    "clipboard": "external",
+    "mouse": true,
+    "ruler": true,
+    "cursorline": true,
+    "scrollbar": true,
+    "diffgutter": true,
+    "savecursor": true,
+    "saveundo": true,
+    "autosave": 0,
+    "tabsize": 4,
+    "tabstospaces": true,
+    "eofnewline": true,
+    "rmtrailingws": false,
+    "*.md": {
+        "softwrap": true,
+        "wordwrap": true
+    },
+    "*.txt": {
+        "softwrap": true,
+        "wordwrap": true
+    },
+    "ft:go": {
+        "tabstospaces": false
+    },
+    "ft:makefile": {
+        "tabstospaces": false
+    },
+    "ft:yaml": {
+        "tabsize": 2
+    },
+    "ft:json": {
+        "tabsize": 2
+    },
+    "ft:lua": {
+        "tabsize": 4
+    }
+}

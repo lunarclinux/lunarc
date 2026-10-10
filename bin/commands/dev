@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+# summary: Developer setup: Docker, language runtimes (mise) and local databases
+set -euo pipefail
+source "$DISTRO_LIB/lib.sh"
+
+usage() {
+  cat <<USAGE
+Usage: $DISTRO_ID dev <command>
+
+  docker                 install Docker (with Compose and Buildx), start it, add you to the docker group
+  lang <tool[@version]>  install a language runtime with mise, e.g. node, python, go@1.23
+  db list                databases this command manages, and whether they run
+  db add <name>          start a database in Docker: postgres, mariadb or redis
+  db remove <name>       stop and delete it (asks first; its data volume too)
+  status <thing>         exit 0 if docker / lang:<tool> / db:<name> is set up (used by '$DISTRO_ID app')
+
+Databases listen on localhost only, restart with the computer and keep their
+data in a named Docker volume. Passwords are in ~/.config/$DISTRO_ID/databases.
+USAGE
+}
+
+as_root() { if [[ -t 0 ]]; then sudo "$@"; else pkexec "$@"; fi; }
+
+docker_ready() { pacman -Q docker >/dev/null 2>&1 && id -nG "$USER" | tr ' ' '\n' | grep -qx docker; }
+
+setup_docker() {
+  install_packages docker docker-compose docker-buildx
+  as_root systemctl enable --now docker.socket
+  if ! id -nG "$USER" | tr ' ' '\n' | grep -qx docker; then
+    as_root usermod -aG docker "$USER"
+    info "added $USER to the docker group: log out and back in before using docker without sudo"
+  fi
+}
+
+ensure_mise() {
+  if ! command -v mise >/dev/null; then install_packages mise; fi
+}
+
+# name | image | port | env needing a password | data path in the container
+databases=(
+  "postgres|docker.io/library/postgres:17|5432|POSTGRES_PASSWORD|/var/lib/postgresql/data"
+  "mariadb|docker.io/library/mariadb:11|3306|MARIADB_ROOT_PASSWORD|/var/lib/mysql"
+  "redis|docker.io/library/redis:7|6379||/data"
+)
+db_row() { local r; for r in "${databases[@]}"; do if [[ ${r%%|*} == "$1" ]]; then echo "$r"; return; fi; done; return 1; }
+container() { echo "$DISTRO_ID-$1"; }
+secrets_dir=${XDG_CONFIG_HOME:-$HOME/.config}/$DISTRO_ID/databases
+
+docker_cmd() {
+  if docker info >/dev/null 2>&1; then docker "$@"; else as_root docker "$@"; fi
+}
+
+db_exists() { docker_cmd ps -a --format '{{.Names}}' 2>/dev/null | grep -qx "$(container "$1")"; }
+
+db_add() {
+  local name=$1 row image port envvar data pass args
+  row=$(db_row "$name") || die "unknown database: $name (postgres, mariadb, redis)"
+  IFS='|' read -r name image port envvar data <<<"$row"
+  if ! pacman -Q docker >/dev/null 2>&1; then setup_docker; fi
+  if db_exists "$name"; then info "$name is already set up ($(container "$name"))"; return; fi
+  args=(run -d --name "$(container "$name")" --restart unless-stopped
+        -p "127.0.0.1:$port:$port" -v "$(container "$name")-data:$data")
+  if [[ -n $envvar ]]; then
+    mkdir -p "$secrets_dir"; chmod 700 "$secrets_dir"
+    pass=$(head -c 18 /dev/urandom | base64 | tr -dc 'A-Za-z0-9')
+    (umask 077; printf '%s\n' "$pass" > "$secrets_dir/$name")
+    args+=(-e "$envvar=$pass")
+  fi
+  docker_cmd "${args[@]}" "$image" >/dev/null
+  info "$name is running on localhost:$port"
+  if [[ -n $envvar ]]; then info "password: $secrets_dir/$name"; fi
+}
+
+db_remove() {
+  local name=$1 answer
+  db_row "$name" >/dev/null || die "unknown database: $name"
+  if ! db_exists "$name"; then info "$name isn't set up"; return; fi
+  read -rp "Delete $name and all its data? [y/N] " answer
+  [[ $answer == [yY]* ]] || { info "kept $name"; return; }
+  docker_cmd rm -f "$(container "$name")" >/dev/null
+  docker_cmd volume rm "$(container "$name")-data" >/dev/null || true
+  rm -f "$secrets_dir/$name"
+  info "removed $name"
+}
+
+db_list() {
+  local r name state
+  for r in "${databases[@]}"; do
+    name=${r%%|*}
+    state="not set up"
+    if pacman -Q docker >/dev/null 2>&1 && db_exists "$name"; then
+      state=$(docker_cmd inspect -f '{{.State.Status}}' "$(container "$name")" 2>/dev/null || echo unknown)
+    fi
+    printf '  %-8s %s\n' "$name" "$state"
+  done
+}
+
+case ${1:-} in
+  docker) setup_docker ;;
+  lang)
+    [[ -n ${2:-} ]] || die "which language? e.g. $DISTRO_ID dev lang node"
+    ensure_mise
+    mise use -g "$2"
+    info "installed $2 for your user (new terminals pick it up)" ;;
+  db)
+    case ${2:-} in
+      list) db_list ;;
+      add) [[ -n ${3:-} ]] || die "which database? postgres, mariadb or redis"; db_add "$3" ;;
+      remove) [[ -n ${3:-} ]] || die "which database?"; db_remove "$3" ;;
+      *) die "usage: $DISTRO_ID dev db list|add|remove <name>" ;;
+    esac ;;
+  status)
+    case ${2:-} in
+      docker) docker_ready ;;
+      lang:*) tool=${2#lang:}; command -v mise >/dev/null && mise ls --global --installed "${tool%%@*}" 2>/dev/null | grep -q . ;;
+      # Without sudo: a list must never prompt for a password.
+      db:*) docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx "$(container "${2#db:}")" ;;
+      *) die "usage: $DISTRO_ID dev status docker|lang:<tool>|db:<name>" ;;
+    esac ;;
+  -h|--help|"") usage ;;
+  *) die "unknown dev command: $1" ;;
+esac

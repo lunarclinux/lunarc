@@ -68,6 +68,8 @@ is_installed() { # is_installed <id> <source> <target>
   case $2 in
     web) [[ -f $webapps/$DISTRO_ID-web-$1.desktop ]] ;;
     agent) command -v "$3" >/dev/null ;;
+    mise) "/usr/bin/$DISTRO_ID" dev status "lang:$3" ;;
+    dev) "/usr/bin/$DISTRO_ID" dev status "$3" ;;
     *) pkgs=$(packages_for "$2" "$3"); [[ -n $pkgs ]] && pacman -Q "${pkgs%% *}" >/dev/null 2>&1 ;;
   esac
 }
@@ -126,6 +128,13 @@ install_one() {
     aur) read -ra pkgs <<<"$target"; aur_install "${pkgs[@]}" ;;
     web) web_install "$id" "$name" "$target" ;;
     agent) "/usr/bin/$DISTRO_ID" agent install "$target" ;;
+    mise) "/usr/bin/$DISTRO_ID" dev lang "$target" ;;
+    dev)
+      case $target in
+        docker) "/usr/bin/$DISTRO_ID" dev docker ;;
+        db:*) "/usr/bin/$DISTRO_ID" dev db add "${target#db:}" ;;
+        *) die "catalog: $id has an unknown dev target '$target'" ;;
+      esac ;;
     *) die "catalog: $id has an unknown source '$src'" ;;
   esac
 }
@@ -138,6 +147,13 @@ remove_one() {
   case $src in
     web) rm -f "$webapps/$DISTRO_ID-web-$id.desktop"; info "removed $name from the launcher" ;;
     agent) die "coding agents are managed with: $DISTRO_ID agent" ;;
+    mise) mise unuse -g "$target" ;;
+    dev)
+      case $target in
+        db:*) "/usr/bin/$DISTRO_ID" dev db remove "${target#db:}" ;;
+        *) read -ra pkgs <<<"docker docker-compose docker-buildx"
+           if [[ -t 0 ]]; then sudo pacman -Rns "${pkgs[@]}"; else pkexec pacman -Rns --noconfirm "${pkgs[@]}"; fi ;;
+      esac ;;
     *)
       read -ra pkgs <<<"$(packages_for "$src" "$target")"
       if [[ -t 0 ]]; then sudo pacman -Rns "${pkgs[@]}"; else pkexec pacman -Rns --noconfirm "${pkgs[@]}"; fi ;;

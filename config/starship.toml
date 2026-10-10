@@ -1,0 +1,26 @@
+# Prompt: folder, git status, language versions, how long the last command took.
+# Colours come from the theme (Noctalia keeps the palette block at the end).
+"$schema" = 'https://starship.rs/config-schema.json'
+add_newline = true
+
+format = "$directory$git_branch$git_status$nodejs$python$ruby$golang$rust$java$cmd_duration$line_break$character"
+
+[directory]
+style = "bold blue"
+truncation_length = 3
+truncate_to_repo = true
+
+[git_branch]
+symbol = " "
+style = "purple"
+
+[git_status]
+style = "yellow"
+
+[cmd_duration]
+min_time = 2000
+style = "dimmed white"
+
+[character]
+success_symbol = "[❯](bold yellow)"
+error_symbol = "[❯](bold red)"

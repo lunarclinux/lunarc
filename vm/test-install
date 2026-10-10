@@ -149,6 +149,9 @@ fi
 if "$here/ssh" "$vm" "$user" -- "pacman -Q firefox >/dev/null 2>&1"; then
   check "default apps installed"        "pacman -Q firefox nautilus gnome-text-editor papers loupe showtime decibels gnome-calculator btop >/dev/null"
   check "app catalog lists apps"        "$id app list | grep -q steam && $id app search claude | grep -q claude-desktop"
+  check "default editor is micro"       "command -v micro >/dev/null && [ \"\$(bash -lc 'echo \$EDITOR')\" = micro ] && systemctl --user show-environment | grep -qx EDITOR=micro"
+  check "shell defaults active"         "grep -q 'shell defaults' ~/.bashrc && bash -ic 'alias ll && type z && type starship_precmd' >/dev/null 2>&1"
+  check "app catalog has dev tools"     "$id app list dev | grep -q docker && $id app list dev | grep -q postgres"
   check "bluetooth service enabled"     "systemctl is-enabled --quiet bluetooth"
   check "VM has no vendor GPU drivers"  "! pacman -Q vulkan-radeon nvidia-utils vulkan-intel 2>/dev/null | grep -q ."
 fi
@@ -187,6 +190,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     check "notifications can be sent"    "$hypr"' notify-send "Test" "Hello from the install test"'
     check "shell answers its IPC"        "$hypr"' noctalia msg status >/dev/null'
     check "shell config has no errors"   "$hypr"' noctalia config validate 2>&1 | tail -3; noctalia config validate >/dev/null 2>&1'
+    check "editor follows the theme"     "grep -q 'rendered by Noctalia' ~/.config/micro/colorschemes/noctalia.micro && ! grep -q '{{' ~/.config/micro/colorschemes/noctalia.micro"
     check "distro shell defaults applied" "$hypr"' noctalia config export | grep -qE "^polkit_agent *= *true"'
     check "clutter hidden from launcher"  "grep -q '^NoDisplay=true' /usr/local/share/applications/avahi-discover.desktop 2>/dev/null || grep -q '^NoDisplay=true' /usr/share/$id/xdg/applications/avahi-discover.desktop"
     # Every launcher entry must be one we mean to show; new dependency clutter fails here.

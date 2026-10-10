@@ -22,6 +22,8 @@ case ${1:-} in
   first-login)
     done_file=$STATE_DIR/first-login-done
     [[ -f $done_file ]] && exit 0
+    # Shell defaults first, so the theme below also renders the prompt and editor colours.
+    "/usr/bin/$DISTRO_ID" shell defaults on >/dev/null || true
     "/usr/bin/$DISTRO_ID" theme set "$(setting theme moonlit)"
     weather_location
     mkdir -p "$STATE_DIR"; date -Is > "$done_file"
