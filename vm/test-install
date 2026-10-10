@@ -172,7 +172,7 @@ if [[ -n $iso ]]; then
   check "installed from the ISO's installer" "pacman -Q $id | grep -q ."
 fi
 if "$here/ssh" "$vm" "$user" -- "pacman -Q firefox >/dev/null 2>&1"; then
-  check "default apps installed"        "pacman -Q firefox nautilus gnome-text-editor papers loupe showtime decibels gnome-calculator btop >/dev/null"
+  check "default apps installed"        "pacman -Q firefox nautilus gnome-text-editor papers loupe showtime decibels gnome-calculator btop pika-backup >/dev/null"
   check "app catalog lists apps"        "$id app list | grep -q steam && $id app search claude | grep -q claude-desktop"
   check "default editor is micro"       "command -v micro >/dev/null && [ \"\$(bash -lc 'echo \$EDITOR')\" = micro ] && systemctl --user show-environment | grep -qx EDITOR=micro"
   check "shell defaults active"         "grep -q 'shell defaults' ~/.bashrc && bash -ic 'alias ll && type z && type starship_precmd' >/dev/null 2>&1"
@@ -219,7 +219,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     check "distro shell defaults applied" "$hypr"' noctalia config export | grep -qE "^polkit_agent *= *true"'
     check "clutter hidden from launcher"  "grep -q '^NoDisplay=true' /usr/local/share/applications/avahi-discover.desktop 2>/dev/null || grep -q '^NoDisplay=true' /usr/share/$id/xdg/applications/avahi-discover.desktop"
     # Every launcher entry must be one we mean to show; new dependency clutter fails here.
-    check "launcher shows only intended apps" "for f in /usr/share/applications/*.desktop; do n=\${f##*/}; grep -q '^NoDisplay=true' \"\$f\" && continue; [ -f /usr/share/$id/xdg/applications/\$n ] && continue; echo \$n; done | sort | tr '\\n' ' ' | tee /dev/stderr | grep -qxE '(btop.desktop |com.mitchellh.ghostty.desktop |dev.noctalia.Noctalia.desktop |firefox.desktop |org.gnome.Calculator.desktop |org.gnome.Decibels.desktop |org.gnome.Loupe.desktop |org.gnome.Nautilus.desktop |org.gnome.Papers.desktop |org.gnome.Showtime.desktop |org.gnome.TextEditor.desktop |org.wezfurlong.wezterm.desktop )+'"
+    check "launcher shows only intended apps" "for f in /usr/share/applications/*.desktop; do n=\${f##*/}; grep -q '^NoDisplay=true' \"\$f\" && continue; [ -f /usr/share/$id/xdg/applications/\$n ] && continue; echo \$n; done | sort | tr '\\n' ' ' | tee /dev/stderr | grep -qxE '(btop.desktop |com.mitchellh.ghostty.desktop |dev.noctalia.Noctalia.desktop |firefox.desktop |org.gnome.Calculator.desktop |org.gnome.Decibels.desktop |org.gnome.Loupe.desktop |org.gnome.Nautilus.desktop |org.gnome.Papers.desktop |org.gnome.Showtime.desktop |org.gnome.World.PikaBackup.desktop |org.gnome.TextEditor.desktop |org.wezfurlong.wezterm.desktop )+'"
     check "launcher opens"               "$hypr"' noctalia msg panel-open launcher'
   else
     check "polkit agent running"         'systemctl --user is-active --quiet hyprpolkitagent'
@@ -248,6 +248,18 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     for _ in $(seq 20); do "$here/ssh" "$vm" "$user" -- "test -f ~/.local/state/$id/first-login-done" && break; sleep 2; done
     check "CLI lists its commands"        "$id help | grep -q theme"
     check "first-login setup ran"         "test -f ~/.local/state/$id/first-login-done"
+    # The setup window opens once at first login: welcome, then backups.
+    check "setup window opens at first login" "$hypr for i in \$(seq 20); do hyprctl clients -j | jq -e '.[] | select(.class == \"$id.setup\")' >/dev/null && exit 0; sleep 1; done; exit 1"
+    screenshot setup-welcome
+    check "setup goes on to backups"      "$hypr hyprctl dispatch 'hl.dsp.focus({ window = \"class:^$id.setup\$\" })' >/dev/null; sleep 0.5; wtype -k Return; sleep 1.5; true"
+    screenshot setup-backups
+    check "backups step opens Pika's setup" "$hypr pkill -f -- '--class=$id.setup' ; gapplication action org.gnome.World.PikaBackup setup; for i in \$(seq 20); do hyprctl clients -j | jq -e '.[] | select(.class | test(\"PikaBackup\"))' >/dev/null && exit 0; sleep 1; done; exit 1"
+    screenshot pika-setup
+    check "\"Later\" schedules one reminder" "$hypr pkill -f pika-backup; rm -rf ~/.local/state/$id/setup; $id setup welcome --skip && test -f ~/.local/state/$id/setup/finished && grep -qx skipped ~/.local/state/$id/setup/backups && due=\$(cat ~/.local/state/$id/setup/remind-at) && [ \$(( due - \$(date +%s) )) -gt 250000 ] && systemctl --user is-active --quiet $id-setup-reminder.timer"
+    check "reminder waits until it's due" "$id setup remind-backups && ! test -f ~/.local/state/$id/setup/reminded"
+    check "reminder shows once, never again" "$hypr echo 0 > ~/.local/state/$id/setup/remind-at; timeout 5 $id setup remind-backups; test -f ~/.local/state/$id/setup/reminded && r1=\$(stat -c %Y ~/.local/state/$id/setup/reminded) && sleep 1 && $id setup remind-backups && [ \$(stat -c %Y ~/.local/state/$id/setup/reminded) = \$r1 ]"
+    check "app export lists an added package" "pacman -Q tree >/dev/null 2>&1 || echo '$password' | sudo -S -p '' pacman -S --noconfirm tree >/dev/null; $id app export /tmp/apps.txt >/dev/null && awk '/^\\[packages\\]/{on=1;next} /^\\[/{on=0} on' /tmp/apps.txt | grep -qx tree && grep -q '^theme = ' /tmp/apps.txt && ! grep -qiE 'password|token|secret' /tmp/apps.txt"
+    check "app import previews what's missing" "printf '[packages]\\ncowsay\\n[catalog]\\nobsidian\\n[settings]\\ntheme = nord\\n' > /tmp/import.txt && out=\$($id app import /tmp/import.txt --dry-run) && grep -q cowsay <<<\"\$out\" && grep -q obsidian <<<\"\$out\" && grep -q 'theme = nord' <<<\"\$out\" && ! pacman -Q cowsay >/dev/null 2>&1"
     check "default theme applied"         "$hypr $id theme current | grep -q '^moonlit (dark)'; noctalia msg color-scheme-get | grep -q 'custom $id-moonlit'"
     check "terminal theme generated"      'test -s ~/.config/ghostty/themes/noctalia'
     check "Hyprland borders from theme"   "$hypr test -s ~/.config/hypr/noctalia.lua && grep -q 'ebc77a' ~/.config/hypr/noctalia.lua"
