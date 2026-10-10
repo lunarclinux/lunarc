@@ -3,9 +3,11 @@
 # with the live ISO), installs a git ref over SSH, reboots into the installed
 # system and runs checks.
 #
-#   vm/test-install [--vm distro-clean] [--from l0-complete] [--ref HEAD] [--keep] [--iso VOLUME] [--encrypt]
+#   vm/test-install [--vm distro-clean] [--from l0-complete] [--ref HEAD] [--keep] [--iso VOLUME] [--encrypt] [--rollback]
 #
 # --encrypt installs onto LUKS and types the passphrase at boot (virsh send-key).
+# --rollback ends by rolling back a package install and rebooting into the
+# restored system (not with --encrypt).
 #
 # --iso boots the VM from an installer ISO in libvirt's default pool (built by
 # iso/build) and runs the installer bundled in it, instead of copying a git ref.
@@ -14,13 +16,14 @@
 set -euo pipefail
 export LIBVIRT_DEFAULT_URI=qemu:///system
 here=$(cd "$(dirname "$0")" && pwd); repo=$(dirname "$here")
-vm=distro-clean from=l0-complete ref=HEAD keep=0 iso="" encrypt=0
+vm=distro-clean from=l0-complete ref=HEAD keep=0 iso="" encrypt=0 rollback=0
 while [[ $# -gt 0 ]]; do
   case $1 in
     --vm) vm=$2; shift 2 ;; --from) from=$2; shift 2 ;;
     --ref) ref=$2; shift 2 ;; --keep) keep=1; shift ;;
     --iso) iso=$2; shift 2 ;;
     --encrypt) encrypt=1; shift ;;
+    --rollback) rollback=1; shift ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -48,6 +51,7 @@ wait_ssh root 300
 log "live ISO reachable"
 
 id=$(. "$repo/distro.conf"; echo "$DISTRO_ID")
+repo_url=$(. "$repo/distro.conf"; . "$repo/repo.conf"; echo "$REPO_URL")
 if [[ -z $iso ]]; then
   tarball=$(mktemp); trap 'rm -f "$tarball"' EXIT
   git -C "$repo" archive --format=tar.gz -o "$tarball" "$ref"
@@ -136,6 +140,10 @@ if "$here/ssh" "$vm" "$user" -- "pacman -Q $id >/dev/null 2>&1"; then
   check "hidden apps dir in XDG_DATA_DIRS" "systemctl --user show-environment | grep -q '^XDG_DATA_DIRS=/usr/share/$id/xdg'"
   check "system names itself (os-release)" ". /etc/os-release; [ \"\$ID\" = $id ] && [ \"\$ID_LIKE\" = arch ] && [ -n \"\$NAME\" ]"
   check "signing key trusted"            "pacman -Q $id-keyring >/dev/null && echo '$password' | sudo -S -p '' pacman-key --list-keys $(cat "$repo/pkg/keyring/fingerprint") >/dev/null"
+  check "package repository enabled, signed" "grep -A2 '^\\[$id\\]\$' /etc/pacman.conf | grep -qx 'SigLevel = Required' && grep -A2 '^\\[$id\\]\$' /etc/pacman.conf | grep -qx 'Server = $repo_url'"
+  check "snapshots configured (@snapshots)" "[ \"\$(findmnt -no FSROOT /.snapshots)\" = /@snapshots ] && echo '$password' | sudo -S -p '' snapper -c root get-config | grep TIMELINE_CREATE | grep -qw no"
+  check "a package install takes snapshots" "echo '$password' | sudo -S -p '' pacman -S --noconfirm tree >/dev/null && echo '$password' | sudo -S -p '' snapper -c root --csvout list --columns type,description | grep -q '^pre,.*tree' && echo '$password' | sudo -S -p '' snapper -c root --csvout list --columns type | grep -qx post"
+  check "rollback dry run shows the plan" "n=\$(echo '$password' | sudo -S -p '' snapper -c root --csvout list --columns number,type,description | awk -F, '\$2 == \"pre\" && /tree/ { print \$1 }' | tail -1) && echo '$password' | sudo -S -p '' $id update rollback-apply \$n --dry-run | grep -q 'Plan:'"
   check "distro icon installed"         "test -f /usr/share/icons/hicolor/scalable/apps/$id-logo.svg && test -f /usr/share/icons/hicolor/symbolic/apps/$id-logo-symbolic.svg"
   check "os-release names the icon"     "grep -qx 'LOGO=$id-logo' /etc/os-release"
   check "fastfetch uses the distro logo" "grep -q '/usr/share/$id/default/branding/fastfetch-logo.txt' /etc/xdg/fastfetch/config.jsonc && fastfetch --pipe >/dev/null"
@@ -314,6 +322,19 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
 
   # Last: logging out of the autologin session should bring up the login screen.
   check "logging out shows the login screen" "$hypr"' uwsm stop >/dev/null 2>&1; for i in $(seq 20); do pgrep -x tuigreet >/dev/null && exit 0; sleep 1; done; exit 1'
+fi
+
+# Optional: undo the `tree` install by rolling back, restart, and check the
+# restored system is the one running.
+if (( rollback )) && (( ! encrypt )); then
+  log "rolling back the tree install and restarting"
+  "$here/ssh" "$vm" "$user" -- "n=\$(echo '$password' | sudo -S -p '' snapper -c root --csvout list --columns number,type,description | awk -F, '\$2 == \"pre\" && /tree/ { print \$1 }' | tail -1); echo '$password' | sudo -S -p '' $id update rollback-apply \$n" || fail=1
+  "$here/ssh" "$vm" "$user" -- "echo '$password' | sudo -S -p '' systemctl reboot" || true
+  sleep 15; wait_ssh "$user" 300
+  check "rollback: the install is undone" "! command -v tree"
+  check "rollback: booted the restored @"  "[ \"\$(findmnt -no FSROOT /)\" = /@ ]"
+  check "rollback: old system kept aside"  "echo '$password' | sudo -S -p '' sh -c 'd=\$(mktemp -d); mount -o subvolid=5 \$(findmnt -no SOURCE / | sed \"s/\\[.*//\") \$d && ls \$d | grep -q ^@old-; r=\$?; umount \$d; exit \$r'"
+  check "rollback: snapshots still there"  "echo '$password' | sudo -S -p '' snapper -c root list | grep -q tree"
 fi
 
 if (( keep )); then log "leaving $vm running"; else "$here/ssh" "$vm" "$user" -- "echo '$password' | sudo -S -p '' poweroff" || true; fi
