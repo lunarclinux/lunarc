@@ -35,7 +35,8 @@ done
 log "live system reachable"
 
 # Commands in the live user's desktop session.
-session='u=$(id -u live); export XDG_RUNTIME_DIR=/run/user/$u WAYLAND_DISPLAY=wayland-1;
+session='cd /home/live; u=$(id -u live); export XDG_RUNTIME_DIR=/run/user/$u WAYLAND_DISPLAY=wayland-1
+  DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$u/bus;
   export HYPRLAND_INSTANCE_SIGNATURE=$(ls $XDG_RUNTIME_DIR/hypr 2>/dev/null | head -1);'
 as_live() { "$here/ssh" "$vm" -- 'runuser -u live -- bash -s' <<<"$session $1"; }
 
@@ -54,20 +55,24 @@ check "system names itself"            ". /etc/os-release; [ \"\$ID\" = $id ] &&
 check "live user exists, no password"  "id live && passwd -S live | grep -q ' NP '"
 check "live user has sudo"             "runuser -u live -- sudo -n true"
 check "login screen running"           "systemctl is-active --quiet greetd"
+check "Noctalia's own setup screen is off" "grep -q '^setup_wizard_enabled = false' /usr/share/$id/default/noctalia/defaults.toml"
 check "live user logged in to Hyprland" "$(wait_for 90 'pgrep -u live -x Hyprland >/dev/null')"
 check "Noctalia running"               "$(wait_for 60 'pgrep -u live -x noctalia >/dev/null')"
-check "NetworkManager manages the network" "systemctl is-active --quiet NetworkManager && ! systemctl is-active --quiet systemd-networkd && nmcli -t -f STATE general | grep -q connected"
+check "NetworkManager connected"       "$(wait_for 30 'systemctl is-active --quiet NetworkManager && nmcli -t -f STATE general | grep -q ^connected')"
 check "first-login setup ran (theme)"  "$(wait_for 60 "test -f /home/live/.local/state/$id/first-login-done")"
 check "lock disabled on the live system" "grep -A1 'idle.behavior.lock' /home/live/.config/noctalia/config.toml | grep -q 'enabled = false'"
 check "live welcome shown"             "$(wait_for 30 "runuser -u live -- env XDG_RUNTIME_DIR=/run/user/\$(id -u live) systemctl --user show -p Result live-welcome.service | grep -q success")"
 check "Install entry in the launcher"  "grep -q '^Name=Install ' /usr/share/applications/$id-install.desktop"
+check "no zram offered to the installer" "! lsblk -dno NAME | grep -q '^zram'"
+check "only NetworkManager runs"       "! systemctl is-active --quiet systemd-networkd iwd"
 check "root shell on the second console" "systemctl is-active --quiet getty@tty2"
 check "text installer present"         "test -f /usr/local/bin/install-$id && test -f /root/installer/install/install.sh"
 check "distro packages trusted"        "$(wait_for 60 "pacman-key --list-keys \$(cat /root/installer/pkg/keyring/fingerprint) >/dev/null 2>&1")"
 
 shots=~/.local/share/arch-distro-vm/screenshots; mkdir -p "$shots"
 screenshot() { # screenshot <label>
-  local shot=$shots/$vm-$(date +%Y%m%d-%H%M%S)-live-$1.png
+  local shot
+  shot=$shots/$vm-$(date +%Y%m%d-%H%M%S)-live-$1.png
   if as_live 'grim -' > "$shot" 2>/dev/null && [[ -s $shot ]]; then log "screenshot: $shot"
   else rm -f "$shot"; log "screenshot failed"; fi
 }

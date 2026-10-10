@@ -42,12 +42,13 @@ perms=""
 for path in "/usr/local/bin/install-$DISTRO_ID" /usr/local/bin/live-user-setup /usr/local/bin/live-install /usr/local/bin/live-welcome; do
   perms+="\n  [\"$path\"]=\"0:0:755\""
 done
-perms+="\n  [\"/etc/sudoers.d\"]=\"0:0:750\"\n  [\"/etc/sudoers.d/00-live\"]=\"0:0:440\""
+perms+="\n  [\"/etc/sudoers.d\"]=\"0:0:750\"\n  [\"/etc/sudoers.d/zz-live\"]=\"0:0:440\""
 sed -i "s|^file_permissions=(|file_permissions=($perms|" "$profile/profiledef.sh"
 
 # Boot menu: the live system, a copy-to-RAM variant (the USB stick can be
 # removed once booted) and releng's speech entry; the console gets the theme's
-# palette, and the writable layer room for a desktop session.
+# palette, and the writable layer room for a desktop session. No zram swap on
+# the live system: the installer must only ever be offered real disks.
 entries=$profile/efiboot/loader/entries
 palette=$(<"$root/default/boot/console-palette")
 main=$entries/$(sed -n 's/^default *//p' "$profile/efiboot/loader/loader.conf")
@@ -56,7 +57,7 @@ for f in "$entries"/*.conf; do
   sed -i \
     -e "s|^title .* with speech\$|title    $DISTRO_NAME live, with speech|" \
     -e "s|^title .*install medium.*\$|title    $DISTRO_NAME live|" \
-    -e "s|^\(options .*\)\$|\1 cow_spacesize=4G $palette|" "$f"
+    -e "s|^\(options .*\)\$|\1 cow_spacesize=4G systemd.zram=0 $palette|" "$f"
 done
 sed -i 's|^\(options .*\)$|\1 quiet loglevel=3|' "$main"
 sed -e "s|^title .*|title    $DISTRO_NAME live (copy to RAM)|" -e 's|^sort-key .*|sort-key 015|' \
