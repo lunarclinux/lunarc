@@ -1,0 +1,9 @@
+[Unit]
+Description=Check whether the backup reminder is due
+
+[Timer]
+OnStartupSec=10min
+OnUnitActiveSec=6h
+
+[Install]
+WantedBy=timers.target

@@ -12,6 +12,8 @@ showtime
 decibels
 gnome-calculator
 btop
+# Backups (encrypted, on a schedule); the first-login setup helps choose where.
+pika-backup
 gvfs
 xdg-user-dirs
 xdg-utils

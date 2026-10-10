@@ -40,6 +40,14 @@ hl.window_rule({
     no_anim = true,
 })
 
+-- The setup window (`@DISTRO_ID@ setup`) floats in the middle, like a dialog.
+hl.window_rule({
+    name = "setup",
+    match = { class = "^@DISTRO_ID@\\.setup$" },
+    float = true,
+    size = { 900, 640 },
+})
+
 -- Noctalia's settings window floats; its surfaces get blur and keep their own animations.
 hl.window_rule({
     name = "noctalia-settings",

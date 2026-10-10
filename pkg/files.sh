@@ -29,6 +29,7 @@ case $part in
     # The CLI.
     put "$src/bin/cli" "$dest/usr/bin/$id" 755
     put "$src/bin/lib.sh" "$dest/usr/lib/$id/lib.sh"
+    put "$src/bin/ui.sh" "$dest/usr/lib/$id/ui.sh"
     put "$src/bin/agent-usage.jq" "$dest/usr/lib/$id/agent-usage.jq"
     put "$src/distro.conf" "$dest/usr/lib/$id/distro.conf"
     put "$src/repo.conf" "$dest/usr/lib/$id/repo.conf"
@@ -36,6 +37,8 @@ case $part in
 
     # Defaults (Hyprland, Noctalia, plugins, agent guides), themes, new users' configs.
     copy_tree "$src/default" "$dest/usr/share/$id/default"
+    # The package lists every install gets (`app export` leaves these out).
+    copy_tree "$src/packages" "$dest/usr/share/$id/packages"
     copy_tree "$src/themes" "$dest/usr/share/$id/themes"
     copy_tree "$src/config" "$dest/etc/skel/.config"
     copy_tree "$src/migrations" "$dest/usr/share/$id/migrations"
@@ -60,8 +63,11 @@ case $part in
     put "$src/etc/systemd/user/crash-watch.service" "$units/$id-crash-watch.service"
     put "$src/etc/systemd/user/migrate.service" "$units/$id-migrate.service"
     put "$src/etc/systemd/user/lock-watch.service" "$units/$id-lock-watch.service"
+    put "$src/etc/systemd/user/setup-reminder.service" "$units/$id-setup-reminder.service"
+    put "$src/etc/systemd/user/setup-reminder.timer" "$units/$id-setup-reminder.timer"
     install -d "$units/graphical-session.target.wants"
-    for unit in noctalia.service "$id-first-login.service" "$id-crash-watch.service" "$id-migrate.service" "$id-lock-watch.service"; do
+    for unit in noctalia.service "$id-first-login.service" "$id-crash-watch.service" "$id-migrate.service" "$id-lock-watch.service" \
+      "$id-setup-reminder.timer"; do
       ln -s "../$unit" "$units/graphical-session.target.wants/$unit"
     done
 

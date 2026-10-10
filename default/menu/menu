@@ -47,6 +47,8 @@ Style | Next wallpaper | Switch to the next one | noctalia msg wallpaper-next | 
 Style | Screensaver | Preview the screensaver | @DISTRO_ID@ screensaver preview | device-tv
 
 Setup | | Network, devices and defaults |
+Setup | Backups | Where your files are backed up, and how often | @DISTRO_ID@ setup backups | device-floppy
+Setup | Set up @DISTRO_NAME@ | The first-login choices again | @DISTRO_ID@ setup | settings
 Setup | Wi-Fi | Networks and connections | noctalia msg panel-open control-center network | wifi
 Setup | Bluetooth | Pair and connect devices | noctalia msg panel-open control-center bluetooth | bluetooth
 Setup | Sound | Outputs, inputs and volume | noctalia msg panel-open control-center audio | volume
