@@ -23,4 +23,21 @@ cat >> "$home/.config/noctalia/config.toml" <<'TOML'
 enabled = false
 TOML
 
+# Keyring: the shell stores its clipboard-history key in the Secret Service at
+# login, which would otherwise greet the visitor with "Choose password for new
+# keyring". The live system forgets everything at shutdown, so give it an empty
+# login keyring without a password of its own.
+keyrings=$home/.local/share/keyrings
+install -d -m700 "$home/.local" "$home/.local/share" "$keyrings"
+printf 'login\n' > "$keyrings/default"
+cat > "$keyrings/login.keyring" <<'KEYRING'
+[keyring]
+display-name=Login
+ctime=0
+mtime=0
+lock-on-idle=false
+lock-after=false
+KEYRING
+chmod 600 "$keyrings/default" "$keyrings/login.keyring"
+
 chown -R "$user:$user" "$home"
