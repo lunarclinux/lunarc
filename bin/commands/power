@@ -1,0 +1,159 @@
+#!/usr/bin/env bash
+# summary: Laptop power: battery charge limit, hibernate, lid and battery alerts
+set -euo pipefail
+source "$DISTRO_LIB/lib.sh"
+
+helper=$DISTRO_LIB/power-helper
+swap_file=/swap/swapfile
+
+usage() {
+  cat <<USAGE
+Usage: $DISTRO_ID power <command>
+
+  status                      battery, charge limit and hibernate at a glance
+  charge-limit <50-100|off>   stop charging at this level (kinder to the battery)
+  charge-limit                show the current limit
+  hibernate enable|disable    hibernation (encrypted installs only)
+  hibernate                   show whether hibernation is on
+  hibernate now               hibernate now (when it's on)
+
+Closing the lid with an external monitor connected turns the laptop's screen
+off and keeps working; with no external monitor the laptop sleeps (and locks).
+Battery alerts: Noctalia warns at 20%; this adds a persistent alert at
+$(setting power.battery_critical 10)% and a last warning at $(setting power.battery_final 5)% (settings power.battery_critical
+and power.battery_final).
+USAGE
+}
+
+as_root() { if (( EUID == 0 )); then "$@"; elif [[ -t 0 ]]; then sudo "$@"; else pkexec "$@"; fi; }
+
+batteries() { local b; for b in /sys/class/power_supply/BAT*; do if [[ -d $b ]]; then echo "$b"; fi; done; }
+
+charge_limit_status() {
+  local bat found=0 end
+  while read -r bat; do
+    [[ -n $bat ]] || continue
+    found=1
+    if [[ -r $bat/charge_control_end_threshold ]]; then
+      end=$(<"$bat/charge_control_end_threshold")
+      if (( end >= 100 )); then info "${bat##*/}: charge limit off (charges to 100%)"
+      else info "${bat##*/}: charges to $end%"; fi
+    else
+      info "${bat##*/}: this battery doesn't support a charge limit"
+    fi
+  done < <(batteries)
+  (( found )) || info "no battery"
+}
+
+hibernate_on() { swapon --show=NAME --noheadings 2>/dev/null | grep -qx "$swap_file"; }
+
+# The laptop's own screen: eDP/LVDS/DSI connectors.
+internal_panel() {
+  hyprctl monitors all -j 2>/dev/null | jq -r '.[] | select(.name | test("^(eDP|LVDS|DSI)-")) | .name' | head -1
+}
+external_connected() {
+  hyprctl monitors all -j 2>/dev/null | jq -e '[.[] | select(.name | test("^(eDP|LVDS|DSI)-") | not)] | length > 0' >/dev/null
+}
+
+lid() { # lid close|open (Hyprland's lid-switch binds)
+  local panel
+  panel=$(internal_panel)
+  [[ -n $panel ]] || return 0
+  case $1 in
+    close)
+      # Docked: logind ignores the lid (HandleLidSwitchDocked=ignore), so
+      # turn the closed screen off and keep the desktop on the external one.
+      if external_connected; then
+        hyprctl eval "hl.monitor({ output = \"$panel\", disabled = true })" >/dev/null
+      fi ;;
+    open)
+      # Back to the configured layout.
+      hyprctl reload >/dev/null ;;
+  esac
+}
+
+notify() { # notify <urgency> <title> <body>
+  notify-send -a "$DISTRO_NAME" -u "$1" -i battery-caution "$2" "$3" >/dev/null 2>&1 || true
+}
+
+# Two alerts after Noctalia's own low-battery warning (20%): a persistent one,
+# and a last one before UPower's critical action (at 2% it hibernates when
+# hibernation is on, otherwise it shuts down to protect the battery).
+battery_watch() {
+  local critical final bat capacity status warned_critical=0 warned_final=0
+  critical=$(setting power.battery_critical 10)
+  final=$(setting power.battery_final 5)
+  bat=$(batteries | head -1)
+  [[ -n $bat ]] || exit 0
+  while sleep 60; do
+    capacity=$(<"$bat/capacity") status=$(<"$bat/status")
+    if [[ $status != Discharging ]]; then
+      warned_critical=0 warned_final=0
+      continue
+    fi
+    if (( capacity <= final && ! warned_final )); then
+      warned_final=1 warned_critical=1
+      if hibernate_on; then
+        notify critical "Battery at $capacity%" "Plug in now. At 2% the laptop hibernates; your work is kept."
+      else
+        notify critical "Battery at $capacity%" "Plug in now. At 2% the laptop shuts down, and unsaved work is lost."
+      fi
+    elif (( capacity <= critical && ! warned_critical )); then
+      warned_critical=1
+      notify critical "Battery at $capacity%" "Plug in soon."
+    fi
+  done
+}
+
+# Hyprland stops counting idle time when a window holds idle off (a
+# fullscreen video) and, after that window goes away, doesn't start again
+# until the next real input, so an untouched computer never locks. When the
+# last idle-holding window is gone, restart the count (the idle timer then
+# runs from that moment, as it would after a key press).
+idle_watch() {
+  local held=0 now
+  while sleep 10; do
+    now=$(hyprctl clients -j 2>/dev/null | jq '[.[] | select(.inhibitingIdle)] | length' 2>/dev/null) || continue
+    [[ $now =~ ^[0-9]+$ ]] || continue
+    if (( held > 0 && now == 0 )); then
+      hyprctl dispatch 'hl.dsp.force_idle(1)' >/dev/null 2>&1 || true
+    fi
+    held=$now
+  done
+}
+
+case ${1:-} in
+  status)
+    charge_limit_status
+    if hibernate_on; then info "hibernate: on"; else info "hibernate: off"; fi ;;
+  charge-limit)
+    if [[ -z ${2:-} || ${2:-} == status ]]; then charge_limit_status
+    else
+      [[ $2 == off || $2 =~ ^[0-9]+$ ]] || die "charge-limit takes a number from 50 to 100, or off"
+      # Check the hardware before asking for the password.
+      supported=0
+      while read -r bat; do
+        if [[ -n $bat && -e $bat/charge_control_end_threshold ]]; then supported=1; fi
+      done < <(batteries)
+      (( supported )) || die "this computer's battery doesn't support a charge limit (no battery, or the firmware doesn't offer one)"
+      as_root "$helper" charge-limit "$2"
+    fi ;;
+  hibernate)
+    case ${2:-status} in
+      status) if hibernate_on; then info "hibernate: on"; else info "hibernate: off ($DISTRO_ID power hibernate enable)"; fi ;;
+      enable) as_root "$helper" hibernate-enable ;;
+      disable) as_root "$helper" hibernate-disable ;;
+      now)
+        if hibernate_on; then systemctl hibernate
+        else
+          notify normal "Hibernate is off" "Turn it on with: $DISTRO_ID power hibernate enable (encrypted installs only)."
+          die "hibernate is off; turn it on with '$DISTRO_ID power hibernate enable'"
+        fi ;;
+      *) die "hibernate enable, disable, now or status?" ;;
+    esac ;;
+  lid) lid "${2:-}" ;;
+  battery-watch) battery_watch ;;
+  idle-watch) idle_watch ;;
+  -h|--help|"") usage ;;
+  *) die "unknown power command: $1" ;;
+esac

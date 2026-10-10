@@ -1,0 +1,5 @@
+#!/bin/sh
+# Some firmware resets the battery charge limit across sleep: re-apply it on wake.
+if [ "$1" = post ] && [ -f /etc/@DISTRO_ID@/charge-limit ]; then
+  /usr/lib/@DISTRO_ID@/power-helper charge-limit-apply || true
+fi

@@ -356,6 +356,19 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       screenshot keyboard-layout
       check "keyboard layout removed"      "$hypr $id keyboard remove de >/dev/null && sleep 1 && hyprctl devices -j | jq -e '[.keyboards[] | select(.main)][0].layout == \"us\"' >/dev/null"
       check "idle: lock stays up; inhibitors respected" "$(sed "s/@ID@/$id/g" "$here/checks/idle.sh")"
+      if "$here/ssh" "$vm" "$user" -- "test -x /usr/lib/$id/commands/power"; then
+        check "idle counts again after a video" "$(sed "s/@ID@/$id/g" "$here/checks/idle-rearm.sh")"
+        check "lid binds: external monitor only" "$hypr hyprctl binds -j | jq -e '[.[] | select(.key == \"switch:on:Lid Switch\" or .key == \"switch:off:Lid Switch\")] | length == 2' >/dev/null"
+        check "battery warning at 20%"       "$hypr noctalia config export | grep -A2 '^\[battery\]' | grep -q 'warning_threshold = 20'"
+        check "charge limit: says when unsupported" "$id power charge-limit 80 2>&1 | grep -q \"doesn't support a charge limit\""
+        check "charge limit re-applied at boot" "test -L /usr/lib/systemd/system/multi-user.target.wants/$id-charge-limit.service && systemctl cat $id-charge-limit.service >/dev/null && test -x /usr/lib/systemd/system-sleep/$id-charge-limit"
+        if (( encrypt )); then
+          check "hibernate: swap file and resume" "echo '$password' | sudo -S -p '' $id power hibernate enable >/dev/null && swapon --show=NAME --noheadings | grep -qx /swap/swapfile && echo '$password' | sudo -S -p '' grep -q 'resume=UUID=.* resume_offset=' /boot/limine.conf"
+          check "hibernate: off again"        "echo '$password' | sudo -S -p '' $id power hibernate disable >/dev/null && ! swapon --show=NAME --noheadings | grep -q /swap/swapfile && ! echo '$password' | sudo -S -p '' grep -q 'resume_offset=' /boot/limine.conf && ! grep -q /swap /etc/fstab"
+        else
+          check "hibernate: refused unencrypted" "echo '$password' | sudo -S -p '' $id power hibernate enable 2>&1 | grep -q 'only offered on encrypted installs'"
+        fi
+      fi
       # The lock: the screensaver plays behind a real session lock; the
       # password (typed like a person would) unlocks it.
       check "lock packages installed"       "pacman -Q swaylock-plugin windowtolayer >/dev/null"

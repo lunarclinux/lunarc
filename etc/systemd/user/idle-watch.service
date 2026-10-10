@@ -1,0 +1,14 @@
+# Restarts the idle count after a window that held idle off (a fullscreen
+# video) goes away; see `@DISTRO_ID@ power` (idle-watch).
+[Unit]
+Description=Idle count after video
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=/usr/bin/@DISTRO_ID@ power idle-watch
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=graphical-session.target

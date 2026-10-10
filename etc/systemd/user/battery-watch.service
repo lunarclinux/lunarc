@@ -1,0 +1,14 @@
+# Low-battery alerts beyond Noctalia's own warning (`@DISTRO_ID@ power --help`).
+[Unit]
+Description=Low-battery alerts
+After=graphical-session.target
+PartOf=graphical-session.target
+ConditionPathExistsGlob=/sys/class/power_supply/BAT*
+
+[Service]
+ExecStart=/usr/bin/@DISTRO_ID@ power battery-watch
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=graphical-session.target

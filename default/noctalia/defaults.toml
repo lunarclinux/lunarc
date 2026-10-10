@@ -122,6 +122,11 @@ hide_when_single_layout = true
 show_label = false
 hide_when_full = false
 
+# Low-battery warning at 20%; `@DISTRO_ID@ power` adds persistent alerts at 10%
+# and 5% (settings power.battery_critical and power.battery_final).
+[battery]
+warning_threshold = 20
+
 # Each hides itself when it has nothing to show.
 [widget.crashes]
 type = "@DISTRO_ID@/crashes:indicator"
