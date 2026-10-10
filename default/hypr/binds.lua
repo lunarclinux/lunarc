@@ -11,6 +11,7 @@ end
 
 bind(mod .. " + Return", "Open a terminal", run(terminal))
 bind(mod .. " + ALT + Space", "System menu", run("@DISTRO_ID@ menu"))
+bind(mod .. " + CTRL + Space", "Next keyboard layout", run("@DISTRO_ID@ keyboard next"))
 bind(mod .. " + K", "Keyboard shortcuts", run("@DISTRO_ID@ keys"))
 bind(mod .. " + W", "Close the window", hl.dsp.window.close())
 bind(mod .. " + F", "Fullscreen", hl.dsp.window.fullscreen())

@@ -31,6 +31,10 @@ adw-gtk-theme
 papirus-icon-theme
 qt6ct
 
+# Saved passwords for apps (browsers, editors, mail): the Secret Service,
+# unlocked at login by the login screen
+gnome-keyring
+
 # Desktop utilities
 grim
 wl-clipboard

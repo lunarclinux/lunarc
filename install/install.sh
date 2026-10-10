@@ -133,6 +133,9 @@ if (( ! DRY_RUN )) && [[ -d $MNT/var/log ]]; then cp "$INSTALL_LOG" "$MNT/var/lo
 ui_header "Done"
 printf '  %s%s%s is installed.%s\n\n' "$C_BOLD" "$C_TEXT" "$DISTRO_NAME" "$C_OFF"
 printf '  %sRemove the USB stick, then restart to start using it.%s\n' "$C_TEXT" "$C_OFF"
+if (( AUTOLOGIN && ! ENCRYPT )); then
+  printf '  %sSaved passwords are kept in a keyring with its own password; it is asked for once each time you log in.%s\n' "$C_MUTED" "$C_OFF"
+fi
 if (( ENCRYPT )); then
   printf '  %sAt startup, type the disk passphrase to unlock it.%s\n' "$C_MUTED" "$C_OFF"
 fi

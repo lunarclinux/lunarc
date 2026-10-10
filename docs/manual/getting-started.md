@@ -38,15 +38,16 @@ SUPER is the Windows key. SUPER+K lists every shortcut, searchable.
 | ALT+Print | Start or stop a screen recording |
 | SUPER+CTRL+C | Pick a colour from the screen |
 | SUPER+CTRL+D | Dictate: speak, press again, the text is typed |
+| SUPER+CTRL+Space | Next keyboard layout (when you have more than one) |
 | SUPER+SHIFT+Escape | Log out |
 
 ## The bar
 
-Left: the menu (crescent; right-click for apps) and workspaces. Centre: stay awake, night light, silence notifications, reminders, screen recording and dictation, then the clock and weather. Right: media, tray, AI usage, crashes, and status icons (network, Bluetooth, sound, brightness, battery, power), each opening its own panel.
+Left: the menu (crescent; right-click for apps) and workspaces. Centre: stay awake, night light, silence notifications, reminders, screen recording and dictation, then the clock and weather. Right: media, tray, AI usage, crashes, the keyboard layout (only with more than one; click to switch), and status icons (network, Bluetooth, sound, brightness, battery, power), each opening its own panel.
 
 ## The system menu
 
-SUPER+ALT+Space (or `/m` in the launcher). Type part of a name and press Enter to open it; keep typing to filter the next level; Backspace goes back. Items are in `/usr/share/lunarc/default/menu/menu`; copy it to `~/.config/lunarc/menu` to make your own.
+SUPER+ALT+Space (or `/m` in the launcher). Type part of a name and press Enter to open it; keep typing to filter the next level; Backspace goes back. Typing at the top also finds items inside the groups, so "screenshot" or "steam" goes straight to the item. Items are in `/usr/share/lunarc/default/menu/menu`; copy it to `~/.config/lunarc/menu` to make your own.
 
 ## The `lunarc` command
 
@@ -68,6 +69,7 @@ SUPER+ALT+Space (or `/m` in the launcher). Type part of a name and press Enter t
 | `lunarc remind "stretch" in 20m` / `at 15:30` / `list` / `cancel <id>` | Reminders (also the alarm icon in the bar) |
 | `lunarc dictate toggle` / `setup` | Dictation; runs locally with whisper.cpp (first use downloads a ~150 MB model) |
 | `lunarc menu` / `lunarc keys` | The system menu / the shortcut list |
+| `lunarc keyboard add de` / `remove` / `list` / `next` | Keyboard layouts (`lunarc keyboard available` lists them) |
 | `lunarc migrate --list --user` | See which config migrations have run |
 | `lunarc screensaver effects` / `preview [effect]` | List the screensaver's effects / play one now (any key closes it) |
 
@@ -86,3 +88,9 @@ nano is installed as well, with colours, line numbers and Ctrl+S to save. Prefer
 - Screensaver effects: the distro's in `/usr/share/lunarc/default/screensaver/effects/`; add your own as `~/.config/terminaltexteffects/effects/<name>.py` and they join the rotation.
 - The system's name: `/etc/os-release` (`ID=lunarc`, `ID_LIKE=arch`), rewritten by a pacman hook whenever Arch's `filesystem` package updates.
 - Package signing: Lunarc's packages are signed; `lunarc-keyring` holds the key pacman checks them against (`pacman-key --list-keys 798A81A89261BC4E49D0784BFD4EE07A81DE46AE`). Lunarc's own repository isn't hosted yet, so for now its packages come from the installer only.
+
+## Passwords, lock-outs and staying awake
+
+- Wrong passwords: after 10 wrong tries in a row (lock screen, sudo), the account waits 2 minutes before accepting the password again.
+- Saved passwords (browsers, editors, mail) live in the desktop keyring. Logging in with a password unlocks it. With automatic login on an encrypted disk it has no password of its own (the disk encryption protects it); on an unencrypted disk it asks for its own password once per login.
+- The screensaver, lock and screen-off wait while a video plays or a game runs: apps that ask the system to stay awake are honoured, as is the stay-awake button in the bar.

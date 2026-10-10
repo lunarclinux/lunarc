@@ -15,7 +15,7 @@ behavior_order = ["screensaver", "lock", "screen-off"]
 timeout = 300
 action = "command"
 command = "@DISTRO_ID@ screensaver start"
-resume_command = "@DISTRO_ID@ screensaver stop"
+resume_command = "@DISTRO_ID@ screensaver stop --idle"
 enabled = true
 
 [idle.behavior.lock]
@@ -104,6 +104,10 @@ show_label = false
 [widget.brightness]
 show_label = false
 
+# The active keyboard layout, only when there is more than one; click to switch.
+[widget.keyboard_layout]
+hide_when_single_layout = true
+
 [widget.battery]
 show_label = false
 hide_when_full = false
@@ -118,7 +122,7 @@ type = "@DISTRO_ID@/agents:usage"
 [bar.default]
 start  = ["menu", "workspaces"]
 center = ["stay-awake", "nightlight", "silence", "reminders", "recorder", "dictate", "clock", "weather"]
-end    = ["media", "tray", "ai-usage", "crashes", "notifications", "network", "bluetooth", "volume", "brightness", "battery", "session"]
+end    = ["media", "tray", "ai-usage", "crashes", "notifications", "keyboard_layout", "network", "bluetooth", "volume", "brightness", "battery", "session"]
 
 # Weather in the bar. The location is set from your time zone at first login
 # (just the city name is looked up); change it under Settings → Location.

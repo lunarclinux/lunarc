@@ -106,10 +106,15 @@ open_window() { # open_window [effect]
 }
 
 TTE_HOME=$(effects_home)
+# When the screensaver last started (seconds), for `stop --idle`.
+started=${XDG_RUNTIME_DIR:-$STATE_DIR}/$DISTRO_ID-screensaver.started
 
 case ${1:-} in
   start)
-    if ! running; then open_window; fi ;;
+    if ! running; then
+      mkdir -p "${started%/*}"; date +%s > "$started"
+      open_window
+    fi ;;
   preview)
     effect=${2:-}
     if [[ -n $effect ]] && ! effect_list | grep -qx -- "$effect"; then
@@ -118,6 +123,11 @@ case ${1:-} in
     if running; then pkill -f -- "$match" || true; sleep 0.5; fi
     open_window ${effect:+"$effect"} ;;
   stop)
+    # Noctalia runs `stop --idle` when it sees activity. The screensaver's own
+    # window appearing (focus, pointer warp) counts as activity for a moment, so
+    # ignore that first moment; after it, the window itself closes on any key or
+    # mouse movement (see run).
+    if [[ ${2:-} == --idle && -f $started ]] && (( $(date +%s) - $(<"$started") < 3 )); then exit 0; fi
     pkill -f -- "$match" 2>/dev/null || true ;;
   effects)
     effect_list ;;
@@ -160,6 +170,12 @@ case ${1:-} in
         sleep 2
       done ) &
     anim=$!
+    # Any key or mouse movement ends it. The terminal reports mouse motion once
+    # asked to (\e[?1003h); ignore what arrives while the window settles.
+    printf '\e[?1003h'
+    trap 'printf "\e[?1003l"' EXIT
+    sleep 1.5
+    while read -rsn1 -t 0.05; do :; done
     read -rsn1 || true
     kill "$anim" 2>/dev/null || true ;;
   -h|--help|"") usage ;;

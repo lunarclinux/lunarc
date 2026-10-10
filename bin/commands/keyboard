@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# summary: Keyboard layouts: list, add, remove and switch
+set -euo pipefail
+source "$DISTRO_LIB/lib.sh"
+
+# Layouts are kept in the settings file as "keyboard.layouts = us,de:nodeadkeys"
+# (layout, optionally ":variant"). Hyprland reads them from a small file this
+# command writes, which the distro's settings.lua loads.
+generated=$CONFIG_DIR/hypr/keyboard.lua
+rules=/usr/share/X11/xkb/rules/base.lst
+
+usage() {
+  cat <<USAGE
+Usage: $DISTRO_ID keyboard <command>
+
+  list                 the configured layouts (first one is the default)
+  add <layout[:variant]>  add a layout, e.g. "de", "fr", "us:intl", "de:nodeadkeys"
+  remove <layout>      remove a layout
+  next                 switch to the next layout (SUPER+CTRL+Space)
+  available [word]     layouts you can add, optionally filtered
+
+With more than one layout, the bar shows the active one; click it to switch.
+USAGE
+}
+
+layouts() { setting keyboard.layouts us | tr ',' '\n' | sed '/^$/d'; }
+
+known_layout() { # known_layout <layout> [variant]
+  [[ -f $rules ]] || return 0
+  awk -v l="$1" '/^! layout/{s=1;next} /^!/{s=0} s && $1==l {f=1} END{exit !f}' "$rules" || return 1
+  if [[ -n ${2:-} ]]; then
+    awk -v l="$1" -v v="$2" '/^! variant/{s=1;next} /^!/{s=0} s && $1==v && $2==l":" {f=1} END{exit !f}' "$rules"
+  fi
+}
+
+# Write Hyprland's include and reload it, so the change applies right away.
+apply() {
+  local list kb_layout="" kb_variant="" entry
+  mapfile -t list < <(layouts)
+  for entry in "${list[@]}"; do
+    kb_layout+="${kb_layout:+,}${entry%%:*}"
+    if [[ $entry == *:* ]]; then kb_variant+=",${entry#*:}"; else kb_variant+=","; fi
+  done
+  kb_variant=${kb_variant#,}
+  mkdir -p "${generated%/*}"
+  cat > "$generated" <<LUA
+-- Written by \`$DISTRO_ID keyboard\`; edit with that command.
+hl.config({ input = { kb_layout = "$kb_layout", kb_variant = "$kb_variant" } })
+LUA
+  if [[ -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then hyprctl reload >/dev/null 2>&1 || true; fi
+}
+
+save() { # save <layout>...
+  local IFS=,
+  set_setting keyboard.layouts "$*"
+  apply
+}
+
+case ${1:-} in
+  list)
+    i=0
+    while IFS= read -r entry; do
+      if (( i == 0 )); then info "$entry (default)"; else info "$entry"; fi
+      i=$((i + 1))
+    done < <(layouts) ;;
+  add)
+    [[ -n ${2:-} ]] || die "add which layout? see: $DISTRO_ID keyboard available"
+    new=$2 layout=${2%%:*} variant=""
+    if [[ $new == *:* ]]; then variant=${new#*:}; fi
+    known_layout "$layout" "$variant" || die "unknown layout '$new' (see: $DISTRO_ID keyboard available)"
+    mapfile -t list < <(layouts)
+    for entry in "${list[@]}"; do
+      if [[ $entry == "$new" ]]; then info "$new is already there"; exit 0; fi
+    done
+    save "${list[@]}" "$new"
+    info "added $new; switch with SUPER+CTRL+Space or the bar" ;;
+  remove)
+    [[ -n ${2:-} ]] || die "remove which layout?"
+    mapfile -t list < <(layouts)
+    keep=()
+    for entry in "${list[@]}"; do
+      if [[ $entry != "$2" && ${entry%%:*} != "$2" ]]; then keep+=("$entry"); fi
+    done
+    (( ${#keep[@]} < ${#list[@]} )) || die "$2 isn't one of your layouts"
+    (( ${#keep[@]} > 0 )) || die "keep at least one layout"
+    save "${keep[@]}"
+    info "removed $2" ;;
+  next)
+    noctalia msg keyboard-layout-cycle >/dev/null 2>&1 || hyprctl switchxkblayout all next >/dev/null ;;
+  available)
+    [[ -f $rules ]] || die "the layout list ($rules) isn't installed"
+    awk '/^! layout/{s=1;next} /^!/{s=0} s {code=$1; $1=""; sub(/^ +/,""); printf "%-8s %s\n", code, $0}' "$rules" \
+      | grep -i -- "${2:-}" || true ;;
+  apply) apply ;;
+  -h|--help|"") usage ;;
+  *) die "unknown keyboard command: $1" ;;
+esac
