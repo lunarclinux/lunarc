@@ -101,6 +101,7 @@ done < <(find "$airootfs/usr/local" "$airootfs/usr/share/applications" "$airootf
            "$airootfs/etc/sudoers.d" -type f -print0)
 
 # Login screen: the installed system's greeter, plus logging the live user in.
+mkdir -p "$airootfs/etc/greetd"
 {
   sed "s/@DISTRO_ID@/$DISTRO_ID/g; s/@DISTRO_NAME@/$DISTRO_NAME/g" "$root/etc/greetd/config.toml"
   printf '\n# Live system: log the live user straight in.\n[initial_session]\ncommand = "uwsm start -e -D Hyprland hyprland.desktop"\nuser = "live"\n'
