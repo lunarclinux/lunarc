@@ -52,6 +52,9 @@ Setup | Bluetooth | Pair and connect devices | noctalia msg panel-open control-c
 Setup | Sound | Outputs, inputs and volume | noctalia msg panel-open control-center audio | volume
 Setup | Power profile | Cycle performance, balanced and power saver | noctalia msg power-cycle | bolt
 Setup | Reminders | Upcoming reminders | noctalia msg panel-toggle @DISTRO_ID@/utilities:reminders-panel | alarm
+Setup | Keyboard: next layout | Switch layout (SUPER+CTRL+Space) | @DISTRO_ID@ keyboard next | keyboard
+Setup | Keyboard: add a layout | e.g. de, fr, us:intl | term: @DISTRO_ID@ keyboard available; read -rp 'Layout to add: ' l; [ -n "$l" ] && @DISTRO_ID@ keyboard add "$l" | keyboard
+Setup | Keyboard: remove a layout | | term: @DISTRO_ID@ keyboard list; read -rp 'Layout to remove: ' l; [ -n "$l" ] && @DISTRO_ID@ keyboard remove "$l" | keyboard-off
 Setup | Default terminal | The terminal SUPER+Return opens | menu: terminal | terminal-2
 Setup | Coding agent | The AI agent used for diagnosis and prompts | menu: agent | sparkles
 Setup | Dictation | Install the speech engine (once) | term: @DISTRO_ID@ dictate setup | microphone

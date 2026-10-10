@@ -47,3 +47,6 @@ hl.config({
 hl.curve("settle", { type = "bezier", points = { {0.22, 1}, {0.36, 1} } })
 hl.animation({ leaf = "global", enabled = true, speed = 6, bezier = "settle" })
 hl.animation({ leaf = "workspaces", enabled = true, speed = 4, bezier = "settle", style = "slide" })
+
+-- Extra keyboard layouts, written by `@DISTRO_ID@ keyboard add` (absent until then).
+pcall(dofile, (os.getenv("XDG_CONFIG_HOME") or (os.getenv("HOME") .. "/.config")) .. "/@DISTRO_ID@/hypr/keyboard.lua")

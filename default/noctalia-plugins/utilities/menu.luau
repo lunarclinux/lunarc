@@ -201,10 +201,42 @@ local function level(path, done)
   return done(list)
 end
 
+-- Typing at the top level also searches inside the groups, so "screenshot"
+-- or "steam" finds the item directly: every static item, and every app in the
+-- install catalog. They rank just below a group with an equal match.
+local function nested(filter)
+  local out = {}
+  if string.len(filter) < 2 then return out end
+  for _, r in ipairs(menuRows()) do
+    if r.group ~= "" and r.title ~= "" and string.sub(r.cmd, 1, 5) ~= "menu:" then
+      local score = noctalia.fuzzyScore(filter, r.title)
+      if score then
+        local it = item(r.title, r.group .. (r.desc ~= "" and (" · " .. r.desc) or ""), r.cmd,
+          r.glyph ~= "" and r.glyph or groupGlyph[r.group])
+        it.score = score - 1
+        table.insert(out, it)
+      end
+    end
+  end
+  for _, a in ipairs(catalogRows()) do
+    local score = noctalia.fuzzyScore(filter, a.name .. " " .. a.id)
+    if score then
+      local it = item(a.name, "Install" .. sep .. label(a.cat), "term: " .. cli .. " app install " .. a.id,
+        categoryGlyph[a.cat] or "download")
+      it.score = score - 2
+      table.insert(out, it)
+    end
+  end
+  return out
+end
+
 function onQuery(text)
   local path, filter = parse(text)
   level(path, function(list)
     local out = {}
+    if #path == 0 and filter ~= "" then
+      for _, r in ipairs(nested(filter)) do table.insert(out, r) end
+    end
     if #path > 0 and filter == "" then
       local up = table.clone(path); table.remove(up)
       table.insert(out, { id = "back", title = "Back", subtitle = "Or press Backspace", glyph = "arrow-left",
