@@ -35,6 +35,7 @@ Capture | Read a QR code | Select the code; its contents are copied | @DISTRO_ID
 Toggle | | Quick switches |
 Toggle | Stay awake | Keep the screen on and the computer awake | noctalia msg caffeine-toggle | coffee
 Toggle | Night light | Warmer colours in the evening | noctalia msg nightlight-toggle | moon
+Toggle | Low Gravity | Float the windows on this workspace, or tile them again (SUPER+G) | @DISTRO_ID@ gravity toggle | feather
 Toggle | Silence notifications | Notifications still go to the history | noctalia msg notification-dnd-toggle | bell-off
 Toggle | Dictation | Speak to type (SUPER+CTRL+D) | @DISTRO_ID@ dictate toggle | microphone
 Toggle | Dark mode | Use the theme's dark colours | @DISTRO_ID@ theme mode dark | moon-stars

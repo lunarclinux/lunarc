@@ -1,0 +1,212 @@
+#!/usr/bin/env bash
+# summary: Low Gravity: float every window on this workspace, or tile them again
+set -euo pipefail
+source "$DISTRO_LIB/lib.sh"
+
+# Which workspaces float, and the windows Low Gravity floated there (so turning
+# it off tiles those and leaves windows that float anyway, like dialogs). Kept
+# in the session's runtime directory: it starts off at every login, like the
+# window rules it pairs with (they live in Hyprland, not the config).
+state_file=$USER_RUNTIME/$DISTRO_ID-gravity
+address_re='^0x[0-9a-fA-F]+$'
+
+usage() {
+  cat <<USAGE
+Usage: $DISTRO_ID gravity [on|off|toggle|status] [--all]
+
+  toggle        Low Gravity on or off for the workspace you're on (SUPER+G)
+  on | off      turn it on or off
+  status        on or off for this workspace
+  --all         every workspace at once
+
+On: every window on the workspace floats, spread out a little so none sits
+exactly on top of another, and new windows there float too. Off: they tile
+again. Setting gravity.scope = all makes plain on/off/toggle apply everywhere.
+It starts off at every login.
+USAGE
+}
+
+need_hyprland() { [[ -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]] || die "this needs the Hyprland session"; }
+load() { if [[ -s $state_file ]]; then cat "$state_file"; else echo '{"all":false,"workspaces":{}}'; fi; }
+store() { local tmp; tmp=$(mktemp "$state_file.XXXXXX"); printf '%s\n' "$1" > "$tmp"; mv "$tmp" "$state_file"; }
+active_ws() { hyprctl activeworkspace -j | jq -r '.id'; }
+is_number() { [[ $1 =~ ^-?[0-9]+$ ]]; }
+
+# on_for <ws>: is Low Gravity on for this workspace?
+on_for() { load | jq -e --arg ws "$1" '.all or (.workspaces | has($ws))' >/dev/null; }
+
+lua() { hyprctl eval "$1" >/dev/null; }
+dispatch() { hyprctl dispatch "$1" >/dev/null; }
+
+# The window rule that floats new windows (one per workspace, or one for all).
+rule() { # rule <ws|all> on|off
+  local name match enabled=true
+  if [[ $1 == all ]]; then name="$DISTRO_ID-gravity-all"; match='class = ".*"'
+  else is_number "$1" || return 0; name="$DISTRO_ID-gravity-ws-$1"; match="workspace = \"$1\""; fi
+  [[ $2 == on ]] || enabled=false
+  lua "hl.window_rule({ name = \"$name\", match = { $match }, float = true, enabled = $enabled })"
+}
+
+# A softer, slower move while windows lift off or settle, then the usual feel.
+drift() {
+  lua 'hl.curve("drift", { type = "bezier", points = { {0.25, 0.1}, {0.25, 1} } })
+hl.animation({ leaf = "windowsMove", enabled = true, speed = 9, bezier = "drift" })'
+  setsid -f bash -c 'sleep 1.5; hyprctl eval "hl.animation({ leaf = \"windowsMove\", enabled = true, speed = 6, bezier = \"settle\" })" >/dev/null 2>&1' >/dev/null 2>&1 || true
+}
+
+# Usable area of the monitor showing workspace <ws>: x y w h (logical pixels,
+# minus the bar and other reserved space).
+area() { # area <ws>
+  hyprctl monitors -j | jq -r --argjson ws "$1" '
+    ([.[] | select(.activeWorkspace.id == $ws)] + [.[] | select(.focused)] + .)[0]
+    | (.scale // 1) as $s | (.reserved // [0,0,0,0]) as $r
+    | [(.x + $r[0]), (.y + $r[1]), ((.width / $s) - $r[0] - $r[2] | floor), ((.height / $s) - $r[1] - $r[3] | floor)]
+    | @tsv'
+}
+
+# Lift the tiled windows on <ws> and spread them out: each keeps roughly its
+# size (kept between a third and three quarters of the screen), placed across
+# the screen in their left-to-right order with a little deterministic jitter,
+# so no two land on the same spot.
+float_workspace() { # float_workspace <ws> [seed] → prints the addresses it floated
+  local ws=$1 seed=${2:-0} ax ay aw ah plan address x y w h
+  read -r ax ay aw ah < <(area "$ws")
+  plan=$(hyprctl clients -j | jq -r --argjson ws "$ws" --argjson ax "$ax" --argjson ay "$ay" --argjson aw "$aw" --argjson ah "$ah" --argjson seed "$seed" '
+    [.[] | select(.workspace.id == $ws and (.floating | not) and (.fullscreen == 0) and (.pinned | not) and .mapped)]
+    | sort_by(.at[0], .at[1]) as $wins | ($wins | length) as $n
+    | [range(0; $n) as $k | ($k + $seed) as $i | $wins[$k] as $c
+       # Windows arriving later (seed > 0) get a moderate size of their own
+       # instead of the full tile they briefly had.
+       | (if $seed > 0 then ($aw * 0.5 | floor) else ([[($c.size[0]), ($aw * 0.35 | floor)] | max, ($aw * 0.72 | floor)] | min) end) as $w
+       | (if $seed > 0 then ($ah * 0.55 | floor) else ([[($c.size[1]), ($ah * 0.35 | floor)] | max, ($ah * 0.75 | floor)] | min) end) as $h
+       | ([0.18, 0.62, 0.34, 0.78, 0.48, 0.26, 0.70] | .[$i % 7]) as $fy
+       | ((($i * 73 + $n * 31) % 61) - 30) as $jx
+       | ((($i * 47 + $n * 17) % 41) - 20) as $jy
+       | (if $n == 1 and $seed == 0 then 0.5 elif $n == 1 then ([0.3, 0.62, 0.45, 0.75, 0.22, 0.55] | .[$seed % 6]) else (($k + 0.5) / $n) end) as $fx
+       | ($ax + (($aw - $w) * $fx | floor) + $jx + $i * 7) as $x
+       | ($ay + (($ah - $h) * $fy | floor) + $jy + $i * 5) as $y
+       | [$c.address,
+          ([[$x, $ax] | max, ($ax + $aw - $w)] | min),
+          ([[$y, $ay] | max, ($ay + $ah - $h)] | min), $w, $h] | @tsv] | .[]')
+  [[ -n $plan ]] || return 0
+  while IFS=$'\t' read -r address x y w h; do
+    [[ $address =~ $address_re ]] || continue
+    if ! { is_number "$x" && is_number "$y" && is_number "$w" && is_number "$h"; }; then continue; fi
+    dispatch "hl.dsp.window.float({ action = \"enable\", window = \"address:$address\" })"
+    dispatch "hl.dsp.window.resize({ x = $w, y = $h, window = \"address:$address\" })"
+    dispatch "hl.dsp.window.move({ x = $x, y = $y, window = \"address:$address\" })"
+    printf '%s\n' "$address"
+  done <<<"$plan"
+}
+
+# Tile again the windows Low Gravity floated on <ws> (still there and floating).
+tile_workspace() { # tile_workspace <ws>
+  local ws=$1 address
+  load | jq -r --arg ws "$ws" '.workspaces[$ws] // [] | .[]' | while read -r address; do
+    [[ $address =~ $address_re ]] || continue
+    if hyprctl clients -j | jq -e --arg a "$address" --argjson ws "$ws" 'any(.[]; .address == $a and .workspace.id == $ws and .floating)' >/dev/null; then
+      dispatch "hl.dsp.window.float({ action = \"disable\", window = \"address:$address\" })"
+    fi
+  done
+}
+
+record() { # record <ws> <addresses…> : remember windows floated on ws
+  local ws=$1; shift
+  store "$(load | jq --arg ws "$ws" --args '.workspaces[$ws] = ((.workspaces[$ws] // []) + $ARGS.positional | unique)' "$@")"
+}
+
+workspaces_in_use() { hyprctl workspaces -j | jq -r '.[] | select(.id > 0) | .id'; }
+
+turn_on() { # turn_on <ws|all>
+  local ws floated
+  drift
+  if [[ $1 == all ]]; then
+    store "$(load | jq '.all = true')"
+    rule all on
+    for ws in $(workspaces_in_use); do
+      mapfile -t floated < <(float_workspace "$ws")
+      record "$ws" "${floated[@]}"
+    done
+  else
+    ws=$1
+    store "$(load | jq --arg ws "$ws" '.workspaces[$ws] = (.workspaces[$ws] // [])')"
+    rule "$ws" on
+    mapfile -t floated < <(float_workspace "$ws")
+    record "$ws" "${floated[@]}"
+  fi
+}
+
+turn_off() { # turn_off <ws|all>
+  local ws
+  drift
+  if [[ $1 == all ]]; then
+    rule all off
+    for ws in $(load | jq -r '.workspaces | keys[]'); do
+      is_number "$ws" || continue
+      rule "$ws" off; tile_workspace "$ws"
+    done
+    store '{"all":false,"workspaces":{}}'
+  else
+    ws=$1
+    tile_workspace "$ws"; rule "$ws" off
+    store "$(load | jq --arg ws "$ws" 'del(.workspaces[$ws])')"
+    # Scope "all" stays on elsewhere; this workspace was turned off by hand.
+    if load | jq -e '.all' >/dev/null; then store "$(load | jq '.all = false')"; rule all off; fi
+  fi
+}
+
+# A window opened on a floating workspace (from the workspace watcher): give it
+# a sensible size and spot instead of the tiny default floating size.
+place() { # place <address>
+  local address=$1 ws
+  [[ $address =~ $address_re ]] || return 0
+  ws=$(hyprctl clients -j | jq -r --arg a "$address" '.[] | select(.address == $a) | .workspace.id')
+  is_number "${ws:-x}" || return 0
+  on_for "$ws" || return 0
+  # Float it if the rule didn't (opened before the rule existed), then spread
+  # the workspace's not-yet-placed windows the same way as when turning on.
+  local floating; floating=$(hyprctl clients -j | jq -r --arg a "$address" '.[] | select(.address == $a) | .floating')
+  if [[ $floating == true ]]; then dispatch "hl.dsp.window.float({ action = \"disable\", window = \"address:$address\" })"; fi
+  local seed floated
+  seed=$(hyprctl clients -j | jq --argjson ws "$ws" '[.[] | select(.workspace.id == $ws and .floating)] | length')
+  mapfile -t floated < <(float_workspace "$ws" "$seed")
+  record "$ws" "${floated[@]}"
+}
+
+# After Hyprland reloads its config the runtime rules are gone: put them back.
+reapply() {
+  local ws
+  if load | jq -e '.all' >/dev/null; then rule all on; fi
+  for ws in $(load | jq -r '.workspaces | keys[]'); do rule "$ws" on; done
+}
+
+refresh_bar() { noctalia msg plugin "$DISTRO_ID/utilities:gravity" all refresh >/dev/null 2>&1 || true; }
+
+target() { # target [--all] → all|<active workspace id>
+  if [[ ${1:-} == --all || $(setting gravity.scope workspace) == all ]]; then echo all; else active_ws; fi
+}
+
+case ${1:-} in
+  on|off|toggle)
+    need_hyprland
+    t=$(target "${2:-}")
+    want=$1
+    if [[ $want == toggle ]]; then
+      if [[ $t == all ]]; then if load | jq -e '.all' >/dev/null; then want=off; else want=on; fi
+      elif on_for "$t"; then want=off; else want=on; fi
+    fi
+    if [[ $want == on ]]; then turn_on "$t"; else turn_off "$t"; fi
+    refresh_bar
+    if [[ $t == all ]]; then info "Low Gravity: $want (every workspace)"; else info "Low Gravity: $want (workspace $t)"; fi ;;
+  status)
+    need_hyprland
+    ws=$(active_ws)
+    if [[ ${2:-} == --json ]]; then
+      on=false; if on_for "$ws"; then on=true; fi
+      jq -nc --argjson ws "$ws" --argjson on "$on" --argjson all "$(load | jq '.all')" '{workspace: $ws, on: $on, all: $all}'
+    elif on_for "$ws"; then info "on (workspace $ws)"; else info "off (workspace $ws)"; fi ;;
+  place) need_hyprland; place "${2:-}" ;;
+  reapply) need_hyprland; reapply ;;
+  -h|--help|"") usage ;;
+  *) die "unknown gravity command: $1" ;;
+esac

@@ -16,6 +16,7 @@ bind(mod .. " + K", "Keyboard shortcuts", run("@DISTRO_ID@ keys"))
 bind(mod .. " + W", "Close the window", hl.dsp.window.close())
 bind(mod .. " + F", "Fullscreen", hl.dsp.window.fullscreen())
 bind(mod .. " + T", "Float or tile the window", hl.dsp.window.float({ action = "toggle" }))
+bind(mod .. " + G", "Low Gravity (float this workspace)", run("@DISTRO_ID@ gravity toggle"))
 bind(mod .. " + J", "Switch split direction", hl.dsp.layout("togglesplit"))
 bind(mod .. " + SHIFT + Escape", "Log out", run("uwsm stop"))
 

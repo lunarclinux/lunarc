@@ -397,6 +397,13 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       check "workspace watcher running"     "systemctl --user is-active --quiet $id-workspace-watch"
       check "workspaces follow Hyprland"    "$hypr $id workspaces go 3 && sleep 1 && $id workspaces state | jq -e '.active == 3 and (.items | length) >= 5' >/dev/null"
       check "attention: dot, then SUPER+U"  "$(sed "s/@ID@/$id/g" "$here/checks/attention.sh")"
+      # Low Gravity (decision record 0038): float this workspace, tile it again.
+      check "Low Gravity: float, spread, new windows, off, all" "$(sed "s/@ID@/$id/g" "$here/checks/gravity.sh")"
+      "$here/ssh" "$vm" "$user" -- "$hypr $id workspaces go 6; for i in 1 2 3; do hyprctl dispatch 'hl.dsp.exec_cmd(\"ghostty --gtk-single-instance=false\")' >/dev/null; sleep 2; done; $id gravity on >/dev/null; sleep 2" >/dev/null 2>&1 || true
+      screenshot gravity-on
+      "$here/ssh" "$vm" "$user" -- "$hypr $id gravity off >/dev/null; sleep 2" >/dev/null 2>&1 || true
+      screenshot gravity-off
+      "$here/ssh" "$vm" "$user" -- "$hypr for p in \$(hyprctl clients -j | jq -r '.[] | select(.workspace.id == 6) | .pid'); do kill \$p; done" >/dev/null 2>&1 || true
       check "workspaces style switches"     "$hypr $id workspaces style noctalia >/dev/null && sleep 2 && noctalia config export | grep -qE 'workspaces-noctalia' && noctalia config export | grep -qE '^center *=.*stay-awake' && $id workspaces style moon >/dev/null && sleep 2 && ! noctalia config export | grep -qE '^start *=.*workspaces-noctalia'"
       "$here/ssh" "$vm" "$user" -- "$hypr $id workspaces go 3" >/dev/null 2>&1 || true
       screenshot workspaces

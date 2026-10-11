@@ -5,7 +5,7 @@ plugin_api = 28
 author = "@DISTRO_ID@"
 license = "GPL-3.0-or-later"
 icon = "tool"
-description = "The bar's workspaces and one-click utilities: silence notifications, screen recording, dictation and reminders."
+description = "The bar's workspaces and one-click utilities: Low Gravity, silence notifications, screen recording, dictation and reminders."
 tags = ["system"]
 
 # Workspaces: numbers, the active one as its moon phase, a gold dot for
@@ -13,6 +13,11 @@ tags = ["system"]
 [[widget]]
 id = "workspaces"
 entry = "workspaces.luau"
+
+# Low Gravity: float this workspace's windows (`@DISTRO_ID@ gravity --help`).
+[[widget]]
+id = "gravity"
+entry = "gravity.luau"
 
 [[widget]]
 id = "silence"
