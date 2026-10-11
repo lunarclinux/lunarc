@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# Proves an update of the distro package is quiet (decision record 0040):
+# reboots distro-clean into a session, builds a strictly newer package with a
+# trivial plugin change (temporary commits, reset afterwards), installs it with
+# pacman -U while the desktop runs, and counts Noctalia hot reloads. Run under
+# the VM lock after vm/test-install --keep.
+Q=$(cd "$(dirname "$0")/.." && pwd)
+V=$Q/vm
+# shellcheck source=/dev/null
+source "$Q/distro.conf"; id=$DISTRO_ID
+PW=$(cat ~/.local/share/arch-distro-vm/distro-clean.password)
+vmsh() { "$V/ssh" distro-clean tester -- "$@"; }
+SUDO="echo '$PW' | sudo -S -p ''"
+ENVS='export XDG_RUNTIME_DIR=/run/user/$(id -u) WAYLAND_DISPLAY=wayland-1;'
+count() { vmsh "$ENVS journalctl --user -b --since '$1' --no-pager -o cat | grep -c '$2' || true"; }
+
+echo "== reboot so autologin starts a desktop session"
+vmsh "$SUDO systemctl reboot" >/dev/null 2>&1 || true
+sleep 20
+for i in $(seq 60); do vmsh true >/dev/null 2>&1 && break; sleep 5; done
+for i in $(seq 60); do vmsh "$ENVS noctalia msg status >/dev/null 2>&1" && break; sleep 3; done
+vmsh "$ENVS noctalia msg status >/dev/null && echo session-up || echo NO-SESSION"
+sleep 10
+echo "== baseline: plugin dir layout"
+vmsh "ls -la /usr/share/$id/ | grep noctalia; readlink /usr/share/$id/noctalia-plugins"
+since=$(vmsh "date '+%Y-%m-%d %H:%M:%S'")
+echo "== in-place rewrite of one plugin file (expect 1 hot reload: watcher still works)"
+vmsh "$SUDO sh -c 'f=/usr/share/$id/noctalia-plugins/utilities/silence.luau; cp \$f /root/s.luau; echo \"-- touched\" >> /root/s.luau; install -m644 /root/s.luau \$f'"
+sleep 4
+echo "hot reloads: $(count "$since" 'hot reload: reloaded')"
+
+echo "== build a newer package with a trivial plugin change"
+git -C $Q stash -q 2>/dev/null || true
+for f in $Q/default/noctalia-plugins/utilities/*.luau; do echo "-- quiet-update test build" >> "$f"; done
+git -C $Q -c user.name=t -c user.email=t@t commit -qam "TEMP test build (reverted)"
+for n in 1 2 3; do git -C $Q -c user.name=t -c user.email=t@t commit -q --allow-empty -m "TEMP version bump $n (reverted)"; done
+$Q/pkg/build >/dev/null 2>&1 || { echo "build failed"; }
+git -C $Q reset -q --hard HEAD~4
+pkg=$(ls $Q/pkg/out/repo/$id-0*.pkg.tar.zst | head -1); echo "built: ${pkg##*/}"
+scp_dest=$(vmsh 'echo $HOME')/
+"$V/ssh" distro-clean tester -- 'cat > /home/tester/new.pkg.tar.zst' < "$pkg"
+since=$(vmsh "date '+%Y-%m-%d %H:%M:%S'")
+echo "installed: $(vmsh 'pacman -Q $id')"
+echo "== pacman -U the newer package while the desktop runs"
+vmsh "$SUDO pacman -U --noconfirm /home/tester/new.pkg.tar.zst 2>&1 | tail -4"
+sleep 6
+echo "hot reloads during update (expect 0): $(count "$since" 'hot reload: reloaded')"
+echo "reload failures (expect 0): $(count "$since" 'hot reload: failed')"
+echo "config reloads: $(count "$since" 'config changed, reloading\|reloading config')"
+echo "plugins loaded from: $(vmsh "$ENVS journalctl --user -b --since '$since' --no-pager -o cat | grep 'loaded plugin' | tail -3")"
+echo "unknown widget warnings after update: $(count "$since" 'unknown widget')"
+vmsh "readlink /usr/share/$id/noctalia-plugins; ls /usr/share/$id/noctalia-plugins.d/; ls /usr/share/$id/default/ | grep -c noctalia-plugins || true"
+echo "new code active: $(vmsh "grep -c 'quiet-update test build' /usr/share/$id/noctalia-plugins/utilities/silence.luau")"
+vmsh "$ENVS noctalia msg status >/dev/null && echo shell-ok"
