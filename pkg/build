@@ -54,7 +54,9 @@ for vendored in "$root"/pkg/*/; do
   case ${vendored##*/} in main|settings|keyring|out) continue ;; esac
   [[ -f $vendored/PKGBUILD ]] || continue
   build=$work/${vendored##*/}; mkdir -p "$build"
-  cp "$vendored/PKGBUILD" "$build/"
+  # The whole folder (PKGBUILD plus any patches), from the git ref being built.
+  if [[ ! -f $work/src/pkg/${vendored##*/}/PKGBUILD ]]; then continue; fi
+  cp -r "$work/src/pkg/${vendored##*/}/." "$build/"
   (cd "$build" && PKGDEST=$out/repo makepkg -f --nodeps --noconfirm "${sign[@]}" >/dev/null)
 done
 

@@ -52,11 +52,16 @@ screensaver_lock() {
     --command-each "$background"
     --ignore-empty-password
     --show-failed-attempts
-    --font "Inter" --font-size 18
-    --indicator-radius 90 --indicator-thickness 7
-    # The ring appears only while typing, then fades back to the screensaver.
-    --inside-color "${night}cc" --inside-clear-color "${night}cc" --inside-ver-color "${night}cc"
-    --inside-wrong-color "${night}cc" --inside-caps-lock-color "${night}cc"
+    # The ring appears with the first key and fades back to the screensaver,
+    # with one line under it saying what the lock expects (our swaylock-plugin
+    # patch); nothing static is drawn on the screensaver itself.
+    --hint-text "Type your password · Enter to unlock · Esc clears"
+    --hint-color "$text"
+    --font "Inter" --font-size 22
+    --indicator-radius 110 --indicator-thickness 9
+    --indicator-caps-lock
+    --inside-color "${night}e6" --inside-clear-color "${night}e6" --inside-ver-color "${night}e6"
+    --inside-wrong-color "${night}e6" --inside-caps-lock-color "${night}e6"
     --ring-color "$gold" --ring-clear-color "$violet" --ring-ver-color "$text"
     --ring-wrong-color "$wrong" --ring-caps-lock-color "$gold"
     --key-hl-color "$text" --bs-hl-color "$wrong" --caps-lock-key-hl-color "$text"

@@ -1,0 +1,195 @@
+diff --color -ruN a/include/swaylock.h b/include/swaylock.h
+--- a/include/swaylock.h	2026-10-11 12:49:45.432486158 -0500
++++ b/include/swaylock.h	2026-10-11 12:49:45.438683723 -0500
+@@ -49,6 +49,7 @@
+ 	uint32_t layout_background;
+ 	uint32_t layout_border;
+ 	uint32_t layout_text;
++	uint32_t hint_text;
+ 	struct swaylock_colorset inside;
+ 	struct swaylock_colorset line;
+ 	struct swaylock_colorset ring;
+@@ -59,6 +60,8 @@
+ 	struct swaylock_colors colors;
+ 	enum background_mode mode;
+ 	char *font;
++	/* one line shown under the indicator while it is visible (NULL: none) */
++	char *hint;
+ 	uint32_t font_size;
+ 	uint32_t radius;
+ 	uint32_t thickness;
+diff --color -ruN a/main.c b/main.c
+--- a/main.c	2026-10-11 12:49:45.432506418 -0500
++++ b/main.c	2026-10-11 12:49:45.439048115 -0500
+@@ -743,6 +743,7 @@
+ 	colors->layout_background = 0x000000C0;
+ 	colors->layout_border = 0x00000000;
+ 	colors->layout_text = 0xFFFFFFFF;
++	colors->hint_text = 0xFFFFFFFF;
+ 	colors->inside = (struct swaylock_colorset){
+ 		.input = 0x000000C0,
+ 		.cleared = 0xE5A445C0,
+@@ -817,6 +818,8 @@
+ 		LO_TEXT_CAPS_LOCK_COLOR,
+ 		LO_TEXT_VER_COLOR,
+ 		LO_TEXT_WRONG_COLOR,
++		LO_HINT_TEXT,
++		LO_HINT_COLOR,
+ 		LO_PLUGIN_GRACE,
+ 		LO_PLUGIN_POINTER_HYSTERESIS,
+ 		LO_PLUGIN_COMMAND,
+@@ -862,6 +865,8 @@
+ 		{"layout-bg-color", required_argument, NULL, LO_LAYOUT_BG_COLOR},
+ 		{"layout-border-color", required_argument, NULL, LO_LAYOUT_BORDER_COLOR},
+ 		{"layout-text-color", required_argument, NULL, LO_LAYOUT_TXT_COLOR},
++		{"hint-text", required_argument, NULL, LO_HINT_TEXT},
++		{"hint-color", required_argument, NULL, LO_HINT_COLOR},
+ 		{"line-color", required_argument, NULL, LO_LINE_COLOR},
+ 		{"line-clear-color", required_argument, NULL, LO_LINE_CLEAR_COLOR},
+ 		{"line-caps-lock-color", required_argument, NULL, LO_LINE_CAPS_LOCK_COLOR},
+@@ -963,6 +968,10 @@
+ 			"Sets the color of the border of the box containing the layout text.\n"
+ 		"  --layout-text-color <color>      "
+ 			"Sets the color of the layout text.\n"
++		"  --hint-text <text>               "
++			"One line shown under the indicator while it is visible.\n"
++		"  --hint-color <color>             "
++			"Sets the color of the hint text (its box uses the layout background).\n"
+ 		"  --line-color <color>             "
+ 			"Sets the color of the line between the inside and ring.\n"
+ 		"  --line-clear-color <color>       "
+@@ -1213,6 +1222,17 @@
+ 				state->args.colors.layout_text = parse_color(optarg);
+ 			}
+ 			break;
++		case LO_HINT_TEXT:
++			if (state) {
++				free(state->args.hint);
++				state->args.hint = optarg[0] ? strdup(optarg) : NULL;
++			}
++			break;
++		case LO_HINT_COLOR:
++			if (state) {
++				state->args.colors.hint_text = parse_color(optarg);
++			}
++			break;
+ 		case LO_LINE_COLOR:
+ 			if (state) {
+ 				state->args.colors.line.input = parse_color(optarg);
+@@ -2251,6 +2271,7 @@
+ 	state.args = (struct swaylock_args){
+ 		.mode = BACKGROUND_MODE_FILL,
+ 		.font = strdup("sans-serif"),
++		.hint = NULL,
+ 		.font_size = 0,
+ 		.radius = 50,
+ 		.thickness = 10,
+diff --color -ruN a/render.c b/render.c
+--- a/render.c	2026-10-11 12:49:45.432555788 -0500
++++ b/render.c	2026-10-11 12:49:45.439115866 -0500
+@@ -146,12 +146,26 @@
+ 		}
+ 	}
+ 
++	// The hint line: shown only while the ring itself is (never for an
++	// indicator that is merely idle-visible).
++	const char *hint = NULL;
++	if (draw_indicator && state->args.hint &&
++			(state->auth_state != AUTH_STATE_IDLE ||
++				state->input_state != INPUT_STATE_IDLE)) {
++		hint = state->args.hint;
++	}
++
+ 	// Compute the size of the buffer needed
+ 	int arc_radius = state->args.radius * surface->scale;
+ 	int arc_thickness = state->args.thickness * surface->scale;
+ 	int buffer_diameter = (arc_radius + arc_thickness) * 2;
+ 	int buffer_width = buffer_diameter;
+ 	int buffer_height = buffer_diameter;
++	double layout_box_height = 0;
++	double hint_padding = 6.0 * surface->scale;
++	double hint_gap = 12.0 * surface->scale;
++	double hint_font_size = (state->args.font_size > 0 ?
++		state->args.font_size : arc_radius / 3.0) * 0.62;
+ 
+ 	if (text || layout_text) {
+ 		cairo_set_antialias(state->test_cairo, CAIRO_ANTIALIAS_BEST);
+@@ -170,12 +184,26 @@
+ 			double box_padding = 4.0 * surface->scale;
+ 			cairo_text_extents(state->test_cairo, layout_text, &extents);
+ 			cairo_font_extents(state->test_cairo, &fe);
+-			buffer_height += fe.height + 2 * box_padding;
++			layout_box_height = fe.height + 2 * box_padding;
++			buffer_height += layout_box_height;
+ 			if (buffer_width < extents.width + 2 * box_padding) {
+ 				buffer_width = extents.width + 2 * box_padding;
+ 			}
+ 		}
+ 	}
++	if (hint) {
++		cairo_text_extents_t extents;
++		cairo_font_extents_t fe;
++		cairo_set_antialias(state->test_cairo, CAIRO_ANTIALIAS_BEST);
++		configure_font_drawing(state->test_cairo, state, surface->subpixel, arc_radius);
++		cairo_set_font_size(state->test_cairo, hint_font_size);
++		cairo_text_extents(state->test_cairo, hint, &extents);
++		cairo_font_extents(state->test_cairo, &fe);
++		buffer_height += hint_gap + fe.height + 2 * hint_padding;
++		if (buffer_width < extents.width + 2 * hint_padding) {
++			buffer_width = extents.width + 2 * hint_padding;
++		}
++	}
+ 	// Ensure buffer size is multiple of buffer scale - required by protocol
+ 	buffer_height += surface->scale - (buffer_height % surface->scale);
+ 	buffer_width += surface->scale - (buffer_width % surface->scale);
+@@ -346,6 +374,32 @@
+ 			cairo_show_text(cairo, layout_text);
+ 			cairo_new_sub_path(cairo);
+ 		}
++
++		// The hint line, under the ring (and under the layout box if any)
++		if (hint) {
++			cairo_text_extents_t extents;
++			cairo_font_extents_t fe;
++			double x, y;
++			configure_font_drawing(cairo, state, surface->subpixel, arc_radius);
++			cairo_set_font_size(cairo, hint_font_size);
++			cairo_text_extents(cairo, hint, &extents);
++			cairo_font_extents(cairo, &fe);
++			x = (buffer_width / 2) - (extents.width / 2) - hint_padding;
++			y = buffer_diameter + layout_box_height + hint_gap;
++
++			cairo_rectangle(cairo, x, y,
++				extents.width + 2.0 * hint_padding,
++				fe.height + 2.0 * hint_padding);
++			cairo_set_source_u32(cairo, state->args.colors.layout_background);
++			cairo_fill(cairo);
++
++			cairo_move_to(cairo,
++				x - extents.x_bearing + hint_padding,
++				y + (fe.height - fe.descent) + hint_padding);
++			cairo_set_source_u32(cairo, state->args.colors.hint_text);
++			cairo_show_text(cairo, hint);
++			cairo_new_sub_path(cairo);
++		}
+ 	}
+ 
+ 	// Send Wayland requests
+diff --color -ruN a/swaylock.1.scd b/swaylock.1.scd
+--- a/swaylock.1.scd	2026-10-11 12:49:45.432581039 -0500
++++ b/swaylock.1.scd	2026-10-11 12:49:53.906281243 -0500
+@@ -176,6 +176,14 @@
+ *--layout-text-color* <rrggbb[aa]>
+ 	Sets the color of the layout text.
+ 
++*--hint-text* <text>
++	One line of text shown under the indicator while it is visible (typing,
++	verifying, wrong, cleared), never while the indicator is only idle-visible.
++	Its box uses the layout background color.
++
++*--hint-color* <rrggbb[aa]>
++	Sets the color of the hint text.
++
+ *--line-color* <rrggbb[aa]>
+ 	Sets the color of the line between the inside and ring.
+ 
