@@ -27,6 +27,74 @@ install_disks() {
 }
 
 # ---------------------------------------------------------------------------
+# What's already on a disk, for installing alongside it (decision record 0035).
+# Nothing here writes to the disk; EFI partitions are only mounted read-only.
+
+ALONGSIDE_MIN_BYTES=$(( 40 * 1024 * 1024 * 1024 ))
+ESP_TYPE=c12a7328-f81f-11d2-ba4b-00a0c93ec93b
+
+# The largest stretch of unpartitioned space on the disk, in bytes.
+disk_free_bytes() { # disk_free_bytes <disk>
+  if [[ ${INSTALL_DRY_RUN:-0} == 1 ]]; then
+    case $1 in *nvme0n1) echo $(( 420 * 1024 * 1024 * 1024 )) ;; *) echo 0 ;; esac
+    return
+  fi
+  sfdisk --list-free --bytes "$1" 2>/dev/null \
+    | awk '$1 ~ /^[0-9]+$/ && $4 ~ /^[0-9]+$/ && $4 > max { max = $4 } END { printf "%d\n", max }'
+}
+
+# Whether the disk has partitions at all.
+disk_has_partitions() { # disk_has_partitions <disk>
+  if [[ ${INSTALL_DRY_RUN:-0} == 1 ]]; then [[ $1 == *nvme0n1 ]]; return; fi
+  lsblk -lno TYPE "$1" | grep -qx part
+}
+
+# The disk's EFI system partition holding Windows Boot Manager, if any.
+disk_windows_esp() { # disk_windows_esp <disk>
+  local part type dir found=''
+  if [[ ${INSTALL_DRY_RUN:-0} == 1 ]]; then
+    if [[ $1 == *nvme0n1 ]]; then echo "${1}p1"; fi
+    return 0
+  fi
+  while read -r part type; do
+    [[ ${type,,} == "$ESP_TYPE" ]] || continue
+    dir=$(mktemp -d)
+    if mount -o ro "$part" "$dir" 2>/dev/null; then
+      if [[ -n $(find "$dir" -maxdepth 4 -ipath "$dir/efi/microsoft/boot/bootmgfw.efi" -print -quit 2>/dev/null) ]]; then
+        found=$part
+      fi
+      umount "$dir" || true
+    fi
+    rmdir "$dir" 2>/dev/null || true
+    if [[ -n $found ]]; then printf '%s\n' "$found"; return 0; fi
+  done < <(lsblk -lnpo NAME,PARTTYPE "$1" | awk 'NF == 2')
+}
+
+# Whether any partition on the disk is BitLocker-encrypted.
+disk_has_bitlocker() { # disk_has_bitlocker <disk>
+  if [[ ${INSTALL_DRY_RUN:-0} == 1 ]]; then return 1; fi
+  lsblk -lno FSTYPE "$1" | grep -qix bitlocker
+}
+
+# The lowest partition number not yet used on the disk.
+next_partnum() { # next_partnum <disk>
+  local used n
+  used=" $(lsblk -lno PARTN "$1" | tr -s ' \n' '  ') "
+  for n in $(seq 1 128); do
+    if [[ $used != *" $n "* ]]; then printf '%s\n' "$n"; return 0; fi
+  done
+  return 1
+}
+
+# A partition's device name from its number (/dev/vda4, /dev/nvme0n1p4).
+partition_dev() { # partition_dev <disk> <number>
+  lsblk -lnpo NAME,PARTN "$1" | awk -v n="$2" '$2 == n { print $1; exit }'
+}
+
+# Sizes for people: 420 GB.
+human_gb() { printf '%d GB' $(( $1 / 1000000000 )); }
+
+# ---------------------------------------------------------------------------
 # The styled installer (decision record 0023): used only for an interactive
 # install on a terminal with gum available. Scripted installs (--yes, the VM
 # tests) keep the plain output above.

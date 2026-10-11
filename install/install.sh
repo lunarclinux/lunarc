@@ -5,7 +5,9 @@
 #   install/install.sh --disk /dev/vda --user NAME [options]
 #
 # Options:
-#   --disk DEV            disk to erase and install to (required)
+#   --disk DEV            disk to install to (required); erased unless --alongside
+#   --alongside           keep what's on the disk (e.g. Windows) and install into
+#                         its largest stretch of free space (at least 40 GB)
 #   --user NAME           admin user to create (required)
 #   --password-file FILE  file holding the user's password; prompted for if omitted
 #   --hostname NAME       default: the distro ID from distro.conf
@@ -14,7 +16,7 @@
 #   --encrypt FILE        encrypt the disk (LUKS2) with the passphrase in FILE
 #   --ssh-key FILE        authorise this public key for the user and enable sshd
 #                         (used by the VM tests)
-#   --yes                 don't ask before erasing the disk
+#   --yes                 don't ask before changing the disk
 #
 # Run from the root of a checkout (or an unpacked `git archive`). Started with
 # no disk or user on a terminal, it asks; with gum installed the questions and
@@ -29,6 +31,7 @@ trap on_exit EXIT
 DRY_RUN=${INSTALL_DRY_RUN:-0}
 
 DISK='' USERNAME='' PASSWORD_FILE='' SSH_KEY='' ASSUME_YES=0 AUTOLOGIN=0 ENCRYPT_FILE='' ENCRYPT=0
+INSTALL_MODE=erase WINDOWS_ESP=''
 HOSTNAME_NEW=$DISTRO_ID TIMEZONE=UTC
 
 while [[ $# -gt 0 ]]; do
@@ -42,6 +45,7 @@ while [[ $# -gt 0 ]]; do
     --autologin) AUTOLOGIN=1; shift ;;
     --encrypt) ENCRYPT=1; ENCRYPT_FILE=$2; shift 2 ;;
     --yes) ASSUME_YES=1; shift ;;
+    --alongside) INSTALL_MODE=alongside; shift ;;
     -h|--help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) die "unknown option: $1" ;;
   esac
@@ -60,6 +64,17 @@ fi
 [[ -z $SSH_KEY || -f $SSH_KEY ]] || die "ssh key not found: $SSH_KEY"
 (( ! ENCRYPT )) || [[ -s $ENCRYPT_FILE ]] || die "encryption passphrase file is missing or empty"
 
+# Alongside: never touch existing partitions; there must be room, and Windows'
+# boot files (if any) get a menu entry.
+if [[ $INSTALL_MODE == alongside ]]; then
+  (( DRY_RUN )) || [[ $(blkid -p -o value -s PTTYPE "$DISK" 2>/dev/null) == gpt ]] \
+    || die "$DISK doesn't have a GPT partition table; installing alongside needs one (UEFI systems use GPT)"
+  free=$(disk_free_bytes "$DISK")
+  (( free >= ALONGSIDE_MIN_BYTES )) \
+    || die "$DISK has $(human_gb "$free") of free space; installing alongside needs at least $(human_gb "$ALONGSIDE_MIN_BYTES")"
+  if [[ -z $WINDOWS_ESP ]]; then WINDOWS_ESP=$(disk_windows_esp "$DISK"); fi
+fi
+
 if [[ -n $PASSWORD_FILE ]]; then
   PASSWORD=$(<"$PASSWORD_FILE")
 else
@@ -71,11 +86,16 @@ fi
 
 if (( ! ASSUME_YES )); then
   lsblk "$DISK" || true
-  read -rp "Erase everything on $DISK? Type yes: " answer
+  if [[ $INSTALL_MODE == alongside ]]; then
+    read -rp "Install into the free space on $DISK, keeping everything on it? Type yes: " answer
+  else
+    read -rp "Erase everything on $DISK? Type yes: " answer
+  fi
   [[ $answer == yes ]] || die "cancelled"
 fi
 
 export root DISK USERNAME PASSWORD SSH_KEY HOSTNAME_NEW TIMEZONE AUTOLOGIN ENCRYPT ENCRYPT_FILE MNT=/mnt
+export INSTALL_MODE WINDOWS_ESP
 
 # On the live ISO the pacman keyring is set up by a service at boot; installing
 # before it finishes fails with "keyring is not writable".
@@ -108,6 +128,10 @@ if (( ! UI )); then
     if (( DRY_RUN )); then pretend_step "$step"; else source "$step"; fi
   done
   step "done: remove the install media and reboot"
+  if [[ -n $WINDOWS_ESP ]]; then
+    info "Windows is kept: pick it in the boot menu. Windows keeps the clock in local time;"
+    info "to stop it showing the wrong time, set RealTimeIsUniversal=1 in Windows (see the manual)."
+  fi
   exit 0
 fi
 
@@ -138,6 +162,12 @@ if (( AUTOLOGIN && ! ENCRYPT )); then
 fi
 if (( ENCRYPT )); then
   printf '  %sAt startup, type the disk passphrase to unlock it.%s\n' "$C_MUTED" "$C_OFF"
+fi
+if [[ -n $WINDOWS_ESP ]]; then
+  printf '\n'
+  ui_text "$C_TEXT" "Windows is still there: pick it in the boot menu when the computer starts. $DISTRO_NAME starts by default."
+  ui_text "$C_MUTED" "The clock: $DISTRO_NAME keeps the computer's clock in UTC, Windows in local time, so Windows may show the wrong time after using $DISTRO_NAME. To fix it for good, in Windows run this once as administrator: reg add HKLM\\SYSTEM\\CurrentControlSet\\Control\\TimeZoneInformation /v RealTimeIsUniversal /t REG_DWORD /d 1 /f"
+  ui_text "$C_MUTED" "If a Windows update ever makes Windows start first, open the computer's boot menu at power-on (usually F12, F11 or Esc) and choose $DISTRO_NAME; the BIOS settings can make it first again."
 fi
 printf '\n'
 choice=$(gum choose "Restart now" "Stay in the live system") || exit 0

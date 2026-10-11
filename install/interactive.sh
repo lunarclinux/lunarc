@@ -18,7 +18,7 @@ disk_label() { # disk_label <dev>
   local size model has
   if [[ ${INSTALL_DRY_RUN:-0} == 1 ]]; then
     case $1 in
-      *nvme0n1) printf '%-14s %7s   %s   (has: ntfs, vfat)' "${1#/dev/}" 1.8T "Samsung SSD 990 PRO" ;;
+      *nvme0n1) printf '%-14s %7s   %s   (has: Windows, ntfs, vfat)' "${1#/dev/}" 1.8T "Samsung SSD 990 PRO" ;;
       *) printf '%-14s %7s   %s' "${1#/dev/}" 500G "WD Blue SA510" ;;
     esac
     return
@@ -26,6 +26,7 @@ disk_label() { # disk_label <dev>
   size=$(lsblk -dno SIZE "$1" | tr -d ' ')
   model=$(lsblk -dno MODEL "$1" | sed 's/[[:space:]]*$//')
   has=$(lsblk -no FSTYPE "$1" | sed '/^$/d' | sort -u | paste -sd, - | sed 's/,/, /g')
+  if [[ -n $has && -n $(disk_windows_esp "$1") ]]; then has="Windows, $has"; fi
   printf '%-14s %7s   %s%s' "${1#/dev/}" "$size" "${model:-disk}" "${has:+   (has: $has)}"
 }
 
@@ -47,8 +48,48 @@ online() {
   curl -sfI --max-time 4 https://archlinux.org -o /dev/null
 }
 
+# What's on the chosen disk in words: "Windows" or "the partitions on it".
+disk_contents() { # disk_contents <windows esp>
+  if [[ -n $1 ]]; then echo Windows; else echo "what's on it"; fi
+}
+
+# The disk already has partitions: keep them and use the free space, or erase
+# it all. Sets INSTALL_MODE and WINDOWS_ESP; returns 1 to pick another disk.
+disk_choice() { # disk_choice <total steps>
+  local free win what choice options=()
+  INSTALL_MODE=erase WINDOWS_ESP=''
+  disk_has_partitions "$DISK" || return 0
+  free=$(disk_free_bytes "$DISK"); win=$(disk_windows_esp "$DISK"); what=$(disk_contents "$win")
+  ui_question 1 "$1" "What should happen to ${DISK#/dev/}?"
+  if [[ -n $win ]]; then
+    ui_text "$C_TEXT" "Windows is installed on this disk."
+  else
+    ui_text "$C_TEXT" "This disk already has partitions: $(lsblk -no FSTYPE "$DISK" | sed '/^$/d' | sort -u | paste -sd, - | sed 's/,/, /g')."
+  fi
+  if disk_has_bitlocker "$DISK"; then
+    ui_text "$C_GOLD" "BitLocker is on. Before going on, make sure you have the BitLocker recovery key (account.microsoft.com/devices/recoverykey): some computers ask for it once after another system is added."
+  fi
+  printf '\n'
+  if (( free >= ALONGSIDE_MIN_BYTES )); then
+    options+=("Keep $what, use the free space ($(human_gb "$free"))")
+  else
+    ui_text "$C_MUTED" "There isn't enough free space to keep $what: $(human_gb "$free") free, $(human_gb "$ALONGSIDE_MIN_BYTES") needed."
+    if [[ -n $win ]]; then
+      ui_text "$C_MUTED" "To make room: start Windows, right-click Start, open Disk Management, right-click the C: drive and choose Shrink Volume (at least 40 GB, more is better). Also turn off Fast Startup (Control Panel, Power Options, Choose what the power buttons do). Then start from this USB again."
+    fi
+    printf '\n'
+  fi
+  options+=("Erase the whole disk" "Pick another disk")
+  choice=$(gum choose "${options[@]}")
+  case $choice in
+    Keep*) INSTALL_MODE=alongside WINDOWS_ESP=$win ;;
+    Erase*) INSTALL_MODE=erase ;;
+    *) return 1 ;;
+  esac
+}
+
 styled_questions() {
-  local total=6 labels=() disks=() pick=() label i answer again phrase zone file
+  local total=6 labels=() disks=() pick=() label i answer again phrase zone file target
 
   # Welcome.
   while :; do
@@ -73,13 +114,14 @@ styled_questions() {
 
   while :; do
     # 1. Disk.
-    ui_question 1 $total "Which disk should $DISTRO_NAME use?" "Everything on it will be erased, including any other system on it."
+    ui_question 1 $total "Which disk should $DISTRO_NAME use?" "If it already has a system on it, like Windows, you choose next whether to keep it."
     pick=(--height 10)
     if [[ -n $DISK ]]; then pick+=(--selected="$(disk_label "$DISK")"); fi
     label=$(gum choose "${pick[@]}" "${labels[@]}")
     for i in "${!labels[@]}"; do
       if [[ ${labels[i]} == "$label" ]]; then DISK=${disks[i]}; fi
     done
+    if ! disk_choice $total; then DISK=''; continue; fi
 
     # 2. Account.
     ui_question 2 $total "Create your account" "Lowercase letters, digits, - and _; start with a letter."
@@ -118,7 +160,9 @@ styled_questions() {
     # 5. Encryption.
     ui_question 5 $total "Encrypt the disk?" "Recommended, especially for laptops: your files stay private if the computer is lost. You type a passphrase each time it starts."
     ENCRYPT=0 ENCRYPT_FILE=''
-    if ask --affirmative "Encrypt" --negative "Don't encrypt" "Encrypt $DISK?"; then
+    target=$DISK
+    if [[ $INSTALL_MODE == alongside ]]; then target="$DISTRO_NAME's part of ${DISK#/dev/}"; fi
+    if ask --affirmative "Encrypt" --negative "Don't encrypt" "Encrypt $target?"; then
       while :; do
         phrase=$(gum input --password --header "Disk passphrase" --placeholder "")
         again=$(gum input --password --header "Type it again" --placeholder "")
@@ -142,7 +186,13 @@ styled_questions() {
     ui_header "Installer"
     printf '  %s%sReady to install%s\n\n' "$C_BOLD" "$C_TEXT" "$C_OFF"
     summary_line "Disk" "$(disk_label "$DISK" | sed 's/  */ /g')"
-    summary_line "" "${C_RED}everything on it will be erased${C_OFF}"
+    if [[ $INSTALL_MODE == alongside ]]; then
+      summary_line "" "${C_GREEN}$(disk_contents "$WINDOWS_ESP") is kept${C_OFF}"
+      summary_line "" "$DISTRO_NAME uses the free space: $(human_gb "$(disk_free_bytes "$DISK")")"
+      if [[ -n $WINDOWS_ESP ]]; then summary_line "" "the boot menu gets a Windows entry"; fi
+    else
+      summary_line "" "${C_RED}everything on it will be erased${C_OFF}"
+    fi
     summary_line "Account" "$USERNAME"
     summary_line "Computer name" "$HOSTNAME_NEW"
     summary_line "Time zone" "$TIMEZONE"
@@ -152,7 +202,12 @@ styled_questions() {
       summary_line "" "a keyring password is asked for once at each login"
     fi
     printf '\n'
-    if GUM_CONFIRM_PROMPT_FOREGROUND=$RED GUM_CONFIRM_SELECTED_BACKGROUND=$RED \
+    if [[ $INSTALL_MODE == alongside ]]; then
+      if ask --default=false --affirmative "Install" --negative "Start over" \
+         "Install $DISTRO_NAME alongside $(disk_contents "$WINDOWS_ESP") on ${DISK#/dev/}?"; then
+        break
+      fi
+    elif GUM_CONFIRM_PROMPT_FOREGROUND=$RED GUM_CONFIRM_SELECTED_BACKGROUND=$RED \
        ask --default=false --affirmative "Erase and install" --negative "Start over" "Erase ${DISK#/dev/} and install $DISTRO_NAME?"; then
       break
     fi
@@ -181,6 +236,19 @@ plain_questions() {
     pick=${pick:-1}
     [[ $pick =~ ^[0-9]+$ && $pick -ge 1 && $pick -le ${#choices[@]} ]] || die "no such disk"
     DISK=${choices[pick - 1]}
+  fi
+
+  # Something on it already: keep it and use the free space?
+  if [[ $INSTALL_MODE != alongside ]] && disk_has_partitions "$DISK"; then
+    local free win
+    free=$(disk_free_bytes "$DISK"); win=$(disk_windows_esp "$DISK")
+    if (( free >= ALONGSIDE_MIN_BYTES )); then
+      read -rp "$DISK has $(disk_contents "$win") on it. Keep it and install into the free space ($(human_gb "$free"))? [Y/n] " answer
+      if [[ ${answer,,} != n* ]]; then INSTALL_MODE=alongside WINDOWS_ESP=$win; fi
+    elif [[ -n $win ]]; then
+      echo "  Windows is on $DISK without enough free space to keep it ($(human_gb "$free") free; 40 GB needed)."
+      echo "  To keep Windows: shrink C: in Windows' Disk Management, turn off Fast Startup, then run this again."
+    fi
   fi
 
   if [[ -z $USERNAME ]]; then
@@ -226,7 +294,11 @@ plain_questions() {
   if [[ ${answer,,} == y* ]]; then AUTOLOGIN=1; fi
 
   echo
-  echo "  Disk:      $DISK (everything on it will be erased)"
+  if [[ $INSTALL_MODE == alongside ]]; then
+    echo "  Disk:      $DISK (keeping $(disk_contents "$WINDOWS_ESP"); using the free space)"
+  else
+    echo "  Disk:      $DISK (everything on it will be erased)"
+  fi
   echo "  User:      $USERNAME"
   echo "  Computer:  $HOSTNAME_NEW"
   echo "  Time zone: $TIMEZONE"

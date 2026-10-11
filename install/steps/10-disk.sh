@@ -3,15 +3,31 @@
 # Partition, format and mount. Sourced by install.sh.
 umount -R "$MNT" 2>/dev/null || true
 cryptsetup close system 2>/dev/null || true
-wipefs -af "$DISK" >/dev/null
-sgdisk --zap-all "$DISK" >/dev/null
-sgdisk -n1:0:+1G -t1:ef00 -c1:EFI -n2:0:0 -t2:8300 -c2:system "$DISK" >/dev/null
-partprobe "$DISK"; udevadm settle
 
-# /dev/vda1 but /dev/nvme0n1p1
-part() { lsblk -lnpo NAME "$DISK" | sed -n "$(( $1 + 1 ))p"; }
-ESP=$(part 1) SYSTEM=$(part 2)
-info "EFI: $ESP  system: $SYSTEM"
+if [[ $INSTALL_MODE == alongside ]]; then
+  # Keep every existing partition (decision record 0035). Our own EFI system
+  # partition and the system partition go into the largest stretch of free
+  # space: Windows' EFI partition is usually 100-300 MB, too small for kernels,
+  # and we never write to it.
+  boot_num=$(next_partnum "$DISK")
+  sgdisk -n"$boot_num":0:+1G -t"$boot_num":ef00 -c"$boot_num":"$DISTRO_NAME boot" "$DISK" >/dev/null
+  partprobe "$DISK"; udevadm settle
+  system_num=$(next_partnum "$DISK")
+  sgdisk -n"$system_num":0:0 -t"$system_num":8300 -c"$system_num":"$DISTRO_NAME system" "$DISK" >/dev/null
+  partprobe "$DISK"; udevadm settle
+  ESP=$(partition_dev "$DISK" "$boot_num") SYSTEM=$(partition_dev "$DISK" "$system_num")
+  [[ -b $ESP && -b $SYSTEM ]] || die "the new partitions didn't appear (numbers $boot_num and $system_num)"
+  info "kept the existing partitions; new: boot $ESP, system $SYSTEM"
+  if [[ -n $WINDOWS_ESP ]]; then info "Windows boot files: $WINDOWS_ESP (left untouched)"; fi
+else
+  wipefs -af "$DISK" >/dev/null
+  sgdisk --zap-all "$DISK" >/dev/null
+  sgdisk -n1:0:+1G -t1:ef00 -c1:EFI -n2:0:0 -t2:8300 -c2:system "$DISK" >/dev/null
+  partprobe "$DISK"; udevadm settle
+  boot_num=1
+  ESP=$(partition_dev "$DISK" 1) SYSTEM=$(partition_dev "$DISK" 2)
+  info "EFI: $ESP  system: $SYSTEM"
+fi
 
 mkfs.fat -F32 -n EFI "$ESP" >/dev/null
 
@@ -38,4 +54,4 @@ mount -o "$opts,subvol=@log" "$SYSTEM" "$MNT/var/log"
 mount -o "$opts,subvol=@pkg" "$SYSTEM" "$MNT/var/cache/pacman/pkg"
 mount -o "$opts,subvol=@snapshots" "$SYSTEM" "$MNT/.snapshots"
 mount "$ESP" "$MNT/boot"
-export ESP SYSTEM LUKS_UUID
+export ESP SYSTEM LUKS_UUID boot_num

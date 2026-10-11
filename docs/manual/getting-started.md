@@ -6,8 +6,18 @@ Working name: Lunarc (see decision record 0016); the command is `lunarc`.
 
 1. Put the ISO (`lunarc-YYYY.MM.DD-x86_64.iso`) on a USB stick, e.g. with Ventoy, and boot it. UEFI only; turn off Secure Boot. "Lunarc live (copy to RAM)" in the boot menu lets you remove the stick once it has started.
 2. It starts the live desktop: try it freely; nothing is written to disk. Wi-Fi is in the bar's network menu.
-3. To install, open **Install Lunarc** from the launcher (SUPER+Space) and answer the questions: disk (erased), user name and password, computer name, time zone, disk encryption (recommended), automatic login. (Without the desktop: Ctrl+Alt+F2 gives a root shell; run `install-lunarc` there.)
+3. To install, open **Install Lunarc** from the launcher (SUPER+Space) and answer the questions: disk (erased, or keep what's on it and use its free space), user name and password, computer name, time zone, disk encryption (recommended), automatic login. (Without the desktop: Ctrl+Alt+F2 gives a root shell; run `install-lunarc` there.)
 4. Restart and remove the stick.
+
+### Next to Windows
+
+If the disk you pick already has Windows (or anything else) on it, the installer asks whether to keep it and use the disk's free space, or erase the whole disk. Keeping it needs at least 40 GB of free (unpartitioned) space:
+
+1. In Windows, right-click Start, open **Disk Management**, right-click the C: drive and choose **Shrink Volume** (at least 40 GB; more is better).
+2. Turn off **Fast Startup** (Control Panel, Power Options, Choose what the power buttons do), and if BitLocker is on, make sure you have its recovery key (account.microsoft.com/devices/recoverykey).
+3. Start from the USB stick and install, choosing **Keep Windows, use the free space**.
+
+Lunarc gets its own small boot partition and starts by default; the boot menu has a **Windows** entry. Nothing on the Windows partitions is changed. Windows keeps the hardware clock in local time and Lunarc in UTC; to stop Windows showing the wrong time, run this once in Windows as administrator: `reg add HKLM\SYSTEM\CurrentControlSet\Control\TimeZoneInformation /v RealTimeIsUniversal /t REG_DWORD /d 1 /f`. If a Windows update makes Windows start first, pick Lunarc in the computer's boot menu at power-on (often F12, F11 or Esc) or in its firmware settings.
 
 Graphics drivers are picked from the hardware: AMD, Intel and NVIDIA (GTX 16xx / RTX 20xx and newer). On a laptop with both integrated and NVIDIA graphics, the integrated GPU drives the screens and you start an app on the NVIDIA GPU with `prime-run <app>`. Older NVIDIA cards keep the open-source driver (nouveau); the older proprietary driver is only in the AUR.
 
