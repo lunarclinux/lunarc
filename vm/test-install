@@ -455,12 +455,24 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       check "lock recovery key works while locked" "$hypr hyprctl binds -j | jq -e '.[] | select(.key == \"L\" and .modmask == 12 and .locked == true)' >/dev/null"
       check "lock engages, screensaver behind it" "$hypr $id lock && sleep 3 && pgrep -x swaylock-plugin >/dev/null && pgrep -x windowtolayer >/dev/null && for i in \$(seq 20); do pgrep -x tte >/dev/null && exit 0; sleep 1; done; exit 1"
       screenshot lock
-      check "lock says what it expects"    "$hypr sleep 1; grim - | tesseract stdin - 2>/dev/null | tr -s ' ' | grep -qi 'typing your password'"
-      # The ring's states, for the screenshots: typing, a wrong password, caps lock.
-      vm_type "abc"; screenshot lock-typing
-      virsh send-key "$vm" KEY_ENTER >/dev/null; sleep 1; screenshot lock-wrong; sleep 3
-      virsh send-key "$vm" KEY_CAPSLOCK >/dev/null; vm_type "x"; screenshot lock-capslock
-      virsh send-key "$vm" KEY_CAPSLOCK >/dev/null; virsh send-key "$vm" KEY_ESC >/dev/null; sleep 1
+      # Idle: only the screensaver; the ring and its hint appear with the first key.
+      check "lock: no static text while idle" "$hypr ! grim - | tesseract stdin - 2>/dev/null | grep -qi 'type your password'"
+      # The ring (and its hint) fades 1.5 s after the last key, so these grab
+      # the screen at once and read the typing shot here on the host.
+      quick_shot() { # quick_shot <label>: prints the file
+        local f; f=$shots/$vm-$(date +%Y%m%d-%H%M%S)-$1.png
+        "$here/ssh" "$vm" "$user" -- "$hypr grim -" > "$f" 2>/dev/null || true
+        log "screenshot: $f"; printf '%s' "$f" > "$shots/.last"
+      }
+      vm_type "abc"; quick_shot lock-typing
+      if command -v tesseract >/dev/null && tesseract "$(<"$shots/.last")" - 2>/dev/null | grep -qi 'type your password'; then
+        printf '  \033[32mok\033[0m   %s\n' "lock: hint shows while typing"
+      else
+        printf '  \033[31mFAIL\033[0m %s\n' "lock: hint shows while typing"; fail=1
+      fi
+      virsh send-key "$vm" KEY_ENTER >/dev/null; sleep 1; quick_shot lock-wrong; sleep 3
+      virsh send-key "$vm" KEY_CAPSLOCK >/dev/null; vm_type "x"; quick_shot lock-capslock
+      virsh send-key "$vm" KEY_CAPSLOCK >/dev/null; virsh send-key "$vm" KEY_ESC >/dev/null; quick_shot lock-cleared; sleep 1
       vm_type "$password"; virsh send-key "$vm" KEY_ENTER >/dev/null; sleep 5
       check "password unlocks; animation ends" "! pgrep -x swaylock-plugin >/dev/null && sleep 3 && ! pgrep -x windowtolayer >/dev/null && ! pgrep -x tte >/dev/null"
       # Fail closed: without the screensaver lock, Noctalia's lock takes over.

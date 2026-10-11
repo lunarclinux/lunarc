@@ -52,8 +52,11 @@ screensaver_lock() {
     --command-each "$background"
     --ignore-empty-password
     --show-failed-attempts
-    # The ring appears with the first key and fades back to the screensaver;
-    # the screensaver's bottom line says what to do before that.
+    # The ring appears with the first key and fades back to the screensaver,
+    # with one line under it saying what the lock expects (our swaylock-plugin
+    # patch); nothing static is drawn on the screensaver itself.
+    --hint-text "Type your password · Enter to unlock · Esc clears"
+    --hint-color "$text"
     --font "Inter" --font-size 22
     --indicator-radius 110 --indicator-thickness 9
     --indicator-caps-lock
