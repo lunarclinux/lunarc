@@ -161,7 +161,7 @@ key_check() {
   [[ -r $trusted ]] || return 0
   fpr=$(cut -d: -f1 "$trusted" | head -1)
   [[ $fpr =~ ^[0-9A-F]{40}$ ]] || return 0
-  validity=$(sudo gpg --homedir /etc/pacman.d/gnupg --batch --with-colons --list-keys "$fpr" 2>/dev/null | awk -F: '$1 == "pub" { print $2; exit }')
+  validity=$(sudo gpg --homedir /etc/pacman.d/gnupg --batch --with-colons --list-keys "$fpr" 2>/dev/null | awk -F: '$1 == "pub" { print $2; exit }' || true)
   case $validity in f|u) return 0 ;; esac
   info "The $DISTRO_NAME package key isn't trusted on this computer yet. Setting it up from the installed keyring..."
   sudo pacman-key --populate "$DISTRO_ID" >/dev/null
