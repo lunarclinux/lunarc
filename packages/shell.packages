@@ -33,3 +33,8 @@ fd
 ripgrep
 tealdeer
 bash-completion
+
+# Network shares for backups (`<id> share`): NFS and SMB clients; showmount
+# lists a NAS's NFS shares.
+nfs-utils
+cifs-utils
