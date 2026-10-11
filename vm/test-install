@@ -470,17 +470,20 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
         read -r w h < <(magick identify -format '%w %h' "$1")
         crop=$(mktemp --suffix=.png)
         magick "$1" -crop "$((w / 2))x$((h / 20))+$((w / 4))+$((h * 655 / 1000))" +repage -resize 300% -colorspace gray -negate "$crop"
-        tesseract "$crop" - --psm 7 2>/dev/null | grep -qi unlock; local rc=$?
-        rm -f "$crop"; return $rc
+        local rc=1
+        if tesseract "$crop" - --psm 7 2>/dev/null | grep -qi unlock; then rc=0; fi
+        rm -f "$crop"; return "$rc"
       }
       report() { # report <ok?> <description>
         if [[ $1 == 0 ]]; then printf '  \033[32mok\033[0m   %s\n' "$2"; else printf '  \033[31mFAIL\033[0m %s\n' "$2"; fail=1; fi
       }
       quick_shot lock-idle
-      hint_seen "$last_shot"; rc=$?; if (( rc == 2 )); then log "no tesseract/magick here: skipping the hint checks"; else
+      rc=0; hint_seen "$last_shot" || rc=$?
+      if (( rc == 2 )); then log "no tesseract/magick here: skipping the hint checks"; else
         report "$(( rc == 1 ? 0 : 1 ))" "lock: no text while idle"
         vm_type "abc"; quick_shot lock-typing
-        hint_seen "$last_shot"; report "$?" "lock: hint under the ring while typing"
+        rc=0; hint_seen "$last_shot" || rc=$?
+        report "$rc" "lock: hint under the ring while typing"
       fi
       virsh send-key "$vm" KEY_ENTER >/dev/null; sleep 1; quick_shot lock-wrong; sleep 3
       virsh send-key "$vm" KEY_CAPSLOCK >/dev/null; vm_type "x"; quick_shot lock-capslock
