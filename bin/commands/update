@@ -13,6 +13,8 @@ Usage: $DISTRO_ID update [--all] | check | firmware | snapshots | rollback <n> [
   --all           also take a Hyprland release newer than the one $DISTRO_NAME
                   was tested with (normally held back until a distro update)
   check           list waiting updates, by source, without installing
+  doctor          check what updates need (network, clock, package key) and fix
+                  what it can
   firmware        check for and install firmware updates (BIOS/UEFI, SSD, dock...)
                   through fwupd; firmware lists are only downloaded when you run this
   snapshots       list the snapshots taken before updates
@@ -55,19 +57,171 @@ held_back() { # held_back <pending lines>
 
 latest_snapshot() { snapper -c root --csvout list --columns number 2>/dev/null | tail -1 | tr -cd '0-9'; }
 
+# --- before any pacman call: network, clock, package key ---------------------
+# Each check stops with one plain explanation instead of a page of pacman errors.
+
+clock_floor=1767225600   # 2026-01-01: no real clock is earlier than this
+
+repo_url() {
+  local url=""
+  if [[ -r $DISTRO_LIB/repo.conf ]]; then url=$(sed -n 's/^REPO_URL=//p' "$DISTRO_LIB/repo.conf" | head -1); fi
+  if [[ $url =~ ^https://[A-Za-z0-9.-]+(/[A-Za-z0-9._/-]*)?$ ]]; then printf '%s\n' "${url%/}"; fi
+}
+
+# The first Arch mirror pacman would use, as a URL to core's database.
+arch_mirror() {
+  local server
+  server=$(sed -n 's/^[[:space:]]*Server[[:space:]]*=[[:space:]]*//p' /etc/pacman.d/mirrorlist 2>/dev/null | head -1)
+  # shellcheck disable=SC2016  # $repo and $arch are pacman's own placeholders
+  [[ $server =~ ^https?://[A-Za-z0-9.:/_-]+'$repo'/[A-Za-z0-9./_-]*'$arch'$ ]] || return 0
+  server=${server//\$repo/core}; server=${server//\$arch/$(uname -m)}
+  printf '%s/core.db\n' "$server"
+}
+
+# reach <url>: 0 reachable; 60 TLS refused (often a wrong clock); 1 otherwise.
+reach() {
+  local rc=0
+  curl -fsSIL -m 8 -o /dev/null "$1" 2>/dev/null || rc=$?
+  case $rc in 0) return 0 ;; 35|51|58|60) return 60 ;; *) return 1 ;; esac
+}
+
+tls_suspect=0
+network_check() {
+  local repo mirror rc=0 mrc=0
+  if command -v nm-online >/dev/null && ! nm-online -q -t 5; then
+    die "You're offline. Connect to Wi-Fi from the bar (or run nmtui), then try again."
+  fi
+  repo=$(repo_url); mirror=$(arch_mirror)
+  if [[ -n $repo ]]; then reach "$repo/$DISTRO_REPO.db" || rc=$?; fi
+  if [[ -n $mirror ]]; then reach "$mirror" || mrc=$?; fi
+  if (( rc == 60 || mrc == 60 )); then tls_suspect=1; return 0; fi   # the clock check explains it
+  if (( rc != 0 && mrc != 0 )); then
+    die "You're connected to a network, but the internet isn't reachable (a Wi-Fi login page, or the network is down). Open a browser to sign in, then try again."
+  fi
+  if (( rc != 0 )); then
+    die "$DISTRO_NAME's package server (${repo#https://}) can't be reached right now, though the rest of the internet can. Try again in a few minutes."
+  fi
+  if [[ -n $mirror ]] && (( mrc != 0 )); then
+    die "The Arch package mirror (${mirror#*://}) can't be reached right now. Try again in a few minutes."
+  fi
+}
+
+# The time the package server reports (epoch seconds), only as a hint for the
+# message below; never applied without asking. -k: a wrong clock makes TLS fail.
+server_epoch() {
+  local repo date
+  repo=$(repo_url); [[ -n $repo ]] || return 0
+  date=$(curl -ksSIL -m 8 "$repo/$DISTRO_REPO.db" 2>/dev/null | tr -d '\r' | sed -n 's/^[Dd]ate: //p' | tail -1)
+  [[ $date =~ ^[A-Za-z]{3},\ [0-9]{2}\ [A-Za-z]{3}\ [0-9]{4}\ [0-9:]{8}\ GMT$ ]] || return 0
+  date -d "$date" +%s 2>/dev/null || true
+}
+
+clock_check() { # clock_check <interactive 0|1>
+  local interactive=$1 now real diff answer
+  if [[ $(timedatectl show -p NTPSynchronized --value 2>/dev/null) != yes ]]; then
+    if [[ $(timedatectl show -p NTP --value 2>/dev/null) != yes ]] && (( interactive )); then
+      info "Turning on network time..."
+      sudo timedatectl set-ntp true || true
+    fi
+    printf 'Waiting for the clock to sync'
+    for _ in $(seq 20); do
+      if [[ $(timedatectl show -p NTPSynchronized --value 2>/dev/null) == yes ]]; then break; fi
+      printf '.'; sleep 1
+    done
+    printf '\n'
+  fi
+  now=$(date +%s); real=$(server_epoch)
+  if [[ -n $real ]]; then diff=$(( now - real )); diff=${diff#-}; else diff=0; fi
+  if (( diff <= 600 && now >= clock_floor )); then
+    if (( tls_suspect )); then
+      die "Secure connections to the package servers are failing, though the clock looks right. Check the network (a Wi-Fi login page?) and try again."
+    fi
+    return 0
+  fi
+  if [[ -n $real ]]; then
+    info "The clock says $(date '+%Y-%m-%d %H:%M'), but it's actually about $(date -d "@$real" '+%Y-%m-%d %H:%M')."
+  else
+    info "The clock says $(date '+%Y-%m-%d %H:%M'), which can't be right."
+  fi
+  info "Package signatures can't be checked until it's right."
+  if [[ -n $real ]] && (( interactive )); then
+    read -rp "Set the clock to the package server's time now? [y/N] " answer
+    if [[ $answer == [yY]* ]]; then
+      sudo date -s "@$real" >/dev/null && sudo hwclock --systohc 2>/dev/null || true
+      info "Clock set to $(date '+%Y-%m-%d %H:%M'). Network time will keep it right from here."
+      return 0
+    fi
+  fi
+  die "Run: sudo timedatectl set-ntp true   (then wait a moment and try again)"
+}
+
+# The distro key must be in pacman's keyring and trusted (signed locally).
+key_check() {
+  local trusted=/usr/share/pacman/keyrings/$DISTRO_ID-trusted fpr validity
+  [[ -r $trusted ]] || return 0
+  fpr=$(cut -d: -f1 "$trusted" | head -1)
+  [[ $fpr =~ ^[0-9A-F]{40}$ ]] || return 0
+  validity=$(sudo gpg --homedir /etc/pacman.d/gnupg --batch --with-colons --list-keys "$fpr" 2>/dev/null | awk -F: '$1 == "pub" { print $2; exit }' || true)
+  case $validity in f|u) return 0 ;; esac
+  info "The $DISTRO_NAME package key isn't trusted on this computer yet. Setting it up from the installed keyring..."
+  sudo pacman-key --populate "$DISTRO_ID" >/dev/null
+}
+
+preflight() { # preflight <interactive 0|1> [keys 0|1, default = interactive]
+  network_check
+  clock_check "$1"
+  if (( ${2:-$1} )); then key_check; fi
+}
+
+# Download the package lists (pacman -Sy). A local copy of a database dated
+# newer than the server's is never replaced by -Sy, and pairs with the
+# server's newer signature as "invalid": on that error, force fresh copies
+# once (-Syy) before explaining.
+sync_databases() { # sync_databases <error log>
+  if sudo pacman -Sy >/dev/null 2>"$1"; then return 0; fi
+  if db_signature_error "$1"; then
+    info "Refreshing the package lists..."
+    if sudo pacman -Syy >/dev/null 2>"$1"; then return 0; fi
+  fi
+  cat "$1" >&2; explain_failure "$1"; return 1
+}
+
+db_signature_error() { grep -qiE 'invalid or corrupted database|signature from .* is invalid' "$1" 2>/dev/null; }
+
+# After a failed pacman run: if it was a signature problem, say what usually
+# causes it instead of leaving only pacman's text.
+explain_failure() { # explain_failure <stderr log>
+  [[ -s $1 ]] || return 0
+  grep -qiE 'signature|PGP|invalid or corrupted' "$1" || return 0
+  info ""
+  info "A package signature couldn't be checked. Usual causes, most likely first:"
+  info "  1. The clock is wrong: timedatectl (fix: sudo timedatectl set-ntp true)"
+  info "  2. The $DISTRO_NAME key isn't trusted: sudo pacman-key --populate $DISTRO_ID"
+  info "  3. An update was being published just then: try again in a minute"
+}
+
 update_all() { # update_all [1 = take held-back Hyprland too]
   local all=$1 before after pend changed others snap snap_before pre p
-  local held=() ignore=() keyrings=(archlinux-keyring) aur_failed=0 kernel=0
+  local held=() ignore=() keyrings=(archlinux-keyring) aur_failed=0 kernel=0 errlog
   if [[ ! -t 0 ]]; then
     exec "/usr/bin/$DISTRO_ID" terminal launch -- "/usr/bin/$DISTRO_ID" update ${all:+--all}
   fi
   sudo -v
 
+  step "Checking the connection and the clock"
+  preflight 1
+  info "ok"
+  errlog=$USER_RUNTIME/update-errors.log
+  : > "$errlog"
+
   step "Package keyrings"
   # A system that hasn't updated in a while can fail signature checks until
   # its keyrings are current, so they go first.
   if pacman -Si "$DISTRO_ID-keyring" >/dev/null 2>&1; then keyrings+=("$DISTRO_ID-keyring"); fi
-  sudo pacman -Sy --needed --noconfirm "${keyrings[@]}" >/dev/null
+  sync_databases "$errlog" || die "the package lists could not be downloaded"
+  if ! sudo pacman -S --needed --noconfirm "${keyrings[@]}" >/dev/null 2>"$errlog"; then
+    cat "$errlog" >&2; explain_failure "$errlog"; die "the keyrings could not be updated"
+  fi
   info "up to date"
 
   step "Arch and $DISTRO_NAME packages"
@@ -81,7 +235,8 @@ update_all() { # update_all [1 = take held-back Hyprland too]
   fi
   before=$(pacman -Q)
   snap_before=$(latest_snapshot)
-  if ! sudo pacman -Syu "${ignore[@]}"; then
+  if ! sudo pacman -Syu "${ignore[@]}" 2> >(tee -a "$errlog" >&2); then
+    explain_failure "$errlog"
     if (( ${#held[@]} )); then
       info "Holding back Hyprland may be blocking other updates; try: $DISTRO_ID update --all"
     fi
@@ -128,6 +283,7 @@ update_all() { # update_all [1 = take held-back Hyprland too]
 
 check() {
   local pend held aur="" n
+  preflight "$([[ -t 0 ]] && echo 1 || echo 0)"
   pend=$(pending)
   if [[ -n $pend ]]; then
     awk 'NR == FNR { repo[$1] = $2; next } { r = ($1 in repo) ? repo[$1] : "?"; print r ": " $0 }' \
@@ -311,6 +467,10 @@ case ${1:-} in
     esac ;;
   rollback-apply) rollback_apply "${2:?snapshot number}" "$([[ ${3:-} == --dry-run ]] && echo 1 || echo 0)" ;;
   rollback-clean) rollback_clean ;;
+  doctor)
+    preflight "$([[ -t 0 ]] && echo 1 || echo 0)" 1
+    sync_databases "$USER_RUNTIME/update-errors.log" || exit 1
+    info "Network, clock, package key and package lists look right." ;;
   -h|--help) usage ;;
   *) die "unknown update command: $1" ;;
 esac

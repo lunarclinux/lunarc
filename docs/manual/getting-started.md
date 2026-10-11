@@ -131,6 +131,16 @@ If an update stops the computer from starting: in the boot menu, open **Snapshot
 
 Lunarc's packages come from https://pkgs.lunarclinux.com and must be signed by the Lunarc key.
 
+### If an update fails
+
+Before it starts, `lunarc update` checks three things and stops with one plain message if something's off:
+
+- **No internet.** "You're offline": connect to Wi-Fi from the bar (or run `nmtui`). If you're connected but nothing loads, it's often a Wi-Fi login page: open a browser to sign in.
+- **The clock is wrong.** Package signatures carry a date, so a wrong clock (common right after a BIOS update or a dead battery) makes every signature look invalid. It turns on network time and waits for it; if the clock is still off, it shows the right time and offers to set it.
+- **The Lunarc key isn't trusted.** It sets the key up again from the installed keyring.
+
+`lunarc update doctor` runs these checks on their own. If a signature error still shows up, the usual causes are, most likely first: the clock, the key (`sudo pacman-key --populate lunarc`), or an update being published at that moment (try again in a minute).
+
 ## Editing files in the terminal
 `micro` is the default editor (`$EDITOR`; git and `sudoedit` use it). It works like a desktop text editor: **Ctrl+S** save, **Ctrl+Q** quit, **Ctrl+C / Ctrl+X / Ctrl+V** copy, cut, paste (the system clipboard), **Ctrl+Z** undo, **Ctrl+F** find, the mouse to select and scroll. A few nano keys work too: **Ctrl+W** find, **Ctrl+K** cut the line, **Ctrl+U** paste. **Ctrl+E** opens micro's command bar (`help keybindings`, `set tabsize 2`); **Alt+G** shows the key list at the bottom. Its colours follow the theme.
 
