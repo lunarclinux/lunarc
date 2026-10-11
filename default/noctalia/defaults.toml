@@ -83,6 +83,9 @@ labels_only_when_occupied = false
 [widget.stay-awake]
 type = "caffeine"
 
+[widget.gravity]
+type = "@DISTRO_ID@/utilities:gravity"
+
 [widget.silence]
 type = "@DISTRO_ID@/utilities:silence"
 
@@ -143,7 +146,7 @@ type = "@DISTRO_ID@/agents:usage"
 
 [bar.default]
 start  = ["menu", "workspaces"]
-center = ["stay-awake", "nightlight", "silence", "reminders", "recorder", "dictate", "clock", "weather"]
+center = ["stay-awake", "nightlight", "gravity", "silence", "reminders", "recorder", "dictate", "clock", "weather"]
 end    = ["media", "tray", "ai-usage", "crashes", "notifications", "keyboard_layout", "network", "bluetooth", "volume", "brightness", "battery", "session"]
 
 # Location and weather are off until you turn them on (they send your city to
