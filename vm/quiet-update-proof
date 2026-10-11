@@ -40,7 +40,7 @@ pkg=$(ls $Q/pkg/out/repo/$id-0*.pkg.tar.zst | head -1); echo "built: ${pkg##*/}"
 scp_dest=$(vmsh 'echo $HOME')/
 "$V/ssh" distro-clean tester -- 'cat > /home/tester/new.pkg.tar.zst' < "$pkg"
 since=$(vmsh "date '+%Y-%m-%d %H:%M:%S'")
-echo "installed: $(vmsh 'pacman -Q $id')"
+echo "installed: $(vmsh "pacman -Q $id")"
 echo "== pacman -U the newer package while the desktop runs"
 vmsh "$SUDO pacman -U --noconfirm /home/tester/new.pkg.tar.zst 2>&1 | tail -4"
 sleep 6
