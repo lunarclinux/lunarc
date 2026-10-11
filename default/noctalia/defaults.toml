@@ -146,7 +146,7 @@ type = "@DISTRO_ID@/agents:usage"
 
 [bar.default]
 start  = ["menu", "workspaces"]
-center = ["stay-awake", "nightlight", "gravity", "silence", "reminders", "recorder", "dictate", "clock", "weather"]
+center = ["stay-awake", "nightlight", "gravity", "silence", "reminders", "recorder", "dictate", "clock"]  # + "weather" when turned on (bar_apply)
 end    = ["media", "tray", "ai-usage", "crashes", "notifications", "keyboard_layout", "network", "bluetooth", "volume", "brightness", "battery", "session"]
 
 # Location and weather are off until you turn them on (they send your city to

@@ -49,6 +49,7 @@ weather_on() {
   printf '\n%s\n# Turned on with `%s privacy weather on`; `off` removes this block.\n[location]\naddress = "%s"\n\n[weather]\nenabled = true\nunit = "%s"\n%s\n' \
     "$mark_start" "$DISTRO_ID" "$city" "$unit" "$mark_end" >> "$noctalia_config"
   set_setting privacy.weather on
+  bar_apply
   info "weather: on ($city)"
 }
 
@@ -57,6 +58,7 @@ weather_off() {
     sed -i "\|^$mark_start\$|,\|^$mark_end\$|d" "$noctalia_config"
   fi
   set_setting privacy.weather off
+  bar_apply
   info "weather: off"
 }
 

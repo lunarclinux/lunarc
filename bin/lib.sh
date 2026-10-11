@@ -71,3 +71,27 @@ launch_app() {
   fi
   exec "$@"
 }
+
+# The bar sections that depend on settings, kept as one managed block in
+# Noctalia's user config: the workspaces style and whether weather shows (it is
+# left out entirely when off, rather than saying "Weather off"). The lists match
+# [bar.default] in default/noctalia/defaults.toml.
+bar_apply() {
+  local config=${XDG_CONFIG_HOME:-$HOME/.config}/noctalia/config.toml start center
+  local begin="# >>> $DISTRO_ID bar" end="# <<< $DISTRO_ID bar"
+  mkdir -p "${config%/*}"; touch "$config"
+  sed -i "\|^$begin\$|,\|^$end\$|d" "$config"
+  # The older workspaces-style block this replaces.
+  sed -i '/^# workspaces style (set by `.* workspaces style`)$/,/^start = .*$/d' "$config"
+  if grep -q '^\[bar\.default\]' "$config"; then
+    info "your $config has its own [bar.default]; edit start/center there"
+    return 0
+  fi
+  start='["menu", "workspaces"]'
+  if [[ $(setting bar.workspaces moon) == noctalia ]]; then start='["menu", "workspaces-noctalia"]'; fi
+  center='["stay-awake", "nightlight", "gravity", "silence", "reminders", "recorder", "dictate", "clock"'
+  if [[ $(setting privacy.weather off) == on ]]; then center+=', "weather"'; fi
+  center+=']'
+  printf '%s\n# Written by `%s` from its settings (workspaces style, weather).\n[bar.default]\nstart = %s\ncenter = %s\n%s\n' \
+    "$begin" "$DISTRO_ID" "$start" "$center" "$end" >> "$config"
+}

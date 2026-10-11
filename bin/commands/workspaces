@@ -74,15 +74,10 @@ attention() {
 }
 
 style() {
-  local config=${XDG_CONFIG_HOME:-$HOME/.config}/noctalia/config.toml want=$1
+  local want=$1
   [[ $want == moon || $want == noctalia ]] || die "style is moon or noctalia"
-  mkdir -p "${config%/*}"; touch "$config"
-  # Swap the bar's first-section entry; the rest of the user's config stays.
-  sed -i '/^# workspaces style (set by `.* workspaces style`)$/,/^start = .*$/d' "$config"
-  if [[ $want == noctalia ]]; then
-    printf '\n# workspaces style (set by `%s workspaces style`)\n[bar.default]\nstart = ["menu", "workspaces-noctalia"]\n' "$DISTRO_ID" >> "$config"
-  fi
   set_setting bar.workspaces "$want"
+  bar_apply
   info "workspaces: $want"
 }
 
