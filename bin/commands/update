@@ -173,6 +173,21 @@ preflight() { # preflight <interactive 0|1> [keys 0|1, default = interactive]
   if (( ${2:-$1} )); then key_check; fi
 }
 
+# Download the package lists (pacman -Sy). A local copy of a database dated
+# newer than the server's is never replaced by -Sy, and pairs with the
+# server's newer signature as "invalid": on that error, force fresh copies
+# once (-Syy) before explaining.
+sync_databases() { # sync_databases <error log>
+  if sudo pacman -Sy >/dev/null 2>"$1"; then return 0; fi
+  if db_signature_error "$1"; then
+    info "Refreshing the package lists..."
+    if sudo pacman -Syy >/dev/null 2>"$1"; then return 0; fi
+  fi
+  cat "$1" >&2; explain_failure "$1"; return 1
+}
+
+db_signature_error() { grep -qiE 'invalid or corrupted database|signature from .* is invalid' "$1" 2>/dev/null; }
+
 # After a failed pacman run: if it was a signature problem, say what usually
 # causes it instead of leaving only pacman's text.
 explain_failure() { # explain_failure <stderr log>
@@ -203,8 +218,9 @@ update_all() { # update_all [1 = take held-back Hyprland too]
   # A system that hasn't updated in a while can fail signature checks until
   # its keyrings are current, so they go first.
   if pacman -Si "$DISTRO_ID-keyring" >/dev/null 2>&1; then keyrings+=("$DISTRO_ID-keyring"); fi
-  if ! sudo pacman -Sy --needed --noconfirm "${keyrings[@]}" >/dev/null 2> >(tee -a "$errlog" >&2); then
-    explain_failure "$errlog"; die "the keyrings could not be updated"
+  sync_databases "$errlog" || die "the package lists could not be downloaded"
+  if ! sudo pacman -S --needed --noconfirm "${keyrings[@]}" >/dev/null 2>"$errlog"; then
+    cat "$errlog" >&2; explain_failure "$errlog"; die "the keyrings could not be updated"
   fi
   info "up to date"
 
@@ -453,7 +469,8 @@ case ${1:-} in
   rollback-clean) rollback_clean ;;
   doctor)
     preflight "$([[ -t 0 ]] && echo 1 || echo 0)" 1
-    info "Network, clock and package key look right." ;;
+    sync_databases "$USER_RUNTIME/update-errors.log" || exit 1
+    info "Network, clock, package key and package lists look right." ;;
   -h|--help) usage ;;
   *) die "unknown update command: $1" ;;
 esac
