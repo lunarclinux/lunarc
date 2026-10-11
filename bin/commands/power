@@ -29,8 +29,24 @@ as_root() { if (( EUID == 0 )); then "$@"; elif [[ -t 0 ]]; then sudo "$@"; else
 
 batteries() { local b; for b in /sys/class/power_supply/BAT*; do if [[ -d $b ]]; then echo "$b"; fi; done; }
 
+# Batteries whose firmware only offers a fixed "battery care" level (Lenovo's
+# conservation mode, shown by the kernel as charge_types "Long_Life") have no
+# percentage to set; UPower switches them, with its own polkit check.
+upower_battery() {
+  local path
+  path=$(upower -e 2>/dev/null | grep -m1 '/battery_' || true)
+  [[ $path =~ ^/org/freedesktop/UPower/devices/battery_[A-Za-z0-9_]+$ ]] || return 1
+  [[ $(busctl get-property org.freedesktop.UPower "$path" org.freedesktop.UPower.Device ChargeThresholdSupported 2>/dev/null) == "b true" ]] || return 1
+  printf '%s\n' "$path"
+}
+upower_care_set() { # upower_care_set true|false
+  local path
+  path=$(upower_battery) || return 1
+  busctl call org.freedesktop.UPower "$path" org.freedesktop.UPower.Device EnableChargeThreshold b "$1"
+}
+
 charge_limit_status() {
-  local bat found=0 end
+  local bat found=0 end path
   while read -r bat; do
     [[ -n $bat ]] || continue
     found=1
@@ -38,6 +54,12 @@ charge_limit_status() {
       end=$(<"$bat/charge_control_end_threshold")
       if (( end >= 100 )); then info "${bat##*/}: charge limit off (charges to 100%)"
       else info "${bat##*/}: charges to $end%"; fi
+    elif path=$(upower_battery); then
+      if [[ $(busctl get-property org.freedesktop.UPower "$path" org.freedesktop.UPower.Device ChargeThresholdEnabled 2>/dev/null) == "b true" ]]; then
+        info "${bat##*/}: battery care on (the firmware stops charging early, at its own fixed level)"
+      else
+        info "${bat##*/}: battery care off (charges to 100%)"
+      fi
     else
       info "${bat##*/}: this battery doesn't support a charge limit"
     fi
@@ -137,6 +159,14 @@ case ${1:-} in
       while read -r bat; do
         if [[ -n $bat && -e $bat/charge_control_end_threshold ]]; then supported=1; fi
       done < <(batteries)
+      if (( ! supported )) && upower_battery >/dev/null; then
+        # Fixed-level battery care (e.g. Lenovo conservation mode): no number to set.
+        if [[ $2 == off ]]; then upower_care_set false && info "battery care off: charges to 100%"
+        else
+          upower_care_set true && info "battery care on: this battery's firmware has one fixed level (often around 60–80%), so $2% can't be set exactly"
+        fi
+        exit 0
+      fi
       (( supported )) || die "this computer's battery doesn't support a charge limit (no battery, or the firmware doesn't offer one)"
       as_root "$helper" charge-limit "$2"
     fi ;;
