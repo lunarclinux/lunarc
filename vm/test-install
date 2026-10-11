@@ -332,11 +332,11 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     screenshot setup-backups
     # The network-share screens, in their own window (the same flow the
     # backups step runs for "A network share").
-    check "share setup asks how to connect" "$hypr hyprctl dispatch 'hl.dsp.exec_cmd(\"ghostty --class=$id.sharetest -e $id share add --for-backups\")' >/dev/null; for i in \$(seq 20); do hyprctl clients -j | jq -e '.[] | select(.class == \"$id.sharetest\")' >/dev/null && sleep 2 && exit 0; sleep 1; done; exit 1"
+    check "share setup asks how to connect" "$hypr pkill -f -- '^(/usr/bin/)?ghostty --class=${id}[.]setup'; sleep 1; hyprctl dispatch 'hl.dsp.exec_cmd(\"ghostty --class=$id.sharetest -e $id share add --for-backups\")' >/dev/null; for i in \$(seq 20); do hyprctl clients -j | jq -e '.[] | select(.class == \"$id.sharetest\")' >/dev/null && sleep 2 && exit 0; sleep 1; done; exit 1"
     screenshot setup-nas-protocol
     check "share setup then asks for the NAS" "$hypr hyprctl dispatch 'hl.dsp.focus({ window = \"class:^$id.sharetest\$\" })' >/dev/null; sleep 0.3; wtype -k Return; sleep 6; true"
     screenshot setup-nas-address
-    check "share setup closes" "$hypr pkill -f -- '--class=$id.sharetest' ; true"
+    check "share setup closes" "$hypr pkill -f -- '^(/usr/bin/)?ghostty --class=${id}[.]sharetest'; true"
     check "backups step opens Pika's setup" "$hypr pkill -f -- '^(/usr/bin/)?ghostty --class=${id}[.]setup'; gapplication launch org.gnome.World.PikaBackup; sleep 1; gapplication action org.gnome.World.PikaBackup setup; for i in \$(seq 20); do hyprctl clients -j | jq -e '.[] | select(.class | test(\"PikaBackup\"))' >/dev/null && exit 0; sleep 1; done; exit 1"
     screenshot pika-setup
     check "\"Later\" schedules one reminder" "$hypr pkill -x pika-backup; rm -rf ~/.local/state/$id/setup; $id setup welcome --skip && test -f ~/.local/state/$id/setup/finished && grep -qx skipped ~/.local/state/$id/setup/backups && due=\$(cat ~/.local/state/$id/setup/remind-at) && [ \$(( due - \$(date +%s) )) -gt 250000 ] && systemctl --user is-active --quiet $id-setup-reminder.timer"
