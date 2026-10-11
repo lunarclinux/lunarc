@@ -75,8 +75,10 @@ float_workspace() { # float_workspace <ws> [seed] → prints the addresses it fl
     [.[] | select(.workspace.id == $ws and (.floating | not) and (.fullscreen == 0) and (.pinned | not) and .mapped)]
     | sort_by(.at[0], .at[1]) as $wins | ($wins | length) as $n
     | [range(0; $n) as $k | ($k + $seed) as $i | $wins[$k] as $c
-       | ([[($c.size[0]), ($aw * 0.35 | floor)] | max, ($aw * 0.72 | floor)] | min) as $w
-       | ([[($c.size[1]), ($ah * 0.35 | floor)] | max, ($ah * 0.75 | floor)] | min) as $h
+       # Windows arriving later (seed > 0) get a moderate size of their own
+       # instead of the full tile they briefly had.
+       | (if $seed > 0 then ($aw * 0.5 | floor) else ([[($c.size[0]), ($aw * 0.35 | floor)] | max, ($aw * 0.72 | floor)] | min) end) as $w
+       | (if $seed > 0 then ($ah * 0.55 | floor) else ([[($c.size[1]), ($ah * 0.35 | floor)] | max, ($ah * 0.75 | floor)] | min) end) as $h
        | ([0.18, 0.62, 0.34, 0.78, 0.48, 0.26, 0.70] | .[$i % 7]) as $fy
        | ((($i * 73 + $n * 31) % 61) - 30) as $jx
        | ((($i * 47 + $n * 17) % 41) - 20) as $jy
