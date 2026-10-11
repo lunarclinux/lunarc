@@ -146,13 +146,12 @@ nano is installed as well, with colours, line numbers and Ctrl+S to save. Prefer
 - Package signing: Lunarc's packages are signed; `lunarc-keyring` holds the key pacman checks them against (`pacman-key --list-keys 798A81A89261BC4E49D0784BFD4EE07A81DE46AE`). Lunarc's own repository isn't hosted yet, so for now its packages come from the installer only.
 
 ## Locking the screen
-SUPER+L locks the screen and plays the screensaver behind the lock. The bottom
-line shows the time and "Locked · start typing your password to unlock · Esc
-clears". Just start typing your password and press Enter: there is no box to
-click; a ring appears while you type (each key lights part of it), says
-"Verifying" after Enter, turns red with "Wrong" for a wrong password, shows
-"Caps Lock" when caps lock is on, and fades after a few seconds. Esc clears
-what you typed ("Cleared"). The computer also locks after 5
+SUPER+L locks the screen and plays the screensaver behind the lock; nothing
+else is on screen. Just start typing your password and press Enter: a ring
+appears as you type, with "Type your password · Enter to unlock · Esc clears"
+under it. It says "Verifying" after Enter, turns red with "Wrong" for a wrong
+password, shows "Caps Lock" when caps lock is on, and fades a moment after
+you stop typing. Esc clears what you typed ("Cleared"). The computer also locks after 5
 minutes idle and before it sleeps. If the lock screen ever hangs, press
 CTRL+ALT+L to start it again. To use Noctalia's lock screen instead, set
 `lock.style = noctalia` in `~/.config/lunarc/settings`.
