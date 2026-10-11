@@ -76,6 +76,7 @@ SUPER+ALT+Space (or `/m` in the launcher). Type part of a name and press Enter t
 | `lunarc shell defaults on\|off` / `shell set bash\|zsh\|fish` | Shell defaults (prompt, `z`, `ll`, Ctrl+R search) and your login shell |
 | `lunarc dev docker` / `dev lang node` / `dev db add postgres` | Docker, language runtimes (mise) and local databases |
 | `lunarc display edit` / `list` / `save <name>` | Screens: resolution, scale, arrangement, docked/undocked profiles |
+| `lunarc share list` / `add` / `test <name>` / `remove <name>` | Network shares (NAS), mounted on demand |
 | `lunarc app list` / `search <word>` / `install <app>` | Browse and install apps: browsers, editors, AI (Claude, ChatGPT, Ollama, Hermes), games (Steam, Lutris, Heroic), chat and more |
 | `lunarc app export apps.txt` / `import apps.txt` | Save your apps and a few settings to a file, then install them all on another computer |
 | `lunarc setup` / `setup backups` | The first-login choices again / set up backups |
@@ -107,6 +108,8 @@ Each screen keeps its own resolution, scale and rotation, wherever it's plugged 
 ## Backups
 
 At the first login a setup window helps you set up backups with Pika Backup (installed by default): pick an external drive, a network share or online storage, and Pika opens on its setup screen. Keep **Encryption** on and save the password in your password manager; then set **Schedule** to Daily. Skipped it? You'll get one reminder a few days later, or open **Setup › Backups** from the menu (SUPER+ALT+Space) any time.
+
+**Backing up to a NAS.** Choose *A network share* in the setup window (or run `lunarc share add`): pick NFS, SMB or SSH, the NAS address and the shared folder. Lunarc mounts it at `/mnt/nas/<you>/backups` only when it's used (a NAS that's switched off never slows down starting up), checks you can write there, creates a folder for this computer and shows its path; pick that folder in Pika Backup under *Location on Disk*. If the write check fails, it tells you what to change on the NAS: the shared folder must belong to your NAS user, and for NFS every request must be mapped to that user (TrueNAS: *Mapall User/Group*) because NFS sends user numbers, not names; the share must also allow this computer's address. `lunarc share list`, `share test <name>` and `share remove <name>` manage shares later (also under Setup in the menu). SMB passwords are kept in a root-only file; nothing on a share can run as a program here.
 
 Other backup tools: `lunarc app list backup` (KopiaUI also runs on Windows and macOS, handy with a dual boot).
 

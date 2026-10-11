@@ -212,6 +212,7 @@ if "$here/ssh" "$vm" "$user" -- "pacman -Q $id >/dev/null 2>&1"; then
   check "firefox policies in place"     "jq -e '.policies.DisableTelemetry == true and .policies.DNSOverHTTPS.Enabled == false and .policies.HttpsOnlyMode == \"enabled\"' /etc/firefox/policies/policies.json >/dev/null"
   check "telemetry opt-outs in shells"  "bash -lc 'echo \$DO_NOT_TRACK \$DOTNET_CLI_TELEMETRY_OPTOUT \$DISABLE_TELEMETRY' | grep -qx '1 1 1'"
   check "firewall refuses incoming"     "$sudo_vm firewall-cmd --state | grep -qx running && $sudo_vm firewall-cmd --get-default-zone | grep -qx public && $sudo_vm firewall-cmd --permanent --zone=public --get-target | grep -qx default && [ -z \"\$($sudo_vm firewall-cmd --zone=public --list-ports)\" ]"
+  check "network share: checks, mount on use, write, remove" "$(sed -e "s/@ID@/$id/g" -e "s/@PW@/$password/g" "$here/checks/share.sh")"
   check "firewall: ssh open only because a key was set up" "$sudo_vm firewall-cmd --zone=public --list-services | tr ' ' '\\n' | grep -qx ssh && systemctl is-enabled --quiet sshd"
   check "network privacy settings"      "NetworkManager --print-config | grep -qx 'wifi.cloned-mac-address=stable' && NetworkManager --print-config | grep -qx 'ipv6.ip6-privacy=2' && NetworkManager --print-config | grep -qx 'ipv4.dhcp-send-hostname=false'"
   check "kernel hardening applied"      "[ \$(sysctl -n kernel.kptr_restrict) = 2 ] && [ \$(sysctl -n kernel.unprivileged_bpf_disabled) = 1 ] && [ \$(sysctl -n kernel.kexec_load_disabled) = 1 ] && [ \$(sysctl -n kernel.yama.ptrace_scope) = 1 ]"
@@ -329,6 +330,13 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     screenshot setup-welcome
     check "setup goes on to backups"      "$hypr hyprctl dispatch 'hl.dsp.focus({ window = \"class:^$id.setup\$\" })' >/dev/null; sleep 0.5; wtype -k Return; sleep 1.5; true"
     screenshot setup-backups
+    # The network-share screens, in their own window (the same flow the
+    # backups step runs for "A network share").
+    check "share setup asks how to connect" "$hypr pkill -f -- '^(/usr/bin/)?ghostty --class=${id}[.]setup'; sleep 1; hyprctl dispatch 'hl.dsp.exec_cmd(\"ghostty --class=$id.sharetest -e $id share add --for-backups\")' >/dev/null; for i in \$(seq 20); do hyprctl clients -j | jq -e '.[] | select(.class == \"$id.sharetest\")' >/dev/null && sleep 2 && exit 0; sleep 1; done; exit 1"
+    screenshot setup-nas-protocol
+    check "share setup then asks for the NAS" "$hypr hyprctl dispatch 'hl.dsp.focus({ window = \"class:^$id.sharetest\$\" })' >/dev/null; sleep 0.3; wtype -k Return; sleep 6; true"
+    screenshot setup-nas-address
+    check "share setup closes" "$hypr pkill -f -- '^(/usr/bin/)?ghostty --class=${id}[.]sharetest'; true"
     check "backups step opens Pika's setup" "$hypr pkill -f -- '^(/usr/bin/)?ghostty --class=${id}[.]setup'; gapplication launch org.gnome.World.PikaBackup; sleep 1; gapplication action org.gnome.World.PikaBackup setup; for i in \$(seq 20); do hyprctl clients -j | jq -e '.[] | select(.class | test(\"PikaBackup\"))' >/dev/null && exit 0; sleep 1; done; exit 1"
     screenshot pika-setup
     check "\"Later\" schedules one reminder" "$hypr pkill -x pika-backup; rm -rf ~/.local/state/$id/setup; $id setup welcome --skip && test -f ~/.local/state/$id/setup/finished && grep -qx skipped ~/.local/state/$id/setup/backups && due=\$(cat ~/.local/state/$id/setup/remind-at) && [ \$(( due - \$(date +%s) )) -gt 250000 ] && systemctl --user is-active --quiet $id-setup-reminder.timer"

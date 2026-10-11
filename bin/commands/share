@@ -1,0 +1,292 @@
+#!/usr/bin/env bash
+# summary: Network shares (NAS): add, test and remove NFS/SMB shares, mounted on demand
+set -euo pipefail
+source "$DISTRO_LIB/lib.sh"
+
+helper=$DISTRO_LIB/share-helper
+marker="# $DISTRO_ID share:"
+
+usage() {
+  cat <<USAGE
+Usage: $DISTRO_ID share <command>
+
+  list [--names]             your shares (--names: just their names)
+  add                        set one up, step by step
+  add --nfs HOST:/EXPORT [--name NAME] [--device FOLDER] [--yes]
+  add --smb //HOST/SHARE --user USER [--no-seal] [--name NAME] [--device FOLDER] [--yes]
+                             (the password is asked for, or read from stdin with --password-stdin)
+  add --ssh USER@HOST:PATH   check an SSH location for backups (Pika Backup connects itself)
+  test NAME                  mount it and check this account can write there
+  remove NAME                unmount it and forget it
+
+Shares are mounted at /mnt/nas/<your user>/<name> when first used and unmounted when idle, so
+a NAS that's switched off never slows down starting the computer. SMB
+passwords are kept in a root-only file under /etc/$DISTRO_ID/credentials.
+USAGE
+}
+
+as_root() {
+  if (( EUID == 0 )); then "$@"
+  elif [[ -t 0 ]]; then sudo "$@"
+  else pkexec "$@"; fi
+}
+
+# The person the share is for: the caller, or whoever ran this through sudo.
+owner() { if (( EUID == 0 )) && [[ -n ${SUDO_USER:-} ]]; then echo "$SUDO_USER"; else id -un; fi; }
+as_user() { if (( EUID == 0 )) && [[ -n ${SUDO_USER:-} ]]; then runuser -u "$SUDO_USER" -- "$@"; else "$@"; fi; }
+
+# Each person's shares live in their own /mnt/nas/<user> (0700): other local
+# users can't look into them.
+base=/mnt/nas/$(owner)
+mine="$marker $(owner)/"
+
+ask() { # ask <prompt> [default] → answer
+  local answer
+  if command -v gum >/dev/null; then
+    answer=$(gum input --placeholder "$1" --value "${2:-}") || return 1
+  else
+    read -rp "  $1${2:+ [$2]}: " answer || return 1
+    answer=${answer:-${2:-}}
+  fi
+  printf '%s\n' "$answer"
+}
+ask_secret() { # ask_secret <prompt> → answer
+  local answer
+  if command -v gum >/dev/null; then answer=$(gum input --password --placeholder "$1") || return 1
+  else read -rsp "  $1: " answer || return 1; printf '\n' >&2; fi
+  printf '%s\n' "$answer"
+}
+choose() { # choose <option>... → choice
+  if command -v gum >/dev/null; then gum choose "$@"
+  else local c PS3="  Choose: "; select c in "$@"; do printf '%s\n' "$c"; break; done; fi
+}
+confirm() { # confirm <question>
+  if command -v gum >/dev/null; then gum confirm "$1"
+  else local a; read -rp "  $1 [y/N] " a; [[ $a == [yY]* ]]; fi
+}
+
+# Same checks as the helper, to say what's wrong before asking for a password.
+valid_name() { [[ $1 =~ ^[a-z0-9][a-z0-9-]{0,31}$ ]]; }
+valid_host() {
+  [[ $1 =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ || ( $1 =~ ^[0-9A-Fa-f:]+$ && $1 == *:*:* ) ||
+     ( ${#1} -le 253 && $1 =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,62})(\.[A-Za-z0-9]([A-Za-z0-9-]{0,62}))*$ ) ]]
+}
+valid_export() { [[ $1 =~ ^/[A-Za-z0-9._@+/-]*$ && $1 != *..* ]]; }
+valid_folder() { [[ $1 =~ ^[A-Za-z0-9._-]{1,64}$ && $1 != . && $1 != .. ]]; }
+
+# --- list --------------------------------------------------------------------
+list() {
+  local found=0 name="" line src mp type
+  while IFS= read -r line; do
+    if [[ $line == "$mine"* ]]; then name=${line#"$mine"}; continue; fi
+    if [[ -n $name ]]; then
+      read -r src mp type _ <<<"$line"
+      if [[ ${1:-} == --names ]]; then printf '%s\n' "$name"
+      else printf '%-14s %-5s %-40s %s\n' "$name" "$type" "$src" "$mp"; fi
+      found=1; name=""
+    fi
+  done < /etc/fstab
+  if (( ! found )) && [[ ${1:-} != --names ]]; then info "no network shares set up (add one: $DISTRO_ID share add)"; fi
+  return 0
+}
+
+# --- finding a NAS -----------------------------------------------------------
+# NAS boxes announced on the local network (TrueNAS, Synology and most others
+# announce SMB; some NFS). Only when Avahi is running; never required.
+discover() {
+  command -v avahi-browse >/dev/null || return 0
+  timeout 4 avahi-browse -rptk _smb._tcp _nfs._tcp 2>/dev/null \
+    | awk -F';' '$1 == "=" && $3 == "IPv4" { print $7 }' | sort -u || true
+}
+
+nfs_exports() { # nfs_exports <host> → export paths
+  command -v showmount >/dev/null || return 0
+  timeout 8 showmount -e --no-headers "$1" 2>/dev/null | awk '{print $1}' || true
+}
+
+# --- testing -----------------------------------------------------------------
+explain_denied() { # explain_denied <mountpoint>
+  cat >&2 <<EOF
+
+  This account can't write to the share. On the NAS, check:
+  - the shared folder (dataset) is owned by your NAS user, not root;
+  - for NFS: the share maps every request to your NAS user (TrueNAS: Mapall
+    User and Group), because NFS sends user numbers, not names, and your user
+    number here ($(id -u "$(owner)")) is probably different from the NAS's;
+  - for NFS: the share allows this computer's address (TrueNAS: Hosts or
+    Networks);
+  - the share isn't read-only.
+  Then run: $DISTRO_ID share test ${1##*/}
+EOF
+}
+
+test_share() { # test_share <name>
+  local name=$1 mp probe
+  valid_name "$name" || die "invalid name"
+  grep -qxF "$mine$name" /etc/fstab || die "no share called '$name'"
+  mp=$base/$name
+  # Touching the folder mounts it (on-demand mount); give the NAS a moment.
+  if ! timeout 25 ls "$mp" >/dev/null 2>&1; then
+    die "couldn't reach the share at $mp: is the NAS on and the address right? ($DISTRO_ID share list)"
+  fi
+  probe=$mp/.$DISTRO_ID-write-test-$$
+  if as_user touch "$probe" 2>/dev/null; then
+    as_user rm -f "$probe"
+    info "$name: mounted at $mp, and this account can write there"
+  else
+    explain_denied "$mp"
+    return 1
+  fi
+}
+
+device_folder() { # device_folder <name> <folder> → path
+  local mp=$base/$1 folder=$2
+  valid_folder "$folder" || die "invalid folder name (letters, digits, . _ -)"
+  as_user mkdir -p "$mp/$folder" || { explain_denied "$mp"; return 1; }
+  printf '%s\n' "$mp/$folder"
+}
+
+# Where the setup screen looks for the backup location to show and copy.
+remember_backup_location() {
+  local file=${XDG_STATE_HOME:-$HOME/.local/state}/$DISTRO_ID/setup/backup-location
+  if (( EUID == 0 )) && [[ -n ${SUDO_USER:-} ]]; then return 0; fi
+  mkdir -p "${file%/*}"; printf '%s\n' "$1" > "$file"
+}
+
+# --- adding ------------------------------------------------------------------
+add() {
+  local kind="" src="" user="" name=backups device="" seal=seal yes=0 pw_stdin=0 for_backups=0
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      --nfs) kind=nfs src=${2:-}; shift 2 ;;
+      --smb) kind=smb src=${2:-}; shift 2 ;;
+      --ssh) kind=ssh src=${2:-}; shift 2 ;;
+      --user) user=${2:-}; shift 2 ;;
+      --name) name=${2:-}; shift 2 ;;
+      --device) device=${2:-}; shift 2 ;;
+      --no-seal) seal=noseal; shift ;;
+      --password-stdin) pw_stdin=1; shift ;;
+      --yes) yes=1; shift ;;
+      --for-backups) for_backups=1; shift ;;
+      *) die "unknown option: $1" ;;
+    esac
+  done
+  valid_name "$name" || die "invalid name '$name' (lowercase letters, digits and -)"
+  if grep -qxF "$mine$name" /etc/fstab; then
+    # Set up before (running the setup screen again): use it as it is.
+    (( for_backups )) || die "a share called '$name' already exists ($DISTRO_ID share list)"
+    info "using the share set up earlier: $base/$name"
+  else
+    [[ -n $kind ]] || interactive_choose_kind
+    case $kind in
+      nfs) add_nfs ;;
+      smb) add_smb ;;
+      ssh) add_ssh; return ;;
+    esac
+  fi
+  test_share "$name" || return 1
+  if [[ -z $device ]] && (( for_backups || ! yes )); then
+    device=$(ask "Folder for this computer's backups" "$(hostnamectl hostname 2>/dev/null || hostname)") || return 1
+  fi
+  if [[ -n $device ]]; then
+    local path
+    path=$(device_folder "$name" "$device") || return 1
+    info "backup folder: $path"
+    (( for_backups )) && remember_backup_location "$path"
+  fi
+  return 0
+}
+
+interactive_choose_kind() {
+  local choice host found
+  choice=$(choose "NFS (most NAS boxes, Linux-friendly)" "SMB (Windows-style share, needs a username and password)" "SSH (a server you log in to; Pika Backup connects itself)") || exit 1
+  case $choice in NFS*) kind=nfs ;; SMB*) kind=smb ;; *) kind=ssh ;; esac
+  if [[ $kind != ssh ]]; then
+    mapfile -t found < <(discover)
+    if (( ${#found[@]} )); then
+      host=$(choose "${found[@]}" "Type an address") || exit 1
+      if [[ $host == "Type an address" ]]; then host=""; fi
+    fi
+    [[ -n ${host:-} ]] || host=$(ask "NAS address (name or IP, e.g. truenas.local or 192.168.1.100)") || exit 1
+    valid_host "$host" || die "that doesn't look like an address: '$host'"
+  fi
+  case $kind in
+    nfs)
+      local exports expath
+      mapfile -t exports < <(nfs_exports "$host")
+      if (( ${#exports[@]} )); then
+        expath=$(choose "${exports[@]}" "Type a path") || exit 1
+        if [[ $expath == "Type a path" ]]; then expath=""; fi
+      fi
+      [[ -n ${expath:-} ]] || expath=$(ask "Shared folder on the NAS (e.g. /mnt/tank/backups/$(id -un))") || exit 1
+      src="$host:$expath" ;;
+    smb)
+      local share
+      share=$(ask "Share name (as shown on the NAS, e.g. backups)") || exit 1
+      user=$(ask "NAS username" "$(id -un)") || exit 1
+      src="//$host/$share" ;;
+    ssh)
+      src=$(ask "Login and folder, e.g. $(id -un)@truenas.local:/mnt/tank/backups/$(id -un)") || exit 1 ;;
+  esac
+}
+
+add_nfs() {
+  local host=${src%%:/*} expath=/${src#*:/}
+  [[ $src == *:/* ]] || die "NFS address must look like HOST:/path"
+  host=${host#[}; host=${host%]}
+  valid_host "$host" || die "invalid host '$host'"
+  valid_export "$expath" || die "invalid path '$expath' (no spaces, commas or quotes)"
+  info "NFS share $host:$expath → $base/$name"
+  (( yes )) || confirm "Set it up?" || exit 1
+  as_root "$helper" add-nfs "$name" "$host" "$expath"
+}
+
+add_smb() {
+  local rest host share pass
+  [[ $src == //*/* ]] || die "SMB address must look like //HOST/SHARE"
+  rest=${src#//}; host=${rest%%/*}; share=${rest#*/}
+  valid_host "$host" || die "invalid host '$host'"
+  [[ $share =~ ^[A-Za-z0-9._-][A-Za-z0-9._$-]{0,79}$ ]] || die "invalid share name '$share' (letters, digits, . _ - \$)"
+  [[ -z $user || $user =~ ^[A-Za-z0-9._@\\-]{1,64}$ ]] || die "invalid username"
+  [[ -n $user ]] || user=$(ask "NAS username" "$(id -un)") || exit 1
+  if (( pw_stdin )); then IFS= read -r pass || die "no password on stdin"
+  else pass=$(ask_secret "Password for $user on $host") || exit 1; fi
+  info "SMB share //$host/$share → $base/$name (encrypted transport: $([[ $seal == seal ]] && echo on || echo off))"
+  (( yes )) || confirm "Set it up?" || exit 1
+  # Username and password go to the helper on stdin, never on a command line.
+  printf '%s\n%s\n' "$user" "$pass" | as_root "$helper" add-smb "$name" "$host" "$share" "$seal"
+}
+
+add_ssh() {
+  local login host path url
+  [[ $src =~ ^([A-Za-z0-9._-]{1,64})@([^:/]+):((/|~/)[A-Za-z0-9._@+/~-]*)$ ]] || die "SSH location must look like user@host:/path or user@host:~/path"
+  login=${BASH_REMATCH[1]} host=${BASH_REMATCH[2]} path=${BASH_REMATCH[3]}
+  valid_host "$host" || die "invalid host '$host'"
+  [[ $path != *..* ]] || die "invalid path"
+  # shellcheck disable=SC2016 # $1 expands in the inner bash, by design
+  if timeout 5 bash -c 'exec 3<>"/dev/tcp/$1/22"' _ "$host" 2>/dev/null; then
+    info "$host answers on SSH (port 22)"
+  else
+    die "$host doesn't answer on SSH (port 22): is SSH turned on on the NAS?"
+  fi
+  if [[ $path == /* ]]; then url="ssh://$login@$host$path"; else url="ssh://$login@$host/${path}"; fi
+  info "In Pika Backup choose Remote Location and enter: $url"
+  (( for_backups )) && remember_backup_location "$url"
+  return 0
+}
+
+remove() {
+  local name=${1:-}
+  valid_name "$name" || die "remove which share? ($DISTRO_ID share list)"
+  as_root "$helper" remove "$name"
+  info "removed $name"
+}
+
+case ${1:-} in
+  list) list "${2:-}" ;;
+  add) shift; add "$@" ;;
+  test) test_share "${2:-}" ;;
+  remove) remove "${2:-}" ;;
+  -h|--help|"") usage ;;
+  *) die "unknown share command: $1" ;;
+esac

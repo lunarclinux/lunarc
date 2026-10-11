@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+# Root side of `<distro id> share`: adds and removes network shares (NFS, SMB)
+# mounted on demand under /mnt/nas/<user>/<name>. Run through sudo or pkexec.
+# The share belongs to the person who ran sudo/pkexec (SUDO_UID / PKEXEC_UID,
+# a real login user, never root); only their shares can be changed. Every
+# argument is checked against a strict pattern before it reaches /etc/fstab, a
+# credentials file or a command; nothing is evaluated.
+#
+#   share-helper add-nfs <name> <host> <export>
+#   share-helper add-smb <name> <host> <share> <seal|noseal>
+#                        (username and password on stdin, one per line)
+#   share-helper remove <name>
+#   share-helper mount <name>          trigger the on-demand mount now
+set -euo pipefail
+(( EUID == 0 )) || { echo "share-helper: must run as root" >&2; exit 1; }
+# shellcheck source=/dev/null
+source "$(dirname "$(readlink -f "$0")")/distro.conf"
+
+fstab=/etc/fstab
+base=/mnt/nas
+creds_dir=/etc/$DISTRO_ID/credentials
+marker="# $DISTRO_ID share:"
+
+die() { echo "share-helper: $*" >&2; exit 1; }
+
+# Who the share is for: the person who ran sudo or pkexec, never an argument.
+owner_uid=${SUDO_UID:-${PKEXEC_UID:-}}
+[[ $owner_uid =~ ^[0-9]{1,10}$ ]] || die "run through sudo or pkexec from your own account"
+(( owner_uid >= 1000 && owner_uid != 65534 )) || die "shares belong to a login user, not root or a system account"
+owner_entry=$(getent passwd "$owner_uid") || die "no user with uid $owner_uid"
+owner=${owner_entry%%:*}
+owner_gid=$(cut -d: -f4 <<<"$owner_entry")
+[[ $owner =~ ^[a-z_][a-z0-9_-]{0,31}$ && $owner_gid =~ ^[0-9]{1,10}$ ]] || die "unexpected user entry"
+
+# --- checks ------------------------------------------------------------------
+valid_name() { [[ $1 =~ ^[a-z0-9][a-z0-9-]{0,31}$ ]]; }
+valid_ipv4() {
+  local IFS=. part
+  [[ $1 =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || return 1
+  for part in $1; do (( 10#$part <= 255 )) || return 1; done
+}
+valid_ipv6() { [[ $1 =~ ^[0-9A-Fa-f:]+$ && $1 == *:*:* && ${#1} -le 39 ]]; }
+valid_hostname() {
+  [[ ${#1} -le 253 && $1 =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,62})(\.[A-Za-z0-9]([A-Za-z0-9-]{0,62}))*$ ]]
+}
+valid_host() { valid_ipv4 "$1" || valid_ipv6 "$1" || valid_hostname "$1"; }
+# Absolute, no spaces, commas, quotes, '#', backslashes or control characters,
+# no "..": safe as an fstab field and a mount source without escaping.
+valid_export() { [[ $1 =~ ^/[A-Za-z0-9._@+/-]*$ && $1 != *..* && ${#1} -le 512 ]]; }
+valid_smb_share() { [[ $1 =~ ^[A-Za-z0-9._-][A-Za-z0-9._$-]{0,79}$ ]]; }
+
+mountpoint_for() { printf '%s/%s/%s\n' "$base" "$owner" "$1"; }
+unit_for() { systemd-escape --path --suffix=automount "$(mountpoint_for "$1")"; }
+
+# The marker line names the owner too, so one user can't touch another's.
+exists() { grep -qxF "$marker $owner/$1" "$fstab"; }
+
+# Mount on demand: never at boot, never blocking boot if the NAS is away. And
+# nothing on the share can run here: no setuid programs, device files or
+# executables (backups never run anything from the share).
+common_opts="nosuid,nodev,noexec,_netdev,nofail,noauto,x-systemd.automount,x-systemd.idle-timeout=10min,x-systemd.mount-timeout=20s"
+
+add_entry() { # add_entry <name> <fstab line>
+  local name=$1 line=$2 mp
+  mp=$(mountpoint_for "$name")
+  # /mnt/nas/<user> is that user's alone: other local users can't look in.
+  install -d -m 755 "$base"
+  install -d -m 700 -o "$owner_uid" -g "$owner_gid" "$base/$owner"
+  install -d -m 755 "$mp"
+  cp "$fstab" "$fstab.$DISTRO_ID-bak"
+  printf '%s %s/%s\n%s\n' "$marker" "$owner" "$name" "$line" >> "$fstab"
+  systemctl daemon-reload
+  systemctl restart "$(unit_for "$name")"
+}
+
+remove_entry() { # remove_entry <name>
+  local name=$1 mp unit
+  mp=$(mountpoint_for "$name")
+  unit=$(unit_for "$name")
+  systemctl stop "$unit" "${unit%.automount}.mount" 2>/dev/null || true
+  umount -l "$mp" 2>/dev/null || true
+  cp "$fstab" "$fstab.$DISTRO_ID-bak"
+  # Drop the marker line and the entry right after it.
+  awk -v m="$marker $owner/$name" '$0 == m { skip = 1; next } skip { skip = 0; next } { print }' \
+    "$fstab.$DISTRO_ID-bak" > "$fstab"
+  rm -f "$creds_dir/$owner/$name"
+  rmdir "$mp" 2>/dev/null || true
+  systemctl daemon-reload
+}
+
+# --- commands ----------------------------------------------------------------
+case ${1:-} in
+  add-nfs)
+    [[ $# -eq 4 ]] || die "usage: add-nfs <name> <host> <export>"
+    name=$2 host=$3 export=$4
+    valid_name "$name" || die "invalid name"
+    valid_host "$host" || die "invalid host"
+    valid_export "$export" || die "invalid export path"
+    exists "$name" && die "a share called '$name' already exists"
+    if valid_ipv6 "$host"; then source_spec="[$host]:$export"; else source_spec="$host:$export"; fi
+    add_entry "$name" "$source_spec $(mountpoint_for "$name") nfs $common_opts 0 0" ;;
+  add-smb)
+    [[ $# -eq 5 ]] || die "usage: add-smb <name> <host> <share> <seal|noseal>"
+    name=$2 host=$3 share=$4 seal=$5
+    valid_name "$name" || die "invalid name"
+    valid_ipv4 "$host" || valid_hostname "$host" || die "invalid host (SMB: a name or an IPv4 address)"
+    valid_smb_share "$share" || die "invalid share name"
+    [[ $seal == seal || $seal == noseal ]] || die "seal or noseal"
+    exists "$name" && die "a share called '$name' already exists"
+    # Credentials come on stdin (never on a command line, where any user can
+    # read them in the process list) and are kept root-only.
+    IFS= read -r user || die "no username on stdin"
+    IFS= read -r pass || die "no password on stdin"
+    [[ $user =~ ^[A-Za-z0-9._@\\-]{1,64}$ ]] || die "invalid username"
+    [[ -n $pass && $pass != *$'\n'* && $pass != *$'\r'* ]] || die "invalid password"
+    install -d -m 700 "$creds_dir" "$creds_dir/$owner"
+    umask 077
+    printf 'username=%s\npassword=%s\n' "$user" "$pass" > "$creds_dir/$owner/$name"
+    chmod 600 "$creds_dir/$owner/$name"
+    opts="credentials=$creds_dir/$owner/$name,uid=$owner_uid,gid=$owner_gid,file_mode=0600,dir_mode=0700,$common_opts"
+    if [[ $seal == seal ]]; then opts="seal,$opts"; fi
+    add_entry "$name" "//$host/$share $(mountpoint_for "$name") cifs $opts 0 0" ;;
+  remove)
+    [[ $# -eq 2 ]] || die "usage: remove <name>"
+    valid_name "$2" || die "invalid name"
+    exists "$2" || die "no share called '$2'"
+    remove_entry "$2" ;;
+  mount)
+    [[ $# -eq 2 ]] || die "usage: mount <name>"
+    valid_name "$2" || die "invalid name"
+    exists "$2" || die "no share called '$2'"
+    unit=$(unit_for "$2")
+    systemctl start "${unit%.automount}.mount" ;;
+  *) die "unknown command" ;;
+esac
