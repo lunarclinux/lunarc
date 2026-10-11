@@ -31,6 +31,7 @@ case $part in
     put "$src/bin/lib.sh" "$dest/usr/lib/$id/lib.sh"
     put "$src/bin/ui.sh" "$dest/usr/lib/$id/ui.sh"
     put "$src/bin/agent-usage.jq" "$dest/usr/lib/$id/agent-usage.jq"
+    put "$src/bin/workspace-watch" "$dest/usr/lib/$id/workspace-watch" 755
     put "$src/bin/power-helper" "$dest/usr/lib/$id/power-helper" 755
     put "$src/distro.conf" "$dest/usr/lib/$id/distro.conf"
     put "$src/repo.conf" "$dest/usr/lib/$id/repo.conf"
@@ -67,11 +68,13 @@ case $part in
     put "$src/etc/systemd/user/setup-reminder.service" "$units/$id-setup-reminder.service"
     put "$src/etc/systemd/user/setup-reminder.timer" "$units/$id-setup-reminder.timer"
     put "$src/etc/systemd/user/battery-watch.service" "$units/$id-battery-watch.service"
+    put "$src/etc/systemd/user/workspace-watch.service" "$units/$id-workspace-watch.service"
     put "$src/etc/systemd/user/idle-watch.service" "$units/$id-idle-watch.service"
     put "$src/etc/systemd/user/snapshot-notice.service" "$units/$id-snapshot-notice.service"
     install -d "$units/graphical-session.target.wants"
     for unit in noctalia.service "$id-first-login.service" "$id-crash-watch.service" "$id-migrate.service" "$id-lock-watch.service" \
-      "$id-setup-reminder.timer" "$id-battery-watch.service" "$id-idle-watch.service" "$id-snapshot-notice.service"; do
+      "$id-setup-reminder.timer" "$id-battery-watch.service" "$id-idle-watch.service" "$id-snapshot-notice.service" \
+      "$id-workspace-watch.service"; do
       ln -s "../$unit" "$units/graphical-session.target.wants/$unit"
     done
 

@@ -11,6 +11,20 @@ STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/$DISTRO_ID
 SETTINGS=$CONFIG_DIR/settings
 DEFAULT_SETTINGS=$SHARE/default/settings
 
+# Small per-session state files (pid files, flags, the attention list) live in
+# a directory only this user can write: the session's runtime directory, else
+# one under ~/.cache. Never a shared path like /tmp, where another user could
+# plant a file or a symlink first.
+USER_RUNTIME=${XDG_RUNTIME_DIR:-}
+if [[ -z $USER_RUNTIME || ! -d $USER_RUNTIME || ! -O $USER_RUNTIME || -L $USER_RUNTIME ]]; then
+  USER_RUNTIME=${XDG_CACHE_HOME:-$HOME/.cache}/$DISTRO_ID/run
+  mkdir -p "$USER_RUNTIME" 2>/dev/null || true
+  chmod 700 "$USER_RUNTIME" 2>/dev/null || true
+fi
+
+# A file we can trust to read: a regular file, not a symlink, owned by us.
+owned_file() { [[ -f $1 && ! -L $1 && -O $1 ]]; }
+
 # Settings are "key = value" lines. The user's file wins over distro defaults.
 setting() { # setting <key> [fallback]
   local key=$1 file value

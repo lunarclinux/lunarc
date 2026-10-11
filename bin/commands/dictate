@@ -8,7 +8,7 @@ models=${XDG_DATA_HOME:-$HOME/.local/share}/$DISTRO_ID/whisper
 model_name=$(setting dictate.model base.en)
 model=$models/ggml-$model_name.bin
 model_url=https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-$model_name.bin
-runtime=${XDG_RUNTIME_DIR:-/tmp}/$DISTRO_ID-dictate
+runtime=$USER_RUNTIME/$DISTRO_ID-dictate
 pidfile=$runtime/record.pid
 audio=$runtime/speech.wav
 

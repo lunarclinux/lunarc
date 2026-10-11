@@ -46,6 +46,8 @@ Style | Theme | Colours for everything | menu: theme | palette
 Style | Wallpaper | Choose a wallpaper | noctalia msg panel-open wallpaper | photo
 Style | Next wallpaper | Switch to the next one | noctalia msg wallpaper-next | arrow-right
 Style | Screensaver | Preview the screensaver | @DISTRO_ID@ screensaver preview | device-tv
+Style | Workspaces: moon phases | Numbers, the active one as its moon | @DISTRO_ID@ workspaces style moon | moon
+Style | Workspaces: pills | Noctalia's own workspace pills | @DISTRO_ID@ workspaces style noctalia | circles
 
 Setup | | Network, devices and defaults |
 Setup | Backups | Where your files are backed up, and how often | @DISTRO_ID@ setup backups | device-floppy

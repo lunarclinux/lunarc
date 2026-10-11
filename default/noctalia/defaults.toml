@@ -68,7 +68,14 @@ tooltip = "Menu (SUPER+ALT+Space)"
 left = "exec @DISTRO_ID@ menu"
 right = "panel-toggle launcher"
 
+# Workspaces: numbers, the one you're on drawn as its moon phase, a gold dot
+# where a window asks for attention (decision record 0037). Noctalia's own
+# pills stay available: `@DISTRO_ID@ workspaces style noctalia`.
 [widget.workspaces]
+type = "@DISTRO_ID@/utilities:workspaces"
+
+[widget.workspaces-noctalia]
+type = "workspaces"
 style = "regular"
 show_labels = true
 labels_only_when_occupied = false

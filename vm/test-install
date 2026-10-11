@@ -391,6 +391,15 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     if "$here/ssh" "$vm" "$user" -- "test -x /usr/lib/$id/commands/menu"; then
       check "bar has the utility group"   "$hypr noctalia config export | grep -qE 'center *=.*stay-awake.*silence.*reminders.*recorder.*dictate.*clock'"
       check "utilities plugin enabled"    "$hypr noctalia msg plugins list 2>&1 | grep -E '$id/utilities' | grep -qiE 'enabled'"
+      # Workspaces (decision record 0037): numbers, the active one as its moon
+      # phase, a gold dot for a window asking for attention.
+      check "workspaces widget in the bar"  "$hypr noctalia config export | grep -qE '^start *= *\\[ *\"menu\", *\"workspaces\" *\\]' && noctalia config export | grep -qE 'type *= *\"$id/utilities:workspaces\"'"
+      check "workspace watcher running"     "systemctl --user is-active --quiet $id-workspace-watch"
+      check "workspaces follow Hyprland"    "$hypr $id workspaces go 3 && sleep 1 && $id workspaces state | jq -e '.active == 3 and (.items | length) >= 5' >/dev/null"
+      check "attention: dot, then SUPER+U"  "$(sed "s/@ID@/$id/g" "$here/checks/attention.sh")"
+      check "workspaces style switches"     "$hypr $id workspaces style noctalia >/dev/null && sleep 2 && noctalia config export | grep -qE 'workspaces-noctalia' && noctalia config export | grep -qE '^center *=.*stay-awake' && $id workspaces style moon >/dev/null && sleep 2 && ! noctalia config export | grep -qE '^start *=.*workspaces-noctalia'"
+      "$here/ssh" "$vm" "$user" -- "$hypr $id workspaces go 3" >/dev/null 2>&1 || true
+      screenshot workspaces
       check "system menu opens"           "$hypr $id menu; sleep 1.5; noctalia msg status | jq -e '.activePanelId == \"launcher\"' >/dev/null"
       screenshot menu
       check "keyboard shortcuts listed"   "$hypr noctalia msg panel-close >/dev/null; $id keys --list | grep -q 'System menu'"

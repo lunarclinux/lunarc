@@ -31,6 +31,10 @@ for i = 1, 10 do
     bind(mod .. " + SHIFT + " .. key, "Move the window to workspace " .. i, hl.dsp.window.move({ workspace = i }))
 end
 
+-- A small gold dot in the bar marks a workspace with a window asking for
+-- attention; this goes to the newest one (or back to the last window).
+bind(mod .. " + U", "Go to the window asking for attention", run("@DISTRO_ID@ workspaces attention"))
+
 bind(mod .. " + mouse:272", "Move a window with the mouse", hl.dsp.window.drag(), { mouse = true })
 bind(mod .. " + mouse:273", "Resize a window with the mouse", hl.dsp.window.resize(), { mouse = true })
 
