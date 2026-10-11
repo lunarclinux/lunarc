@@ -455,20 +455,32 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       check "lock recovery key works while locked" "$hypr hyprctl binds -j | jq -e '.[] | select(.key == \"L\" and .modmask == 12 and .locked == true)' >/dev/null"
       check "lock engages, screensaver behind it" "$hypr $id lock && sleep 3 && pgrep -x swaylock-plugin >/dev/null && pgrep -x windowtolayer >/dev/null && for i in \$(seq 20); do pgrep -x tte >/dev/null && exit 0; sleep 1; done; exit 1"
       screenshot lock
-      # Idle: only the screensaver; the ring and its hint appear with the first key.
-      check "lock: no static text while idle" "$hypr ! grim - | tesseract stdin - 2>/dev/null | grep -qi 'type your password'"
-      # The ring (and its hint) fades 1.5 s after the last key, so these grab
-      # the screen at once and read the typing shot here on the host.
-      quick_shot() { # quick_shot <label>: prints the file
+      # Idle: only the screensaver; the ring and its hint appear with the first
+      # key and fade 1.5 s after the last, so these grab the screen at once and
+      # read the band under the ring here on the host (the busy animation
+      # defeats OCR on the whole screen).
+      quick_shot() { # quick_shot <label>
         local f; f=$shots/$vm-$(date +%Y%m%d-%H%M%S)-$1.png
         "$here/ssh" "$vm" "$user" -- "$hypr grim -" > "$f" 2>/dev/null || true
-        log "screenshot: $f"; printf '%s' "$f" > "$shots/.last"
+        log "screenshot: $f"; last_shot=$f
       }
-      vm_type "abc"; quick_shot lock-typing
-      if command -v tesseract >/dev/null && tesseract "$(<"$shots/.last")" - 2>/dev/null | grep -qi 'type your password'; then
-        printf '  \033[32mok\033[0m   %s\n' "lock: hint shows while typing"
-      else
-        printf '  \033[31mFAIL\033[0m %s\n' "lock: hint shows while typing"; fail=1
+      hint_seen() { # hint_seen <png>: OCR the hint's band (1280x800 VM screen)
+        local w h crop
+        command -v tesseract >/dev/null && command -v magick >/dev/null || return 2
+        read -r w h < <(magick identify -format '%w %h' "$1")
+        crop=$(mktemp --suffix=.png)
+        magick "$1" -crop "$((w / 2))x$((h / 20))+$((w / 4))+$((h * 655 / 1000))" +repage -resize 300% -colorspace gray -negate "$crop"
+        tesseract "$crop" - --psm 7 2>/dev/null | grep -qi unlock; local rc=$?
+        rm -f "$crop"; return $rc
+      }
+      report() { # report <ok?> <description>
+        if [[ $1 == 0 ]]; then printf '  \033[32mok\033[0m   %s\n' "$2"; else printf '  \033[31mFAIL\033[0m %s\n' "$2"; fail=1; fi
+      }
+      quick_shot lock-idle
+      hint_seen "$last_shot"; rc=$?; if (( rc == 2 )); then log "no tesseract/magick here: skipping the hint checks"; else
+        report "$(( rc == 1 ? 0 : 1 ))" "lock: no text while idle"
+        vm_type "abc"; quick_shot lock-typing
+        hint_seen "$last_shot"; report "$?" "lock: hint under the ring while typing"
       fi
       virsh send-key "$vm" KEY_ENTER >/dev/null; sleep 1; quick_shot lock-wrong; sleep 3
       virsh send-key "$vm" KEY_CAPSLOCK >/dev/null; vm_type "x"; quick_shot lock-capslock
