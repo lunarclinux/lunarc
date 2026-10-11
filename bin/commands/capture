@@ -5,8 +5,8 @@ source "$DISTRO_LIB/lib.sh"
 
 shots=$(xdg-user-dir PICTURES 2>/dev/null || echo "$HOME/Pictures")/Screenshots
 videos=$(xdg-user-dir VIDEOS 2>/dev/null || echo "$HOME/Videos")/Recordings
-recording_pid=${XDG_RUNTIME_DIR:-/tmp}/$DISTRO_ID-recording.pid
-recording_file=${XDG_RUNTIME_DIR:-/tmp}/$DISTRO_ID-recording.path
+recording_pid=$USER_RUNTIME/$DISTRO_ID-recording.pid
+recording_file=$USER_RUNTIME/$DISTRO_ID-recording.path
 
 usage() {
   cat <<USAGE
@@ -101,13 +101,13 @@ record() {
   # The GPU's video encoder when there is one, the CPU otherwise.
   args+=(-f 60 -fallback-cpu-encoding yes -o "$file")
   setsid -f bash -c 'echo $$ > "$1"; shift; exec gpu-screen-recorder "$@"' _ \
-    "$recording_pid" "${args[@]}" </dev/null >"${XDG_RUNTIME_DIR:-/tmp}/$DISTRO_ID-recording.log" 2>&1
+    "$recording_pid" "${args[@]}" </dev/null >"$USER_RUNTIME/$DISTRO_ID-recording.log" 2>&1
   printf '%s\n' "$file" > "$recording_file"
   sleep 1
   if ! is_recording; then
     rm -f "$recording_pid" "$recording_file"
-    note -u critical "Recording didn't start" "$(tail -n 2 "${XDG_RUNTIME_DIR:-/tmp}/$DISTRO_ID-recording.log")"
-    die "recording didn't start; see ${XDG_RUNTIME_DIR:-/tmp}/$DISTRO_ID-recording.log"
+    note -u critical "Recording didn't start" "$(tail -n 2 "$USER_RUNTIME/$DISTRO_ID-recording.log")"
+    die "recording didn't start; see $USER_RUNTIME/$DISTRO_ID-recording.log"
   fi
   refresh_bar
   if [[ -t 1 ]]; then info "recording to $file ($DISTRO_ID capture stop to finish)"; fi

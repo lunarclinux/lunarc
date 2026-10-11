@@ -3,7 +3,7 @@
 set -euo pipefail
 source "$DISTRO_LIB/lib.sh"
 
-urgent_file=${XDG_RUNTIME_DIR:-/tmp}/$DISTRO_ID-urgent
+urgent_file=$USER_RUNTIME/$DISTRO_ID-urgent
 
 usage() {
   cat <<USAGE
@@ -24,6 +24,13 @@ get a notification for some apps, list their window classes in
 USAGE
 }
 
+# The attention list: window addresses, one per line, written by the watcher.
+# Only trust our own regular file, and only lines that are window addresses
+# (they end up inside the Lua that hyprctl runs).
+waiting() {
+  if owned_file "$urgent_file"; then grep -E '^0x[0-9a-fA-F]+$' "$urgent_file" || true; fi
+}
+
 refresh_bar() { noctalia msg plugin "$DISTRO_ID/utilities:workspaces" all refresh >/dev/null 2>&1 || true; }
 
 # The bar shows workspaces 1 to the highest of 5, the highest with windows and
@@ -33,7 +40,7 @@ state() {
   active=$(hyprctl activeworkspace -j | jq '.id')
   workspaces=$(hyprctl workspaces -j)
   clients=$(hyprctl clients -j)
-  if [[ -s $urgent_file ]]; then urgent=$(jq -R . "$urgent_file" | jq -s .); fi
+  urgent=$(waiting | jq -R . | jq -s .)
   jq -n --argjson active "$active" --argjson ws "$workspaces" --argjson clients "$clients" --argjson urgent "$urgent" '
     ([$clients[] | select(.address as $a | $urgent | index($a)) | .workspace.id] | unique) as $flagged
     | ([$ws[] | select(.id > 0)] | map({key: (.id | tostring), value: .windows}) | from_entries) as $count
@@ -56,9 +63,9 @@ step() { # step +1|-1: within 1..(last shown), wrapping
 }
 
 attention() {
-  local address=""
-  if [[ -s $urgent_file ]]; then address=$(tail -n 1 "$urgent_file"); fi
-  if [[ -z $address ]]; then
+  local address
+  address=$(waiting | tail -n 1)
+  if [[ ! $address =~ ^0x[0-9a-fA-F]+$ ]]; then
     # Nothing waiting: back to the previous window, like an alt-tab.
     hyprctl dispatch "hl.dsp.focus({ last = true })" >/dev/null 2>&1 || true
     return

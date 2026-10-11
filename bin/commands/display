@@ -73,7 +73,7 @@ lua_string() { local s=$1; s=${s//\\/\\\\}; s=${s//\"/\\\"}; printf '"%s"' "$s";
 # Hyprland monitor rules for the connected screens, from what's remembered.
 # The lid is closed (set by `power lid close`): the built-in screen stays off
 # while an external one is connected, whatever the saved arrangement says.
-lid_flag=${XDG_RUNTIME_DIR:-/tmp}/$DISTRO_ID-lid-closed
+lid_flag=$USER_RUNTIME/$DISTRO_ID-lid-closed
 
 rules() { # rules <monitors-json> <state-json>
   local mons=$1 st=$2 key lid=0
@@ -415,7 +415,7 @@ forget() {
 # arrive together (a dock brings two screens), so wait a moment and run once.
 hotplug() {
   [[ $(setting display.auto on) == on ]] || exit 0
-  local lock=${XDG_RUNTIME_DIR:-/tmp}/$DISTRO_ID-display.lock
+  local lock=$USER_RUNTIME/$DISTRO_ID-display.lock
   exec 9>"$lock"
   flock -n 9 || exit 0
   sleep 1

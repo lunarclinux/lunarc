@@ -8,15 +8,33 @@
 # Usage: workspace-watch <distro id>   (run by the <id>-workspace-watch user service)
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 
 ID = sys.argv[1]
-RUNTIME = os.environ.get("XDG_RUNTIME_DIR", "/tmp")
-URGENT_FILE = os.path.join(RUNTIME, f"{ID}-urgent")
+ADDRESS = re.compile(r"^0x[0-9a-fA-F]+$")
+CONTROL = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def private_runtime():
+    """The session's runtime dir if it's ours, else one under ~/.cache; never /tmp."""
+    runtime = os.environ.get("XDG_RUNTIME_DIR", "")
+    if runtime and os.path.isdir(runtime) and not os.path.islink(runtime) and os.stat(runtime).st_uid == os.getuid():
+        return runtime
+    cache = os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache"))
+    path = os.path.join(cache, ID, "run")
+    os.makedirs(path, mode=0o700, exist_ok=True)
+    os.chmod(path, 0o700)
+    return path
+
+
+SOCKET_DIR = os.environ.get("XDG_RUNTIME_DIR", "")
+URGENT_FILE = os.path.join(private_runtime(), f"{ID}-urgent")
 SETTINGS = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), ID, "settings")
 REFRESH = ["noctalia", "msg", "plugin", f"{ID}/utilities:workspaces", "all", "refresh"]
 WATCHED = ("workspace", "workspacev2", "createworkspace", "createworkspacev2", "destroyworkspace",
@@ -35,10 +53,16 @@ def quiet(cmd, timeout=3):
 
 
 def save():
-    tmp = URGENT_FILE + ".tmp"
-    with open(tmp, "w") as f:
-        f.write("".join(a + "\n" for a in urgent))
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(URGENT_FILE), prefix=f".{ID}-urgent.")
+    with os.fdopen(fd, "w") as f:
+        f.write("".join(a + "\n" for a in urgent if ADDRESS.match(a)))
     os.replace(tmp, URGENT_FILE)
+
+
+def clean(text, limit=80):
+    """Plain, short text for a notification: no control characters."""
+    text = CONTROL.sub(" ", str(text or "")).strip()
+    return text[:limit]
 
 
 def notify_classes():
@@ -64,12 +88,15 @@ def maybe_notify(address):
     window = next((c for c in clients if c.get("address") == address), None)
     if not window or window.get("class") not in wanted:
         return
-    app = window.get("initialTitle") or window.get("class")
+    app = clean(window.get("initialTitle") or window.get("class")) or "An app"
+    title = clean(window.get("title"), 120)
 
     def ask():
-        answer = quiet(["notify-send", "--app-name", app, "--action=focus=Show",
-                        f"{app} needs your attention", window.get("title", "")], timeout=600)
-        if answer.strip() == "focus":
+        # Titles come from apps (even web pages): separate arguments after "--",
+        # so one starting with "-" can't become an option.
+        answer = quiet(["notify-send", "--app-name", app, "--action=focus=Show", "--",
+                        f"{app} needs your attention", title], timeout=600)
+        if answer.strip() == "focus" and ADDRESS.match(address):
             quiet(["hyprctl", "dispatch", f'hl.dsp.focus({{ window = "address:{address}" }})'])
 
     threading.Thread(target=ask, daemon=True).start()
@@ -80,13 +107,15 @@ def handle(line):
     if event not in WATCHED:
         return False
     address = "0x" + data.split(",")[0] if data else ""
-    if event == "urgent":
+    if not ADDRESS.match(address):
+        address = ""
+    if event == "urgent" and address:
         if address in urgent:
             urgent.remove(address)
         urgent.append(address)
         save()
         maybe_notify(address)
-    elif event in ("activewindowv2", "closewindow") and address in urgent:
+    elif event in ("activewindowv2", "closewindow") and address and address in urgent:
         urgent.remove(address)
         save()
     return True
@@ -94,7 +123,7 @@ def handle(line):
 
 def follow():
     signature = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE", "")
-    path = os.path.join(RUNTIME, "hypr", signature, ".socket2.sock")
+    path = os.path.join(SOCKET_DIR, "hypr", signature, ".socket2.sock")
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     sock.connect(path)
     buffer = b""
