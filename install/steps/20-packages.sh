@@ -59,10 +59,13 @@ if [[ -n $REPO_URL ]]; then
   printf '\n# %s packages (signed; key from the %s-keyring package)\n[%s]\nSigLevel = Required\nServer = %s\n' \
     "$DISTRO_NAME" "$DISTRO_ID" "$DISTRO_REPO" "$REPO_URL" >> "$MNT/etc/pacman.conf"
   # pacstrap left the install medium's copy of this repository's database in
-  # the target. Its date is newer than the server's, so pacman would keep it
-  # and pair it with the server's signature: "signature is invalid" on the
-  # first update. Remove it so the first update downloads a matching pair.
-  rm -f "$MNT/var/lib/pacman/sync/$DISTRO_REPO".{db,files}{,.sig}
+  # the target. Its date is newer than the server's, so pacman -Sy would keep
+  # it and pair it with the server's signature ("signature is invalid" on the
+  # first update). Fetch fresh copies now; offline, remove it instead so the
+  # first update downloads a matching pair.
+  if ! in_target pacman -Syy >/dev/null 2>&1; then
+    rm -f "$MNT/var/lib/pacman/sync/$DISTRO_REPO".{db,files}{,.sig}
+  fi
 else
   printf '\n#[%s]\n#SigLevel = Required\n#Server = (not hosted yet; see repo.conf)\n' "$DISTRO_REPO" >> "$MNT/etc/pacman.conf"
 fi

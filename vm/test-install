@@ -470,7 +470,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     # detached (it takes the network away from this SSH session too).
     fpr=$(cat "$repo/pkg/keyring/fingerprint")
     sp="echo '$password' | sudo -S -p ''"
-    "$here/ssh" "$vm" "$user" -- "$sp systemd-run --unit=$id-offline-test --collect sh -c 'sleep 2; nmcli networking off; sleep 3; /usr/bin/$id update check > /run/$id-offline.out 2>&1; echo \$? > /run/$id-offline.rc; nmcli networking on'" >/dev/null 2>&1 || true
+    "$here/ssh" "$vm" "$user" -- "$sp systemd-run --unit=$id-offline-test --collect --setenv=HOME=/root sh -c 'sleep 2; nmcli networking off; sleep 3; /usr/bin/$id update check > /run/$id-offline.out 2>&1; echo \$? > /run/$id-offline.rc; nmcli networking on'" >/dev/null 2>&1 || true
     sleep 25; wait_ssh "$user" 120
     check "update: offline says so plainly"  "cat /run/$id-offline.out; [ \"\$(cat /run/$id-offline.rc)\" != 0 ] && grep -q \"You're offline\" /run/$id-offline.out && ! grep -qi 'failed to retrieve' /run/$id-offline.out"
     check "update: a wrong clock is explained" "before=\$(date +%s); $sp timedatectl set-ntp false; $sp date -s @\$((before - 31536000)) >/dev/null; out=\$($id update check 2>&1); rc=\$?; now=\$(date +%s); $sp date -s @\$((now + 31536000)) >/dev/null; $sp timedatectl set-ntp true; printf '%s\n' \"\$out\" | tail -4; [ \$rc != 0 ] && grep -q 'The clock says' <<<\"\$out\" && grep -q 'actually about' <<<\"\$out\""
