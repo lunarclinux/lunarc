@@ -14,5 +14,5 @@ mapfile -t depends < <(sed -e 's/#.*//' -e '/^[[:space:]]*$/d' "$DISTRO_SRC"/pac
 depends+=("$DISTRO_ID-settings")
 
 package() {
-  bash "$DISTRO_SRC/pkg/files.sh" main "$DISTRO_SRC" "$pkgdir"
+  PLUGIN_SET="$pkgver-$pkgrel" bash "$DISTRO_SRC/pkg/files.sh" main "$DISTRO_SRC" "$pkgdir"
 }

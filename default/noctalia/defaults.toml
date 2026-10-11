@@ -51,7 +51,7 @@ auto_update = "none"
 [[plugins.source]]
 name = "@DISTRO_ID@"
 kind = "path"
-location = "/usr/share/@DISTRO_ID@/default/noctalia-plugins"
+location = "/usr/share/@DISTRO_ID@/noctalia-plugins"
 enabled = true
 
 # The bar: workspaces on the left; in the centre the clock and weather with a

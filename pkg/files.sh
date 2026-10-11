@@ -40,6 +40,17 @@ case $part in
 
     # Defaults (Hyprland, Noctalia, plugins, agent guides), themes, new users' configs.
     copy_tree "$src/default" "$dest/usr/share/$id/default"
+
+    # Noctalia plugins: one directory per package version, reached through a
+    # single symlink. Noctalia hot-reloads (and announces) every script file
+    # rewritten in place, so an update that replaced them one by one popped a
+    # notification per file; files in a new directory and deletions in the old
+    # one don't trigger it. A pacman hook then reloads the shell once.
+    set_name=${PLUGIN_SET:-dev}
+    [[ $set_name =~ ^[0-9A-Za-z._+-]+$ ]] || { echo "files.sh: bad PLUGIN_SET '$set_name'" >&2; exit 2; }
+    install -d "$dest/usr/share/$id/noctalia-plugins.d"
+    mv "$dest/usr/share/$id/default/noctalia-plugins" "$dest/usr/share/$id/noctalia-plugins.d/$set_name"
+    ln -s "noctalia-plugins.d/$set_name" "$dest/usr/share/$id/noctalia-plugins"
     # The package lists every install gets (`app export` leaves these out).
     copy_tree "$src/packages" "$dest/usr/share/$id/packages"
     copy_tree "$src/themes" "$dest/usr/share/$id/themes"
@@ -88,6 +99,9 @@ case $part in
     # pacman hook keeping Limine current at the UEFI fallback path.
     put "$src/etc/pacman.d/hooks/limine-update.hook" "$dest/usr/share/libalpm/hooks/$id-limine-update.hook"
     put "$src/etc/pacman.d/hooks/migrate.hook" "$dest/usr/share/libalpm/hooks/$id-migrate.hook"
+    # One quiet shell reload per update (see the plugin directory above).
+    put "$src/etc/pacman.d/hooks/shell-reload.hook" "$dest/usr/share/libalpm/hooks/$id-shell-reload.hook"
+    put "$src/bin/shell-reload" "$dest/usr/lib/$id/shell-reload" 755
     # Bootable snapshots (decision record 0036): keep the old kernel before
     # mkinitcpio's 60-mkinitcpio-remove deletes it ("10-" sorts first), and
     # rewrite the boot menu's entries after snap-pac's zz-snap-pac-post ("zzz-").
