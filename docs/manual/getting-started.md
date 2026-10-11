@@ -41,6 +41,7 @@ SUPER is the Windows key. SUPER+K lists every shortcut, searchable.
 | SUPER+T | Float / tile window |
 | SUPER+arrows | Move focus (add SHIFT to move the window) |
 | SUPER+1…0 | Switch workspace (add SHIFT to move the window there) |
+| SUPER+U | Go to the window asking for attention |
 | SUPER+L (or SUPER+Escape) | Lock |
 | SUPER+N | Act on the latest notification |
 | ALT+Tab | Switch windows |
@@ -53,7 +54,7 @@ SUPER is the Windows key. SUPER+K lists every shortcut, searchable.
 
 ## The bar
 
-Left: the menu (crescent; right-click for apps) and workspaces. Centre: stay awake, night light, silence notifications, reminders, screen recording and dictation, then the clock and weather. Right: media, tray, AI usage, crashes, the keyboard layout (only with more than one; click to switch), and status icons (network, Bluetooth, sound, brightness, battery, power), each opening its own panel.
+Left: the menu (crescent; right-click for apps) and workspaces: numbers, dim when empty and bright with windows; the one you're on shows its moon phase in gold instead of its number (1 a waxing crescent, 2 first quarter, 3 waxing gibbous, 4 full, and on round the cycle); a small gold dot marks a workspace where a window is asking for attention (SUPER+U goes there). Click to switch, scroll to step through, hover for the active workspace's number. `lunarc workspaces style noctalia` switches to Noctalia's own pills. Centre: stay awake, night light, silence notifications, reminders, screen recording and dictation, then the clock and weather. Right: media, tray, AI usage, crashes, the keyboard layout (only with more than one; click to switch), and status icons (network, Bluetooth, sound, brightness, battery, power), each opening its own panel.
 
 ## The system menu
 
