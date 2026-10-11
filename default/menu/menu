@@ -53,7 +53,7 @@ Style | Workspaces: pills | Noctalia's own workspace pills | @DISTRO_ID@ workspa
 Setup | | Network, devices and defaults |
 Setup | Backups | Where your files are backed up, and how often | @DISTRO_ID@ setup backups | device-floppy
 Setup | Network share: add | Mount a NAS share (NFS or SMB), e.g. for backups | term: @DISTRO_ID@ share add | server
-Setup | Network shares | The shares set up here, and a write test | term: @DISTRO_ID@ share list; for s in $(awk '/^# @DISTRO_ID@ share:/{print $4}' /etc/fstab); do @DISTRO_ID@ share test "$s"; done | server-2
+Setup | Network shares | The shares set up here, and a write test | term: @DISTRO_ID@ share list; for s in $(@DISTRO_ID@ share list --names); do @DISTRO_ID@ share test "$s"; done | server-2
 Setup | Set up @DISTRO_NAME@ | The first-login choices again | @DISTRO_ID@ setup | settings
 Setup | Wi-Fi | Networks and connections | noctalia msg panel-open control-center network | wifi
 Setup | Bluetooth | Pair and connect devices | noctalia msg panel-open control-center bluetooth | bluetooth

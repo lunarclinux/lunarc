@@ -4,14 +4,13 @@ set -euo pipefail
 source "$DISTRO_LIB/lib.sh"
 
 helper=$DISTRO_LIB/share-helper
-base=/mnt/nas
 marker="# $DISTRO_ID share:"
 
 usage() {
   cat <<USAGE
 Usage: $DISTRO_ID share <command>
 
-  list                       the shares set up here
+  list [--names]             your shares (--names: just their names)
   add                        set one up, step by step
   add --nfs HOST:/EXPORT [--name NAME] [--device FOLDER] [--yes]
   add --smb //HOST/SHARE --user USER [--no-seal] [--name NAME] [--device FOLDER] [--yes]
@@ -20,7 +19,7 @@ Usage: $DISTRO_ID share <command>
   test NAME                  mount it and check this account can write there
   remove NAME                unmount it and forget it
 
-Shares are mounted at $base/<name> when first used and unmounted when idle, so
+Shares are mounted at /mnt/nas/<your user>/<name> when first used and unmounted when idle, so
 a NAS that's switched off never slows down starting the computer. SMB
 passwords are kept in a root-only file under /etc/$DISTRO_ID/credentials.
 USAGE
@@ -35,6 +34,11 @@ as_root() {
 # The person the share is for: the caller, or whoever ran this through sudo.
 owner() { if (( EUID == 0 )) && [[ -n ${SUDO_USER:-} ]]; then echo "$SUDO_USER"; else id -un; fi; }
 as_user() { if (( EUID == 0 )) && [[ -n ${SUDO_USER:-} ]]; then runuser -u "$SUDO_USER" -- "$@"; else "$@"; fi; }
+
+# Each person's shares live in their own /mnt/nas/<user> (0700): other local
+# users can't look into them.
+base=/mnt/nas/$(owner)
+mine="$marker $(owner)/"
 
 ask() { # ask <prompt> [default] → answer
   local answer
@@ -72,16 +76,18 @@ valid_folder() { [[ $1 =~ ^[A-Za-z0-9._-]{1,64}$ && $1 != . && $1 != .. ]]; }
 
 # --- list --------------------------------------------------------------------
 list() {
-  local found=0 name line
+  local found=0 name="" line src mp type
   while IFS= read -r line; do
-    if [[ $line == "$marker "* ]]; then name=${line#"$marker "}; continue; fi
-    if [[ -n ${name:-} ]]; then
+    if [[ $line == "$mine"* ]]; then name=${line#"$mine"}; continue; fi
+    if [[ -n $name ]]; then
       read -r src mp type _ <<<"$line"
-      printf '%-14s %-5s %-40s %s\n' "$name" "$type" "$src" "$mp"
+      if [[ ${1:-} == --names ]]; then printf '%s\n' "$name"
+      else printf '%-14s %-5s %-40s %s\n' "$name" "$type" "$src" "$mp"; fi
       found=1; name=""
     fi
   done < /etc/fstab
-  (( found )) || info "no network shares set up (add one: $DISTRO_ID share add)"
+  if (( ! found )) && [[ ${1:-} != --names ]]; then info "no network shares set up (add one: $DISTRO_ID share add)"; fi
+  return 0
 }
 
 # --- finding a NAS -----------------------------------------------------------
@@ -117,7 +123,7 @@ EOF
 test_share() { # test_share <name>
   local name=$1 mp probe
   valid_name "$name" || die "invalid name"
-  grep -qxF "$marker $name" /etc/fstab || die "no share called '$name'"
+  grep -qxF "$mine$name" /etc/fstab || die "no share called '$name'"
   mp=$base/$name
   # Touching the folder mounts it (on-demand mount); give the NAS a moment.
   if ! timeout 25 ls "$mp" >/dev/null 2>&1; then
@@ -166,7 +172,7 @@ add() {
     esac
   done
   valid_name "$name" || die "invalid name '$name' (lowercase letters, digits and -)"
-  if grep -qxF "$marker $name" /etc/fstab; then
+  if grep -qxF "$mine$name" /etc/fstab; then
     # Set up before (running the setup screen again): use it as it is.
     (( for_backups )) || die "a share called '$name' already exists ($DISTRO_ID share list)"
     info "using the share set up earlier: $base/$name"
@@ -248,7 +254,7 @@ add_smb() {
   info "SMB share //$host/$share → $base/$name (encrypted transport: $([[ $seal == seal ]] && echo on || echo off))"
   (( yes )) || confirm "Set it up?" || exit 1
   # Username and password go to the helper on stdin, never on a command line.
-  printf '%s\n%s\n' "$user" "$pass" | as_root "$helper" add-smb "$name" "$host" "$share" "$(id -u "$(owner)")" "$(id -g "$(owner)")" "$seal"
+  printf '%s\n%s\n' "$user" "$pass" | as_root "$helper" add-smb "$name" "$host" "$share" "$seal"
 }
 
 add_ssh() {
@@ -277,7 +283,7 @@ remove() {
 }
 
 case ${1:-} in
-  list) list ;;
+  list) list "${2:-}" ;;
   add) shift; add "$@" ;;
   test) test_share "${2:-}" ;;
   remove) remove "${2:-}" ;;
