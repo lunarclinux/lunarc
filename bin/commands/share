@@ -199,7 +199,7 @@ interactive_choose_kind() {
     mapfile -t found < <(discover)
     if (( ${#found[@]} )); then
       host=$(choose "${found[@]}" "Type an address") || exit 1
-      [[ $host == "Type an address" ]] && host=""
+      if [[ $host == "Type an address" ]]; then host=""; fi
     fi
     [[ -n ${host:-} ]] || host=$(ask "NAS address (name or IP, e.g. truenas.local or 192.168.1.100)") || exit 1
     valid_host "$host" || die "that doesn't look like an address: '$host'"
@@ -210,7 +210,7 @@ interactive_choose_kind() {
       mapfile -t exports < <(nfs_exports "$host")
       if (( ${#exports[@]} )); then
         expath=$(choose "${exports[@]}" "Type a path") || exit 1
-        [[ $expath == "Type a path" ]] && expath=""
+        if [[ $expath == "Type a path" ]]; then expath=""; fi
       fi
       [[ -n ${expath:-} ]] || expath=$(ask "Shared folder on the NAS (e.g. /mnt/tank/backups/$(id -un))") || exit 1
       src="$host:$expath" ;;
