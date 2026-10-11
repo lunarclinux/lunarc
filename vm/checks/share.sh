@@ -15,8 +15,10 @@ unit=$(systemd-escape --path --suffix=automount "$mp")
 # to this user (like TrueNAS's Mapall).
 sudo install -d -o "$u" -g "$g" /srv/share-test
 sudo install -d /etc/exports.d
-printf '/srv/share-test 127.0.0.1(rw,sync,no_subtree_check,all_squash,anonuid=%s,anongid=%s)\n' "$u" "$g" \
-  | sudo tee /etc/exports.d/share-test.exports >/dev/null
+# (Written through sh -c: this sudo wrapper feeds the password on stdin, so a
+# pipe into `sudo tee` would never reach tee.)
+sudo sh -c 'printf "%s\n" "$1" > /etc/exports.d/share-test.exports' _ \
+  "/srv/share-test 127.0.0.1(rw,sync,no_subtree_check,all_squash,anonuid=$u,anongid=$g)"
 sudo systemctl start nfs-server >/dev/null 2>&1 || fail "NFS server didn't start"
 sudo exportfs -ra
 showmount -e 127.0.0.1 2>/dev/null | grep -q /srv/share-test || fail "showmount doesn't list the export"
