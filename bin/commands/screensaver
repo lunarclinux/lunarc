@@ -149,10 +149,32 @@ case ${1:-} in
     mapfile -t colours < <(theme_colours)
     directions=(horizontal vertical diagonal radial)
     text=$(theme_colour mOnSurface) accent=$(theme_colour mPrimary) background=$(theme_colour mSurface)
+    muted=$(theme_colour mOnSurfaceVariant)
+    # Behind the lock, the bottom rows say what the lock expects (the lock's
+    # ring only appears once you type): the time, then a plain hint. The
+    # effects play above them, in a scroll region that leaves those rows alone.
+    height=0 hint_row=0
+    if (( lock )); then
+      read -r rows cols < <(stty size 2>/dev/null || echo "0 0")
+      if (( rows > 8 && cols > 20 )); then
+        height=$(( rows - 2 )) hint_row=$(( rows - 1 ))
+        printf '\e[1;%dr' "$height"
+      fi
+    fi
+    rgb() { if [[ $1 =~ ^[0-9a-fA-F]{6}$ ]]; then printf '\e[38;2;%d;%d;%dm' "0x${1:0:2}" "0x${1:2:2}" "0x${1:4:2}"; fi; }
+    hint() {
+      (( hint_row )) || return 0
+      local clock words="Locked · start typing your password to unlock · Esc clears" line pad
+      clock=$(date +%H:%M)
+      line="$clock   $words"
+      pad=$(( (cols - ${#line}) / 2 )); (( pad < 0 )) && pad=0
+      printf '\e7\e[%d;1H\e[2K\e[%dC%s%s\e[0m   %s%s\e[0m\e8' "$hint_row" "$pad" \
+        "$(rgb "${accent:-ebc77a}")" "$clock" "$(rgb "${muted:-a3abc4}")" "$words"
+    }
     # One effect per round (random unless one was asked for), centred; any key ends it.
     ( while :; do
         effect=${only:-${effects[RANDOM % ${#effects[@]}]}}
-        args=(-i "$art" --canvas-width 0 --canvas-height 0 --anchor-canvas c --anchor-text c --frame-rate 60)
+        args=(-i "$art" --canvas-width 0 --canvas-height "$height" --anchor-canvas c --anchor-text c --frame-rate 60)
         if [[ -n $background ]]; then args+=(--terminal-background-color "$background"); fi
         args+=("$effect")
         if [[ -n $text && -n $accent ]] && tte_run "$effect" --help 2>/dev/null | grep -q -- --final-gradient-stops; then
@@ -170,7 +192,10 @@ case ${1:-} in
           fi
         fi
         clear
+        hint
+        printf '\e[H'
         tte_run "${args[@]}" 2>/dev/null || sleep 1
+        hint
         sleep 2
       done ) &
     anim=$!
