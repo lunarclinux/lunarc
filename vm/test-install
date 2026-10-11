@@ -433,7 +433,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       else
         check "no passwordless keyring"    "! test -e ~/.local/share/keyrings/login.keyring || ! grep -q '^\[keyring\]' ~/.local/share/keyrings/login.keyring"
       fi
-      check "menu searches inside groups" "grep -q 'local function nested' /usr/share/$id/default/noctalia-plugins/utilities/menu.luau && $hypr noctalia msg panel-open launcher '/m steam' >/dev/null && sleep 1 && noctalia msg status | jq -e '.activePanelId == \"launcher\"' >/dev/null"
+      check "menu searches inside groups" "grep -q 'local function nested' /usr/share/$id/noctalia-plugins/utilities/menu.luau && $hypr noctalia msg panel-open launcher '/m steam' >/dev/null && sleep 1 && noctalia msg status | jq -e '.activePanelId == \"launcher\"' >/dev/null"
       screenshot menu-search
       "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg panel-close >/dev/null" || true
       check "keyboard layouts switch"      "$hypr $id keyboard add de >/dev/null && sleep 1 && hyprctl devices -j | jq -e '[.keyboards[] | select(.main)][0].layout == \"us,de\"' >/dev/null && $id keyboard next && sleep 1 && hyprctl devices -j | jq -r '.keyboards[] | select(.main) | .active_keymap' | grep -q German"

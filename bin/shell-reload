@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Run by the package's pacman hook (as root): ask the Noctalia shell of every
+# logged-in user to reload its config once, which picks up the new plugin
+# directory. Fixed arguments only; quiet and never fails the transaction.
+set -u
+while read -r _session uid user _rest; do
+  [[ $uid =~ ^[0-9]+$ ]] || continue
+  (( uid >= 1000 && uid < 60000 )) || continue
+  [[ $user =~ ^[a-z_][a-z0-9_-]*$ ]] || continue
+  runtime=/run/user/$uid
+  [[ -d $runtime ]] || continue
+  timeout 5 runuser -u "$user" -- env XDG_RUNTIME_DIR="$runtime" noctalia msg config-reload >/dev/null 2>&1 || true
+done < <(loginctl list-sessions --no-legend 2>/dev/null | awk '{print $1, $2, $3}' | sort -u -k2,2)
+exit 0
