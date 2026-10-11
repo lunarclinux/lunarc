@@ -465,6 +465,15 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     fi
     check "agent list knows claude"       "$id agent list | grep -qE '^\\* claude'"
     check "update check runs"             "$id update check >/dev/null"
+    # Pre-checks (decision record 0030): offline, a wrong clock and an untrusted
+    # key each give one plain message instead of pacman errors. Offline runs
+    # detached (it takes the network away from this SSH session too).
+    fpr=$(cat "$repo/pkg/keyring/fingerprint")
+    "$here/ssh" "$vm" "$user" -- "$sudo_pw systemd-run --unit=$id-offline-test --collect sh -c 'sleep 2; nmcli networking off; sleep 3; /usr/bin/$id update check > /run/$id-offline.out 2>&1; echo \$? > /run/$id-offline.rc; nmcli networking on'" >/dev/null 2>&1 || true
+    sleep 25; wait_ssh "$user" 120
+    check "update: offline says so plainly"  "cat /run/$id-offline.out; [ \"\$(cat /run/$id-offline.rc)\" != 0 ] && grep -q \"You're offline\" /run/$id-offline.out && ! grep -qi 'failed to retrieve' /run/$id-offline.out"
+    check "update: a wrong clock is explained" "before=\$(date +%s); $sudo_pw timedatectl set-ntp false; $sudo_pw date -s @\$((before - 31536000)) >/dev/null; out=\$($id update check 2>&1); rc=\$?; now=\$(date +%s); $sudo_pw date -s @\$((now + 31536000)) >/dev/null; $sudo_pw timedatectl set-ntp true; printf '%s\n' \"\$out\" | tail -4; [ \$rc != 0 ] && grep -q 'The clock says' <<<\"\$out\" && grep -q 'actually about' <<<\"\$out\""
+    check "update: an untrusted key is repaired" "$sudo_pw pacman-key --delete $fpr >/dev/null 2>&1; $sudo_pw env HOME=/root /usr/bin/$id update doctor 2>&1 | tail -3 | tee /dev/stderr | grep -q 'look right' && $sudo_pw gpg --homedir /etc/pacman.d/gnupg --batch --with-colons --list-keys $fpr 2>/dev/null | awk -F: '\$1 == \"pub\" { print \$2; exit }' | grep -qE '^[fu]\$'"
   fi
 
   # Last: logging out of the autologin session should bring up the login screen.
