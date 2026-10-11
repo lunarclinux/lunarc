@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+# summary: Workspaces in the bar: state for the widget, switching, attention
+set -euo pipefail
+source "$DISTRO_LIB/lib.sh"
+
+urgent_file=${XDG_RUNTIME_DIR:-/tmp}/$DISTRO_ID-urgent
+
+usage() {
+  cat <<USAGE
+Usage: $DISTRO_ID workspaces <command>
+
+  go <n>             switch to workspace n
+  next | prev        the next or previous workspace (the bar's scroll)
+  attention          go to the window that most recently asked for attention (SUPER+U)
+  style moon|noctalia
+                     the bar's workspaces: numbers with the active one as its
+                     moon phase (moon), or Noctalia's own pills
+  state              what the bar widget shows, as JSON
+  watch              follow Hyprland's events (runs as a user service)
+
+Apps that ask for attention get a small gold dot on their workspace. To also
+get a notification for some apps, list their window classes in
+~/.config/$DISTRO_ID/settings, e.g.:  attention.notify = com.mitchellh.ghostty
+USAGE
+}
+
+refresh_bar() { noctalia msg plugin "$DISTRO_ID/utilities:workspaces" all refresh >/dev/null 2>&1 || true; }
+
+# The bar shows workspaces 1 to the highest of 5, the highest with windows and
+# the active one; special (scratchpad) workspaces are left out.
+state() {
+  local active workspaces clients urgent='[]'
+  active=$(hyprctl activeworkspace -j | jq '.id')
+  workspaces=$(hyprctl workspaces -j)
+  clients=$(hyprctl clients -j)
+  if [[ -s $urgent_file ]]; then urgent=$(jq -R . "$urgent_file" | jq -s .); fi
+  jq -n --argjson active "$active" --argjson ws "$workspaces" --argjson clients "$clients" --argjson urgent "$urgent" '
+    ([$clients[] | select(.address as $a | $urgent | index($a)) | .workspace.id] | unique) as $flagged
+    | ([$ws[] | select(.id > 0)] | map({key: (.id | tostring), value: .windows}) | from_entries) as $count
+    | ([5, $active, ($ws[] | select(.id > 0 and .windows > 0) | .id)] | max) as $last
+    | {active: $active,
+       items: [range(1; $last + 1) as $i
+         | {id: $i, windows: ($count[$i | tostring] // 0), urgent: ($flagged | index($i) != null)}]}'
+}
+
+go() { hyprctl dispatch "hl.dsp.focus({ workspace = $1 })" >/dev/null; }
+
+step() { # step +1|-1: within 1..(last shown), wrapping
+  local now last target
+  now=$(hyprctl activeworkspace -j | jq '.id')
+  last=$(state | jq '.items | length')
+  target=$(( now + $1 ))
+  if (( target < 1 )); then target=$last; fi
+  if (( target > last )); then target=1; fi
+  go "$target"
+}
+
+attention() {
+  local address=""
+  if [[ -s $urgent_file ]]; then address=$(tail -n 1 "$urgent_file"); fi
+  if [[ -z $address ]]; then
+    # Nothing waiting: back to the previous window, like an alt-tab.
+    hyprctl dispatch "hl.dsp.focus({ last = true })" >/dev/null 2>&1 || true
+    return
+  fi
+  hyprctl dispatch "hl.dsp.focus({ window = \"address:$address\" })" >/dev/null
+}
+
+style() {
+  local config=${XDG_CONFIG_HOME:-$HOME/.config}/noctalia/config.toml want=$1
+  [[ $want == moon || $want == noctalia ]] || die "style is moon or noctalia"
+  mkdir -p "${config%/*}"; touch "$config"
+  # Swap the bar's first-section entry; the rest of the user's config stays.
+  sed -i '/^# workspaces style (set by `.* workspaces style`)$/,/^start = .*$/d' "$config"
+  if [[ $want == noctalia ]]; then
+    printf '\n# workspaces style (set by `%s workspaces style`)\n[bar.default]\nstart = ["menu", "workspaces-noctalia"]\n' "$DISTRO_ID" >> "$config"
+  fi
+  set_setting bar.workspaces "$want"
+  info "workspaces: $want"
+}
+
+case ${1:-} in
+  state) state ;;
+  go) [[ ${2:-} =~ ^[0-9]+$ ]] || die "go to which workspace?"; go "$2" ;;
+  next) step 1 ;;
+  prev) step -1 ;;
+  attention) attention ;;
+  style) style "${2:-}" ;;
+  watch) exec /usr/bin/python3 "$DISTRO_LIB/workspace-watch" "$DISTRO_ID" ;;
+  refresh) refresh_bar ;;
+  -h|--help|"") usage ;;
+  *) die "unknown workspaces command: $1" ;;
+esac

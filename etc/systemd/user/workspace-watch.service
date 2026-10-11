@@ -1,0 +1,14 @@
+# Follows Hyprland's events for the bar's workspaces widget and remembers which
+# windows asked for attention (`@DISTRO_ID@ workspaces --help`).
+[Unit]
+Description=Workspaces for the bar
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=/usr/bin/@DISTRO_ID@ workspaces watch
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target

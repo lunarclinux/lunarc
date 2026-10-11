@@ -1,0 +1,124 @@
+#!/usr/bin/python3
+# Follows Hyprland's event socket for the bar's workspaces widget:
+#   - refreshes the widget when workspaces or windows change (no polling),
+#   - keeps the list of windows that asked for attention ("urgent"), newest
+#     last, in $XDG_RUNTIME_DIR/<id>-urgent, and drops a window from it once
+#     it's focused or closed,
+#   - optionally notifies for apps listed in the setting attention.notify.
+# Usage: workspace-watch <distro id>   (run by the <id>-workspace-watch user service)
+import json
+import os
+import socket
+import subprocess
+import sys
+import threading
+import time
+
+ID = sys.argv[1]
+RUNTIME = os.environ.get("XDG_RUNTIME_DIR", "/tmp")
+URGENT_FILE = os.path.join(RUNTIME, f"{ID}-urgent")
+SETTINGS = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), ID, "settings")
+REFRESH = ["noctalia", "msg", "plugin", f"{ID}/utilities:workspaces", "all", "refresh"]
+WATCHED = ("workspace", "workspacev2", "createworkspace", "createworkspacev2", "destroyworkspace",
+           "destroyworkspacev2", "openwindow", "closewindow", "movewindow", "movewindowv2",
+           "focusedmon", "focusedmonv2", "activewindowv2", "urgent", "moveworkspace", "moveworkspacev2",
+           "monitoradded", "monitorremoved", "configreloaded")
+
+urgent = []
+
+
+def quiet(cmd, timeout=3):
+    try:
+        return subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=timeout, text=True).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+
+def save():
+    tmp = URGENT_FILE + ".tmp"
+    with open(tmp, "w") as f:
+        f.write("".join(a + "\n" for a in urgent))
+    os.replace(tmp, URGENT_FILE)
+
+
+def notify_classes():
+    try:
+        with open(SETTINGS) as f:
+            for line in f:
+                key, sep, value = line.partition("=")
+                if sep and key.strip() == "attention.notify":
+                    return {c.strip() for c in value.replace(",", " ").split() if c.strip()}
+    except OSError:
+        pass
+    return set()
+
+
+def maybe_notify(address):
+    wanted = notify_classes()
+    if not wanted:
+        return
+    try:
+        clients = json.loads(quiet(["hyprctl", "clients", "-j"]) or "[]")
+    except json.JSONDecodeError:
+        return
+    window = next((c for c in clients if c.get("address") == address), None)
+    if not window or window.get("class") not in wanted:
+        return
+    app = window.get("initialTitle") or window.get("class")
+
+    def ask():
+        answer = quiet(["notify-send", "--app-name", app, "--action=focus=Show",
+                        f"{app} needs your attention", window.get("title", "")], timeout=600)
+        if answer.strip() == "focus":
+            quiet(["hyprctl", "dispatch", f'hl.dsp.focus({{ window = "address:{address}" }})'])
+
+    threading.Thread(target=ask, daemon=True).start()
+
+
+def handle(line):
+    event, _, data = line.partition(">>")
+    if event not in WATCHED:
+        return False
+    address = "0x" + data.split(",")[0] if data else ""
+    if event == "urgent":
+        if address in urgent:
+            urgent.remove(address)
+        urgent.append(address)
+        save()
+        maybe_notify(address)
+    elif event in ("activewindowv2", "closewindow") and address in urgent:
+        urgent.remove(address)
+        save()
+    return True
+
+
+def follow():
+    signature = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE", "")
+    path = os.path.join(RUNTIME, "hypr", signature, ".socket2.sock")
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sock.connect(path)
+    buffer = b""
+    quiet(REFRESH)
+    while True:
+        chunk = sock.recv(65536)
+        if not chunk:
+            raise ConnectionError("Hyprland closed the event socket")
+        buffer += chunk
+        lines = buffer.split(b"\n")
+        buffer = lines.pop()
+        # One refresh per burst of events.
+        if any([handle(l.decode(errors="replace")) for l in lines]):
+            quiet(REFRESH)
+
+
+def main():
+    save()
+    while True:
+        try:
+            follow()
+        except OSError:
+            time.sleep(2)
+
+
+if __name__ == "__main__":
+    main()
