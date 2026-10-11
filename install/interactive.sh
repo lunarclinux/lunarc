@@ -175,11 +175,14 @@ styled_questions() {
 
     # 6. Login.
     if (( ENCRYPT )); then
-      ui_question 6 $total "Log in automatically?" "The disk passphrase already protects this computer at startup, so skipping the login screen is safe."
-      if ask --affirmative "Yes" --negative "No, show the login screen" "Go straight to the desktop after the passphrase?"; then AUTOLOGIN=1; else AUTOLOGIN=0; fi
+      ui_question 6 $total "Log in automatically after unlocking the disk?" "At startup you type the disk passphrase. That already proves it's you, so $DISTRO_NAME can skip the second login screen and open your desktop."
+      ui_text "$C_MUTED" "Yes: one passphrase at startup. The lock screen still asks for your password after sleep or when you lock it."
+      ui_text "$C_MUTED" "No: a second login after unlocking. Safer if someone might learn your disk passphrase."
+      printf '\n'
+      if ask --affirmative "Yes, log in automatically" --negative "No, ask for my password too" "Skip the second login?"; then AUTOLOGIN=1; else AUTOLOGIN=0; fi
     else
-      ui_question 6 $total "Log in automatically?" "Without encryption, anyone who turns the computer on gets your desktop."
-      if ask --default=false --affirmative "Yes" --negative "No, show the login screen" "Go straight to the desktop?"; then AUTOLOGIN=1; else AUTOLOGIN=0; fi
+      ui_question 6 $total "Log in automatically?" "Without disk encryption there's no passphrase at startup, so this would open your desktop for anyone who turns the computer on."
+      if ask --default=false --affirmative "Yes, log in automatically" --negative "No, ask for my password" "Skip the login screen?"; then AUTOLOGIN=1; else AUTOLOGIN=0; fi
     fi
 
     # Summary and the last chance to stop.
