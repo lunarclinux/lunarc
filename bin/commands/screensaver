@@ -152,7 +152,9 @@ case ${1:-} in
     # One effect per round (random unless one was asked for), centred; any key ends it.
     ( while :; do
         effect=${only:-${effects[RANDOM % ${#effects[@]}]}}
-        args=(-i "$art" --canvas-width 0 --canvas-height 0 --anchor-canvas c --anchor-text c --frame-rate 60)
+        # --no-eol: tte otherwise ends with a newline, which scrolls the full-screen
+        # canvas up one row (the wordmark "jumps" at the end of each effect).
+        args=(-i "$art" --canvas-width 0 --canvas-height 0 --anchor-canvas c --anchor-text c --frame-rate 60 --no-eol)
         if [[ -n $background ]]; then args+=(--terminal-background-color "$background"); fi
         args+=("$effect")
         if [[ -n $text && -n $accent ]] && tte_run "$effect" --help 2>/dev/null | grep -q -- --final-gradient-stops; then
