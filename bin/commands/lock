@@ -60,8 +60,9 @@ screensaver_lock() {
     --font "Inter" --font-size 22
     --indicator-radius 110 --indicator-thickness 9
     --indicator-caps-lock
-    --inside-color "${night}e6" --inside-clear-color "${night}e6" --inside-ver-color "${night}e6"
-    --inside-wrong-color "${night}e6" --inside-caps-lock-color "${night}e6"
+    # Solid, so the box stays readable over busy screensaver effects.
+    --inside-color "${night}ff" --inside-clear-color "${night}ff" --inside-ver-color "${night}ff"
+    --inside-wrong-color "${night}ff" --inside-caps-lock-color "${night}ff"
     --ring-color "$gold" --ring-clear-color "$violet" --ring-ver-color "$text"
     --ring-wrong-color "$wrong" --ring-caps-lock-color "$gold"
     --key-hl-color "$text" --bs-hl-color "$wrong" --caps-lock-key-hl-color "$text"
@@ -70,7 +71,7 @@ screensaver_lock() {
     --line-wrong-color 00000000 --line-caps-lock-color 00000000 --separator-color 00000000
     --text-color "$text" --text-clear-color "$text" --text-ver-color "$text"
     --text-wrong-color "$wrong" --text-caps-lock-color "$gold"
-    --layout-bg-color "${night}cc" --layout-border-color 00000000 --layout-text-color "$text"
+    --layout-bg-color "${night}ff" --layout-border-color 00000000 --layout-text-color "$text"
   )
   # A password box instead of the ring (our swaylock-plugin patch); setting
   # lock.indicator = ring keeps the ring. Only passed when the installed
