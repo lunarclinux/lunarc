@@ -415,6 +415,11 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       check "workspaces style switches"     "$hypr $id workspaces style noctalia >/dev/null && sleep 2 && noctalia config export | grep -qE 'workspaces-noctalia' && noctalia config export | grep -qE '^center *=.*stay-awake' && $id workspaces style moon >/dev/null && sleep 2 && ! noctalia config export | grep -qE '^start *=.*workspaces-noctalia'"
       "$here/ssh" "$vm" "$user" -- "$hypr $id workspaces go 3" >/dev/null 2>&1 || true
       screenshot workspaces
+      # Updates take effect without logging out (decision record 0040): the
+      # package's hooks start missing session services and reload Hyprland.
+      check "update starts missing services" "systemctl --user stop $id-workspace-watch && ! systemctl --user is-active --quiet $id-workspace-watch && $sudo_vm /usr/lib/$id/shell-reload && for i in \$(seq 15); do systemctl --user is-active --quiet $id-workspace-watch && exit 0; sleep 1; done; exit 1"
+      check "update reloads Hyprland's binds" "$hypr f=/usr/share/$id/default/hypr/binds.lua; printf '%s\\n' 'bind(\"SUPER + F12\", \"Update test bind\", run(\"true\"))' > /home/$user/testbind.lua && $sudo_vm sh -c 'cp /usr/share/$id/default/hypr/binds.lua /root/binds.lua.orig && cat /home/$user/testbind.lua >> /usr/share/$id/default/hypr/binds.lua' && $sudo_vm /usr/lib/$id/shell-reload --hypr && sleep 1 && hyprctl binds -j | jq -e 'any(.[]; .description == \"Update test bind\")' >/dev/null; rc=\$?; $sudo_vm cp /root/binds.lua.orig \$f; $sudo_vm /usr/lib/$id/shell-reload --hypr; rm -f /home/$user/testbind.lua; exit \$rc"
+      check "update hooks installed"         "test -f /usr/share/libalpm/hooks/$id-shell-reload.hook && grep -q 'shell-reload --hypr' /usr/share/libalpm/hooks/$id-hypr-reload.hook"
       check "system menu opens"           "$hypr $id menu; sleep 1.5; noctalia msg status | jq -e '.activePanelId == \"launcher\"' >/dev/null"
       screenshot menu
       check "keyboard shortcuts listed"   "$hypr noctalia msg panel-close >/dev/null; $id keys --list | grep -q 'System menu'"

@@ -1,5 +1,6 @@
-# After an update of the distro package, reload the Noctalia shell once for
-# everyone logged in, so new plugin code applies without a popup per file.
+# After an update of the distro package, make it take effect for everyone
+# logged in: start new session services, restart our watchers on the new code,
+# apply user migrations, and reload the Noctalia shell once.
 [Trigger]
 Operation = Install
 Operation = Upgrade
@@ -7,6 +8,6 @@ Type = Package
 Target = @DISTRO_ID@
 
 [Action]
-Description = Reloading the desktop shell...
+Description = Applying the update to logged-in desktops...
 When = PostTransaction
 Exec = /usr/lib/@DISTRO_ID@/shell-reload

@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# Proves an update takes effect without logging out (decision record 0040):
+# reboots distro-clean into a desktop session, builds a strictly newer package
+# that adds a session service and a keybind (temporary commits, reset
+# afterwards), installs it with pacman -U while the desktop runs, and checks
+# the service runs and the bind exists without a new login. Run under the VM
+# lock after vm/test-install --keep. Commit your work first: it resets HEAD.
+set -u
+Q=$(cd "$(dirname "$0")/.." && pwd)
+V=$Q/vm
+# shellcheck source=/dev/null
+source "$Q/distro.conf"; id=$DISTRO_ID
+PW=$(cat ~/.local/share/arch-distro-vm/distro-clean.password)
+vmsh() { "$V/ssh" distro-clean tester -- "$@"; }
+SUDO="echo '$PW' | sudo -S -p ''"
+ENVS='export XDG_RUNTIME_DIR=/run/user/$(id -u) WAYLAND_DISPLAY=wayland-1; export HYPRLAND_INSTANCE_SIGNATURE=$(ls $XDG_RUNTIME_DIR/hypr | head -1);'
+[[ -z $(git -C "$Q" status --porcelain) ]] || { echo "commit or stash your changes first"; exit 1; }
+
+echo "== reboot so autologin starts a desktop session"
+vmsh "$SUDO systemctl reboot" >/dev/null 2>&1 || true
+sleep 20
+for _ in $(seq 60); do vmsh true >/dev/null 2>&1 && break; sleep 5; done
+for _ in $(seq 60); do vmsh "$ENVS noctalia msg status >/dev/null 2>&1" && break; sleep 3; done
+vmsh "$ENVS noctalia msg status >/dev/null && echo session-up || echo NO-SESSION"
+sleep 10
+
+echo "== build a newer package that adds a session service and a keybind"
+cat > "$Q/etc/systemd/user/update-test.service" <<'UNIT'
+[Unit]
+Description=Live-update proof (test build only)
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=/usr/bin/sleep infinity
+Restart=on-failure
+UNIT
+sed -i 's|    put "$src/etc/systemd/user/workspace-watch.service" "$units/$id-workspace-watch.service"|&\n    put "$src/etc/systemd/user/update-test.service" "$units/$id-update-test.service"|' "$Q/pkg/files.sh"
+sed -i 's|      "$id-workspace-watch.service"; do|      "$id-workspace-watch.service" "$id-update-test.service"; do|' "$Q/pkg/files.sh"
+printf '\nbind("SUPER + F11", "Live update test bind", run("true"))\n' >> "$Q/default/hypr/binds.lua"
+grep -q update-test "$Q/pkg/files.sh" || { echo "files.sh patch failed"; git -C "$Q" checkout -q -- .; rm -f "$Q/etc/systemd/user/update-test.service"; exit 1; }
+git -C "$Q" add -A
+git -C "$Q" -c user.name=t -c user.email=t@t commit -qm "TEMP live-update test build (reverted)"
+for n in 1 2 3; do git -C "$Q" -c user.name=t -c user.email=t@t commit -q --allow-empty -m "TEMP version bump $n (reverted)"; done
+"$Q/pkg/build" >/dev/null 2>&1 || echo "build failed"
+git -C "$Q" reset -q --hard HEAD~4
+pkg=$(ls "$Q"/pkg/out/repo/"$id"-0*.pkg.tar.zst | head -1); echo "built: ${pkg##*/}"
+vmsh 'cat > /home/tester/new.pkg.tar.zst' < "$pkg"
+echo "installed before: $(vmsh "pacman -Q $id")"
+echo "before: service $(vmsh "systemctl --user is-active $id-update-test.service" 2>/dev/null); bind $(vmsh "$ENVS hyprctl binds -j | jq 'any(.[]; .description == \"Live update test bind\")'")"
+
+echo "== pacman -U the newer package while the desktop runs"
+vmsh "$SUDO pacman -U --noconfirm /home/tester/new.pkg.tar.zst 2>&1 | grep -iE 'upgrading|Applying|Reloading|error' | tail -5"
+sleep 8
+echo "installed after: $(vmsh "pacman -Q $id")"
+svc=$(vmsh "systemctl --user is-active $id-update-test.service" 2>/dev/null)
+bnd=$(vmsh "$ENVS hyprctl binds -j | jq 'any(.[]; .description == \"Live update test bind\")'")
+echo "after (same session): service $svc; bind $bnd"
+echo "session not restarted: Hyprland up since $(vmsh "$ENVS ps -o lstart= -p \$(pgrep -x Hyprland | head -1)")"
+if [[ $svc == active && $bnd == true ]]; then echo "LIVE UPDATE PROOF: PASS"; else echo "LIVE UPDATE PROOF: FAIL"; fi

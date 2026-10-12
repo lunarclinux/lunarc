@@ -40,10 +40,13 @@ as_user() { if (( EUID == 0 )) && [[ -n ${SUDO_USER:-} ]]; then runuser -u "$SUD
 base=/mnt/nas/$(owner)
 mine="$marker $(owner)/"
 
-ask() { # ask <prompt> [default] → answer
-  local answer
+ask() { # ask <question> [default] → answer
+  local answer header=$1
+  if [[ -n ${2:-} ]]; then header+=" (Enter keeps it)"; fi
   if command -v gum >/dev/null; then
-    answer=$(gum input --placeholder "$1" --value "${2:-}") || return 1
+    # The question goes in the header: gum hides a placeholder once a default
+    # value is filled in, which left only "> value" on screen.
+    answer=$(gum input --header "$header" --value "${2:-}") || return 1
   else
     read -rp "  $1${2:+ [$2]}: " answer || return 1
     answer=${answer:-${2:-}}
@@ -52,7 +55,7 @@ ask() { # ask <prompt> [default] → answer
 }
 ask_secret() { # ask_secret <prompt> → answer
   local answer
-  if command -v gum >/dev/null; then answer=$(gum input --password --placeholder "$1") || return 1
+  if command -v gum >/dev/null; then answer=$(gum input --password --header "$1") || return 1
   else read -rsp "  $1: " answer || return 1; printf '\n' >&2; fi
   printf '%s\n' "$answer"
 }
@@ -186,7 +189,7 @@ add() {
   fi
   test_share "$name" || return 1
   if [[ -z $device ]] && (( for_backups || ! yes )); then
-    device=$(ask "Folder for this computer's backups" "$(hostnamectl hostname 2>/dev/null || hostname)") || return 1
+    device=$(ask "Name for this computer's backup folder:" "$(hostnamectl hostname 2>/dev/null || hostname)") || return 1
   fi
   if [[ -n $device ]]; then
     local path

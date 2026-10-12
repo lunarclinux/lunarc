@@ -101,6 +101,7 @@ case $part in
     put "$src/etc/pacman.d/hooks/migrate.hook" "$dest/usr/share/libalpm/hooks/$id-migrate.hook"
     # One quiet shell reload per update (see the plugin directory above).
     put "$src/etc/pacman.d/hooks/shell-reload.hook" "$dest/usr/share/libalpm/hooks/$id-shell-reload.hook"
+    put "$src/etc/pacman.d/hooks/hypr-reload.hook" "$dest/usr/share/libalpm/hooks/$id-hypr-reload.hook"
     put "$src/bin/shell-reload" "$dest/usr/lib/$id/shell-reload" 755
     # Bootable snapshots (decision record 0036): keep the old kernel before
     # mkinitcpio's 60-mkinitcpio-remove deletes it ("10-" sorts first), and
