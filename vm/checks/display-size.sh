@@ -36,11 +36,15 @@ is 1 || fail "screen is at $(scale), not 1"
 # 4. Display size: the choices are Default (100%), Larger, Largest, Keep.
 # Kept: Larger stays. Not answered in 10 seconds: back to what it was.
 printf '2\ny\n' | @ID@ display size >/dev/null && is 1.25 && [[ $(saved) == 1.25 ]] || fail "kept Larger but got $(scale), saved $(saved)"
-start=$(date +%s)
-(printf '3\n'; sleep 14) | @ID@ display size >/dev/null
+(printf '3\n'; sleep 16) | @ID@ display size >/dev/null 2>&1 &
+start=$(date +%s); sleep 2
+# (Hyprland makes 1.5 into 1.6 here: 1280 / 1.5 isn't a whole number.)
+is 1.5 || is 1.6 || fail "Largest not shown while waiting: $(scale)"
+until is 1.25 || (( $(date +%s) - start > 15 )); do sleep 0.5; done
 took=$(( $(date +%s) - start ))
+wait
 is 1.25 && [[ $(saved) == 1.25 ]] || fail "unanswered size didn't go back: $(scale), saved $(saved)"
-(( took >= 10 && took < 14 )) || fail "went back after ${took}s"
+(( took >= 9 && took <= 12 )) || fail "went back after ${took}s"
 printf '1\ny\n' | @ID@ display size >/dev/null && is 1 && [[ $(saved) == none ]] || fail "Default gave $(scale), saved $(saved)"
 
 # 5. The menu offers it at the top of Setup, and in Setup › Displays.

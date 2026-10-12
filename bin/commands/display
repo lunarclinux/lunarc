@@ -83,8 +83,8 @@ lid_flag=$USER_RUNTIME/$DISTRO_ID-lid-closed
 
 # The scale for a screen nobody chose one for, from its pixel density (pixels
 # across / physical width). Laptop panels sit closer to the eyes than desk
-# monitors, so they get their own steps. Only scales that divide common
-# resolutions evenly (1, 1.25, 1.5, 2). Screens that report no size get 1.
+# monitors, so they get their own steps. Steps of 1, 1.25, 1.5 and 2 divide
+# common laptop resolutions evenly. Screens that report no size get 1.
 # Examples: 15.6" 1080p 141 dpi -> 1; 15.6" 1440p 188 -> 1.25; 14" 1440p 210
 # -> 1.5; 13" 4K -> 2; 27" 1440p 109 -> 1; 27" 4K 163 -> 1.5.
 scale_jq='def default_scale:
@@ -359,7 +359,7 @@ set_screen() {
 
 scale_note() {
   local s=${1:-}
-  [[ -n $s ]] || return 0
+  [[ -n $s && -z ${no_note:-} ]] || return 0
   if awk -v s="$s" 'BEGIN{exit !(s != int(s))}' && [[ $(setting display.xwayland default) != sharp ]]; then
     info "Fractional scale: older X11 apps may look slightly soft. '$DISTRO_ID display xwayland sharp' makes them sharp but small."
   fi
@@ -515,6 +515,18 @@ main_screen() { # main_screen <monitors-json> [screen] → monitor JSON
 
 percent() { awk -v s="$1" 'BEGIN{printf "%d%%", s * 100 + 0.5}'; }
 
+# Hyprland applies a new scale a moment after `hyprctl eval` returns: the
+# screen's scale once it differs from <old> (or after a second, if it never does).
+scale_after() { # scale_after <screen name> <old scale>
+  local now
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    now=$(hyprctl monitors -j | jq -r --arg n "$1" '.[] | select(.name == $n) | .scale')
+    if [[ $now != "$2" ]]; then break; fi
+    sleep 0.1
+  done
+  printf '%s\n' "$now"
+}
+
 default_for() { jq -r "$scale_jq default_scale" <<<"$1"; } # default_for <monitor-json>
 
 # step_from <scale> up|down → the next step above or below, or nothing
@@ -548,8 +560,7 @@ scale_cmd() { # scale_cmd [size|smaller|larger|default] [screen]
       want=$(awk -v p="${want%\%}" 'BEGIN{print p / 100}') ;;
   esac
   set_screen "$name" - "$want"
-  mon=$(resolve "$(monitors)" "$name")
-  info "$(label "$mon"): $(percent "$(jq -r .scale <<<"$mon")")"
+  info "$(label "$mon"): $(percent "$(scale_after "$name" "$cur")")"
 }
 
 # Try a size and keep it only when asked to, so a size too big (or small) to
@@ -569,12 +580,16 @@ size() { # size [screen]
   case $choice in Keep*|"") return 0 ;; esac
   want=$(sed -E 's/.*\(([0-9]+)%\)$/\1/' <<<"$choice")
   before=$(load)
-  # Default stores nothing, so the screen keeps following its default.
-  if [[ $choice == Default* ]]; then set_screen "$name" - auto; else set_screen "$name" - "$(awk -v p="$want" 'BEGIN{print p / 100}')"; fi
+  # Default stores nothing, so the screen keeps following its default. The
+  # X11 note is left out here; it's for `display set`.
+  if [[ $choice == Default* ]]; then want=auto; else want=$(awk -v p="$want" 'BEGIN{print p / 100}'); fi
+  no_note=1 set_screen "$name" - "$want"
+  want=$(scale_after "$name" "$cur")
   if keep_it; then
-    info "Display size: $want%. Change it any time in Setup › Display size."
+    info "Display size: $(percent "$want"). Change it any time in Setup › Display size."
   else
     store "$before"; apply_now
+    scale_after "$name" "$want" >/dev/null
     info "Back to $(percent "$cur")."
   fi
 }
