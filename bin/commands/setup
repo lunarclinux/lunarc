@@ -130,6 +130,9 @@ first_login() {
   # Shell defaults first, so the theme below also renders the prompt and editor colours.
   "/usr/bin/$DISTRO_ID" shell defaults on >/dev/null || true
   "/usr/bin/$DISTRO_ID" theme set "$(setting theme moonlit)"
+  # Each screen's size from its dimensions rather than Hyprland's guess, which
+  # can be 150% on a 15" laptop screen. The setup window offers to change it.
+  if [[ -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then "/usr/bin/$DISTRO_ID" display apply >/dev/null || true; fi
   # Weather is opt-in (it looks up the city online): the privacy step asks.
   mkdir -p "$STATE_DIR"; date -Is > "$done_file"
   # The live system has nothing to keep; installed systems get the setup window.

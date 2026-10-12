@@ -1,0 +1,6 @@
+#!/bin/sh
+# $TERMINAL for the desktop session: apps that run something in a terminal
+# (the launcher for Terminal=true entries, among others) call `$TERMINAL -e
+# command...`. Opens it in the terminal chosen with `@DISTRO_ID@ terminal set`.
+[ "${1:-}" = -e ] && shift
+exec /usr/bin/@DISTRO_ID@ terminal launch -- "$@"

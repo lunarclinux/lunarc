@@ -53,6 +53,10 @@ SUPER is the Windows key. SUPER+K lists every shortcut, searchable.
 | SUPER+CTRL+Space | Next keyboard layout (when you have more than one) |
 | SUPER+SHIFT+Escape | Log out |
 
+## Opening apps
+
+SUPER+Space opens the launcher: type part of an app's name and press Enter. **Noctalia Settings** there opens the settings for the bar, launcher, notifications and the rest of the desktop shell. Apps that run in a terminal (btop, for example) open in your default terminal (`lunarc terminal set`).
+
 ## The bar
 
 Left: the menu (crescent; right-click for apps) and workspaces: numbers, dim when empty and bright with windows; the one you're on shows its moon phase in gold instead of its number (1 a waxing crescent, 2 first quarter, 3 waxing gibbous, 4 full, and on round the cycle); a small gold dot marks a workspace where a window is asking for attention (SUPER+U goes there). Click to switch, scroll to step through, hover for the active workspace's number. `lunarc workspaces style noctalia` switches to Noctalia's own pills. Centre: stay awake, night light, Low Gravity (the feather: floats every window on this workspace, spread out, and tiles them again on the next click; SUPER+G), silence notifications, reminders, screen recording and dictation, then the clock and weather. Right: media, tray, AI usage, crashes, the keyboard layout (only with more than one; click to switch), and status icons (network, Bluetooth, sound, brightness, battery, power), each opening its own panel.
@@ -75,6 +79,7 @@ SUPER+ALT+Space (or `/m` in the launcher). Type part of a name and press Enter t
 | `lunarc crash list` / `show` / `diagnose` / `resolve` | The crash list; also the bug icon in the bar |
 | `lunarc shell defaults on\|off` / `shell set bash\|zsh\|fish` | Shell defaults (prompt, `z`, `ll`, Ctrl+R search) and your login shell |
 | `lunarc dev docker` / `dev lang node` / `dev db add postgres` | Docker, language runtimes (mise) and local databases |
+| `lunarc display size` / `scale 125%` | How big things look on screen |
 | `lunarc display edit` / `list` / `save <name>` | Screens: resolution, scale, arrangement, docked/undocked profiles |
 | `lunarc share list` / `add` / `test <name>` / `remove <name>` | Network shares (NAS), mounted on demand |
 | `lunarc app list` / `search <word>` / `install <app>` | Browse and install apps: browsers, editors, AI (Claude, ChatGPT, Ollama, Hermes), games (Steam, Lutris, Heroic), chat and more |
@@ -98,6 +103,7 @@ Settings for these live in `~/.config/lunarc/settings` (`key = value`); defaults
 ## Displays
 Each screen keeps its own resolution, scale and rotation, wherever it's plugged in. Arrangements are remembered per set of connected screens, so docking and undocking a laptop puts things back the way you left them.
 
+- **Display size**: how big text and everything else looks. Each screen starts at a size chosen from its dimensions (a 15" 1080p laptop screen at 100%, a 15" 1440p one at 125%). To change it, open **Setup › Display size** in the system menu (SUPER+ALT+Space) or run `lunarc display size`. Pick Smaller, Default or Larger. The new size is applied straight away; keep it, or it goes back after 10 seconds. `lunarc display scale 125%` (or `smaller`, `larger`, `default`) sets it directly.
 - **Setup › Displays** in the system menu (SUPER+ALT+Space), or `lunarc display edit`: pick a screen, then resolution, scale, position (right of, left of, above, below another) or rotation.
 - `lunarc display list` shows what's connected; `lunarc display set DP-1 2560x1440@144 1.25 right-of eDP-1` changes a screen in one go (`-` keeps a value).
 - `lunarc display save docked` names the current arrangement; it's applied again whenever exactly those screens are connected. `lunarc display profiles`, `apply <name>`, `forget <name>`.
