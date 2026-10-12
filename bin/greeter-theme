@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# Root side of `<distro id> theme`: the login screen (Noctalia Greeter) shows
+# the theme last chosen on this computer. Run through pkexec; the polkit action
+# (<distro id>.greeter-theme) lets the person at the computer do it without a
+# password, and nobody else. The arguments only pick among installed themes,
+# and everything written comes from the distro's own files.
+#
+#   greeter-theme [<theme> <dark|light> <wallpaper number>]   (none: the default theme)
+#
+# Writes /var/lib/<distro id>/greeter.toml; the greeter reads it through a link
+# from its own state folder (owned by the greeter user, so nothing is written there).
+set -euo pipefail
+die() { echo "greeter-theme: $*" >&2; exit 2; }
+(( EUID == 0 )) || { echo "greeter-theme: must run as root" >&2; exit 1; }
+share=/usr/share/@DISTRO_ID@
+default() { awk -F' *= *' -v k="$1" '$1 == k { print $2; exit }' "$share/default/settings"; }
+case $# in
+  0) name=$(default theme) mode=$(default theme.mode) n=1 ;;
+  3) name=$1 mode=$2 n=$3 ;;
+  *) die "usage: greeter-theme [<theme> <dark|light> <wallpaper number>]" ;;
+esac
+[[ $name =~ ^[a-z0-9][a-z0-9-]*$ && -f $share/themes/$name/palette.json ]] || die "unknown theme '$name'"
+[[ $mode == dark || $mode == light ]] || die "mode must be dark or light"
+palette=$share/themes/$name/palette.json
+jq -e --arg m "$mode" 'has($m)' "$palette" >/dev/null || mode=$(awk -F' *= *' '$1 == "mode" { gsub(/"/, "", $2); print $2; exit }' "$share/themes/$name/theme.toml")
+[[ $n =~ ^[0-9]{1,3}$ ]] || die "wallpaper must be a number"
+
+# The theme's wallpapers, in the order `theme wallpaper` numbers them.
+wallpaper=""
+if [[ -d $share/themes/$name/wallpapers ]]; then
+  file=$(find "$share/themes/$name/wallpapers" -maxdepth 1 -type f \( -name '*.svg' -o -name '*.png' -o -name '*.jpg' -o -name '*.webp' \) \
+    -printf '%f\n' | sort -V | sed -n "${n}p")
+  if [[ -n $file ]]; then wallpaper=$share/themes/$name/wallpapers/$file; fi
+fi
+
+# Noctalia's palette names (mOnSurfaceVariant) as the greeter's (on_surface_variant).
+colours=$(jq -r --arg m "$mode" '.[$m] | to_entries[]
+  | select((.key | test("^m[A-Z][A-Za-z]*$")) and (.value | test("^#[0-9A-Fa-f]{6}$")))
+  | "\(.key[1:] | gsub("(?<c>[A-Z])"; "_" + (.c | ascii_downcase)) | ltrimstr("_")) = \"\(.value)\""' "$palette")
+surface=$(jq -r --arg m "$mode" '.[$m].mSurface' "$palette")
+
+out=/var/lib/@DISTRO_ID@/greeter.toml
+install -d -m755 "${out%/*}"
+tmp=$(mktemp "$out.XXXXXX")
+trap 'rm -f "$tmp"' EXIT
+{
+  printf '# The login screen (Noctalia Greeter), written by greeter-theme from the theme\n'
+  printf '# chosen with `@DISTRO_ID@ theme`: %s (%s). Changes here are replaced.\n\n' "$name" "$mode"
+  printf '[session]\ndefault = "@DISTRO_NAME@"\n\n'
+  printf '[appearance]\nscheme = "Synced"\ntheme_mode = "%s"\nfont_family = "Inter"\n' "$mode"
+  printf 'hide_logo = true\nscheme_selector_position = "hidden"\n\n'
+  printf '[appearance.palette]\n%s\n\n' "$colours"
+  printf '[appearance.wallpaper]\n'
+  if [[ -n $wallpaper ]]; then printf 'path = "%s"\nfill_mode = "crop"\n' "$wallpaper"; fi
+  printf 'fill_color = "%s"\n' "$surface"
+} > "$tmp"
+chmod 644 "$tmp"
+mv -f "$tmp" "$out"
+
+# The greeter's state folder comes with the noctalia-greeter package.
+state=/var/lib/noctalia-greeter
+if [[ -d $state && ! -L $state && $(readlink "$state/greeter.toml" 2>/dev/null) != "$out" ]]; then
+  ln -sfn "$out" "$state/greeter.toml"
+fi

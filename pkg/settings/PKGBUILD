@@ -1,5 +1,6 @@
 # System configuration in /etc: sudo for wheel, compressed swap, the login
-# screen's config (with a greetd drop-in pointing at it).
+# screen's config (with a greetd drop-in pointing at it) and its wrapper.
+# tuigreet stays: the wrapper falls back to it when Noctalia Greeter can't start.
 source "${DISTRO_SRC:?build with pkg/build}/distro.conf"
 
 pkgname=$DISTRO_ID-settings

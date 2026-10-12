@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Runs Noctalia Greeter inside its compositor for the login wrapper (greeter)
+# and writes the greeter's exit status to $GREETER_EXIT_FILE, which the
+# compositor doesn't pass on. A stop request from the compositor is passed on.
+set -uo pipefail
+/usr/bin/noctalia-greeter "$@" &
+pid=$!
+trap 'kill -TERM "$pid" 2>/dev/null' TERM INT HUP
+# wait returns early when a signal arrives; wait again until the greeter is gone.
+while :; do
+  wait "$pid"; rc=$?
+  kill -0 "$pid" 2>/dev/null || break
+done
+if [[ -n ${GREETER_EXIT_FILE:-} ]]; then printf '%s\n' "$rc" > "$GREETER_EXIT_FILE"; fi
+exit "$rc"

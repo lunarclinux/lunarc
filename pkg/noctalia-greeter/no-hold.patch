@@ -1,0 +1,14 @@
+diff --color -ruN noctalia-greeter-1.6.0/src/main.cpp ../pb/noctalia-greeter-1.6.0/src/main.cpp
+--- a/src/main.cpp	2026-09-27 09:06:42.000000000 -0500
++++ b/src/main.cpp	2026-10-12 17:17:22.671468398 -0500
+@@ -62,6 +62,10 @@
+   }
+ 
+   void preventGreetdRespawnLoop() {
++    // A wrapper that falls back to another greeter sets this: exit, so it can.
++    if (std::getenv("NOCTALIA_GREETER_NO_HOLD") != nullptr) {
++      return;
++    }
+     kLog.error(
+         "holding process so greetd does not respawn; fix config and "
+         "restart greetd"

@@ -19,6 +19,8 @@ Usage: $DISTRO_ID theme <command>
   wallpaper [list]           the current theme's wallpapers (* marks the one in use)
   wallpaper next|prev        cycle through them
   wallpaper set <n>          use wallpaper number n
+  greeter                    use the current theme on the login screen too
+                             (done on every change; the last one chosen wins)
 USAGE
 }
 
@@ -71,6 +73,17 @@ apply_wallpaper() { # apply_wallpaper <theme> <n>
   set_setting "wallpaper.$1" "$2"
 }
 
+# The login screen shows the theme too: a root helper, allowed without a
+# password for the person at the computer. Elsewhere (SSH) it's refused, and
+# the theme still changes.
+greeter_apply() { # greeter_apply <theme> <mode> <wallpaper n>
+  local helper=$DISTRO_LIB/greeter-theme
+  [[ -x $helper ]] || return 1
+  if (( EUID == 0 )); then "$helper" "$@"
+  else timeout 10 pkexec --disable-internal-agent "$helper" "$@"
+  fi
+}
+
 # Truecolour swatches: two spaces of background per colour.
 swatch() { local h=${1#\#}; printf '\e[48;2;%d;%d;%dm  \e[0m' "0x${h:0:2}" "0x${h:2:2}" "0x${h:4:2}"; }
 
@@ -109,6 +122,7 @@ case ${1:-} in
     apply_mode "$mode"
     apply_wallpaper "$name" "$(wallpaper_index "$name")"
     set_setting theme "$name"
+    greeter_apply "$name" "$mode" "$(wallpaper_index "$name")" >/dev/null 2>&1 || true
     info "theme: $name ($mode)" ;;
   mode)
     mode=${2:-}; [[ $mode == dark || $mode == light ]] || die "mode must be dark or light"
@@ -116,7 +130,13 @@ case ${1:-} in
     has_variant "$name" "$mode" || die "$name has no $mode variant"
     shell_ready || die "the desktop shell isn't running"
     apply_mode "$mode"
+    greeter_apply "$name" "$mode" "$(wallpaper_index "$name")" >/dev/null 2>&1 || true
     info "theme: $name ($mode)" ;;
+  greeter)
+    name=$(setting theme)
+    greeter_apply "$name" "$(setting theme.mode)" "$(wallpaper_index "$name")" \
+      || die "the login screen couldn't be changed from here; run this on the computer itself"
+    info "login screen: $name ($(setting theme.mode))" ;;
   preview)
     if [[ -n ${2:-} ]]; then
       [[ -d $themes/$2 ]] || die "unknown theme '$2'"
@@ -139,6 +159,7 @@ case ${1:-} in
         shell_ready || die "the desktop shell isn't running"
         if [[ $2 == next ]]; then n=$(( n % ${#files[@]} + 1 )); else n=$(( (n + ${#files[@]} - 2) % ${#files[@]} + 1 )); fi
         apply_wallpaper "$name" "$n"
+        greeter_apply "$name" "$(setting theme.mode)" "$n" >/dev/null 2>&1 || true
         info "wallpaper $n of ${#files[@]}: ${files[n - 1]%.*}" ;;
       set)
         want=${3:-}
@@ -147,6 +168,7 @@ case ${1:-} in
         fi
         shell_ready || die "the desktop shell isn't running"
         apply_wallpaper "$name" "$want"
+        greeter_apply "$name" "$(setting theme.mode)" "$want" >/dev/null 2>&1 || true
         info "wallpaper $want of ${#files[@]}: ${files[want - 1]%.*}" ;;
       *) die "unknown wallpaper command: $2" ;;
     esac ;;

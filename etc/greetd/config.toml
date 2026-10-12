@@ -1,9 +1,9 @@
-# Login screen: greetd running the tuigreet text greeter on the first console.
-# Colour names refer to the console palette, which the kernel command line sets
-# to the default theme's (yellow = moon gold, gray = moonlight, black = night).
+# Login screen: greetd runs the distro's login wrapper on the first console, as
+# the unprivileged greeter user. It shows Noctalia Greeter in the current theme,
+# or the tuigreet text greeter if Noctalia Greeter is missing or can't start.
 [terminal]
 vt = 1
 
 [default_session]
-command = "tuigreet --time --remember --remember-session --asterisks --greeting '@DISTRO_NAME@' --theme 'border=yellow;title=yellow;greet=yellow;prompt=yellow;button=yellow;text=gray;time=gray;input=gray;action=blue;container=black' --cmd 'uwsm start -e -D Hyprland hyprland.desktop'"
+command = "/usr/lib/@DISTRO_ID@/greeter"
 user = "greeter"
