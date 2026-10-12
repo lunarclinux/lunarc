@@ -32,7 +32,7 @@ location lookups, no plugin catalogs, no exchange-rate downloads.
 | Installing apps | Arch mirrors, the AUR, the app's own site (web apps) | `lunarc app install` |
 | AI coding agents | the agent's provider (Anthropic, OpenAI, Google, ...) | when you run one; their telemetry is turned off (`DISABLE_TELEMETRY`, Gemini's usage statistics, opencode sharing) |
 | AI crash diagnosis | your chosen agent's provider, with the crash report | when you click Diagnose (or set background diagnosis yourself) |
-| Dictation | the speech model is downloaded once from Hugging Face; speech is transcribed on this computer | first use of Dictate |
+| Dictation | the speech model is downloaded once from Hugging Face and checked against a known checksum; speech is transcribed on this computer | first use of Dictate |
 | Command help (`tldr`) | the tldr pages on GitHub | when you run `tldr` and its cache is old |
 | Debug symbols | `debuginfod.archlinux.org` | when you debug a program in a terminal (gdb); crash capture never looks them up |
 | Backups | where you point Pika Backup | once you set it up |

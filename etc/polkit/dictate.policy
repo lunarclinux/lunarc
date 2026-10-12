@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!-- The password prompt for `@DISTRO_ID@ dictate setup` on installs that don't
+     have the speech engine yet. Only this helper, with its one fixed argument. -->
+<policyconfig>
+  <vendor>@DISTRO_NAME@</vendor>
+  <action id="@DISTRO_ID@.dictate.install">
+    <description>Install the dictation engine</description>
+    <message>Dictation needs the speech engine (whisper.cpp) from the Arch repositories. Installing a package needs your password. Speech is turned into text on this computer; nothing is sent anywhere.</message>
+    <icon_name>audio-input-microphone</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/lib/@DISTRO_ID@/dictate-helper</annotate>
+  </action>
+</policyconfig>

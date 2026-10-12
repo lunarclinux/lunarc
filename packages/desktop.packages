@@ -40,8 +40,9 @@ grim
 wl-clipboard
 playerctl
 
-# Capture (`<id> capture`) and dictation typing: region select, annotation,
-# colour picker, OCR, QR, screen recording, typing into windows
+# Capture (`<id> capture`) and dictation: region select, annotation, colour
+# picker, OCR, QR, screen recording, typing into windows, and the local
+# speech-to-text engine (only the speech model is downloaded, on first use)
 slurp
 satty
 hyprpicker
@@ -50,6 +51,7 @@ tesseract-data-eng
 zbar
 gpu-screen-recorder
 wtype
+whisper-cpp
 
 # Boot splash and the themed disk passphrase prompt (theme in the distro package)
 plymouth

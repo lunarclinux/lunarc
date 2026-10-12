@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# Checks `power charge-limit` against a fake battery: how on/off/numbers are
+# read for each kind of battery (a settable level, fixed-level battery care
+# through UPower, or none) and what status says. No root, no hardware.
+#
+#   tests/charge-limit
+set -euo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd)
+export DISTRO_ID=distro DISTRO_LIB=$root/bin
+source "$root/bin/commands/power"
+set +e
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+fails=0
+
+expect() { # expect <description> <expected> <actual>
+  if [[ $2 == "$3" ]]; then
+    printf 'ok    %s\n' "$1"
+  else
+    printf 'FAIL  %s: expected "%s", got "%s"\n' "$1" "$2" "$3"
+    fails=$((fails + 1))
+  fi
+}
+
+# Percentage battery: the kernel exposes the level to set.
+mkdir -p "$work/percent/BAT0" "$work/care/BAT0" "$work/none"
+echo 90 > "$work/percent/BAT0/charge_control_end_threshold"
+
+POWER_SYSFS=$work/percent POWER_FAKE_UPOWER=none
+expect "percent: kind" percent "$(charge_kind)"
+expect "percent: on means 80" "percent 80" "$(charge_plan percent on)"
+expect "percent: ON is on" "percent 80" "$(charge_plan percent ON)"
+expect "percent: 95" "percent 95" "$(charge_plan percent 95)"
+expect "percent: 050 is 50" "percent 50" "$(charge_plan percent 050)"
+expect "percent: off" "percent off" "$(charge_plan percent off)"
+expect "percent: 40 refused" error "$(charge_plan percent 40 | cut -d' ' -f1)"
+expect "percent: 101 refused" error "$(charge_plan percent 101 | cut -d' ' -f1)"
+expect "percent: junk refused" error "$(charge_plan percent '80;reboot' | cut -d' ' -f1)"
+expect "percent: status" "Charge limit: 90%" "$(charge_limit_status)"
+echo 100 > "$work/percent/BAT0/charge_control_end_threshold"
+expect "percent: status when off" "Charge limit: off" "$(charge_limit_status | cut -d' ' -f1-3)"
+
+# Fixed-level battery care (Lenovo conservation mode and similar).
+POWER_SYSFS=$work/care POWER_FAKE_UPOWER=on
+expect "care: kind" care "$(charge_kind)"
+expect "care: on" "care on" "$(charge_plan care on)"
+expect "care: off" "care off" "$(charge_plan care off)"
+expect "care: 80 means on" "care on-number" "$(charge_plan care 80)"
+expect "care: 95 means on" "care on-number" "$(charge_plan care 95)"
+expect "care: junk refused" error "$(charge_plan care maybe | cut -d' ' -f1)"
+expect "care: status on" "Battery care: on — the firmware decides the level (about 60–80%)" "$(charge_limit_status)"
+POWER_FAKE_UPOWER=off
+expect "care: status off" "Battery care: off" "$(charge_limit_status | cut -d' ' -f1-3)"
+
+# No charge limit at all.
+POWER_SYSFS=$work/care POWER_FAKE_UPOWER=none
+expect "none: kind" none "$(charge_kind)"
+expect "none: refused" error "$(charge_plan none on | cut -d' ' -f1)"
+expect "none: status" "Charge limit: not supported by this battery" "$(charge_limit_status)"
+POWER_SYSFS=$work/none
+expect "no battery: status" "Charge limit: no battery" "$(charge_limit_status)"
+
+# The command itself, end to end, for the case the Legion hit: a fake busctl
+# records what would be sent to UPower.
+mkdir -p "$work/bin"
+cat > "$work/bin/busctl" <<'FAKE'
+#!/bin/sh
+echo "$*" >> "$BUSCTL_LOG"
+FAKE
+chmod +x "$work/bin/busctl"
+run() { PATH=$work/bin:$PATH BUSCTL_LOG=$work/busctl.log POWER_SYSFS=$work/care POWER_FAKE_UPOWER=off \
+  bash "$root/bin/commands/power" charge-limit "$1" 2>&1; }
+expect "care: charge-limit 95 turns care on" \
+  "This battery stops at a level set by its firmware; battery care is now on." "$(run 95)"
+expect "care: UPower asked to enable" "call org.freedesktop.UPower /fake org.freedesktop.UPower.Device EnableChargeThreshold b true" "$(tail -n1 "$work/busctl.log")"
+expect "care: charge-limit off" "Battery care: off (charges to 100%)" "$(run off)"
+expect "care: UPower asked to disable" "b false" "$(tail -n1 "$work/busctl.log" | grep -o 'b false')"
+
+if (( fails )); then echo "$fails failed"; exit 1; fi
+echo "all passed"
