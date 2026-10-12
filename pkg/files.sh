@@ -34,6 +34,10 @@ case $part in
     put "$src/bin/workspace-watch" "$dest/usr/lib/$id/workspace-watch" 755
     put "$src/bin/power-helper" "$dest/usr/lib/$id/power-helper" 755
     put "$src/bin/share-helper" "$dest/usr/lib/$id/share-helper" 755
+    # Dictation's engine, for installs from before it was a default package;
+    # the polkit action gives the password prompt a plain reason.
+    put "$src/bin/dictate-helper" "$dest/usr/lib/$id/dictate-helper" 755
+    put "$src/etc/polkit/dictate.policy" "$dest/usr/share/polkit-1/actions/$id.dictate.policy"
     put "$src/distro.conf" "$dest/usr/lib/$id/distro.conf"
     put "$src/repo.conf" "$dest/usr/lib/$id/repo.conf"
     for cmd in "$src"/bin/commands/*; do put "$cmd" "$dest/usr/lib/$id/commands/${cmd##*/}" 755; done

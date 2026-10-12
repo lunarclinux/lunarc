@@ -131,12 +131,12 @@ case ${1:-} in
     if [[ $value == off ]]; then
       rm -f "$limit_file"
       apply_limit 100
-      echo "charge limit: off"
+      echo "Charge limit: off (charges to 100%)"
     elif [[ $value =~ ^[0-9]+$ ]] && (( value >= 50 && value <= 100 )); then
       apply_limit "$value"
       install -d "$etc"
       echo "$value" > "$limit_file"
-      echo "charge limit: $value%"
+      echo "Charge limit: $value%"
     else
       die "charge-limit takes a number from 50 to 100, or off"
     fi ;;

@@ -85,7 +85,7 @@ Power | | Lock, sleep, restart |
 Power | Lock | SUPER+L | @DISTRO_ID@ lock | lock
 Power | Suspend | Sleep until you wake it | noctalia msg session suspend | zzz
 Power | Hibernate | Save everything to disk and power off (turn on: @DISTRO_ID@ power hibernate enable) | @DISTRO_ID@ power hibernate now | battery-charging-2
-Power | Battery charge limit | Stop charging at 80% to extend battery life | term: @DISTRO_ID@ power charge-limit 80 | battery-2
+Power | Battery charge limit | Stop charging early (80%, or the firmware's battery-care level) to extend battery life | term: @DISTRO_ID@ power charge-limit on | battery-2
 Power | Restart | | noctalia msg session reboot | reload
 Power | Shut down | | noctalia msg session shutdown | power
 Power | Log out | | noctalia msg session logout | logout

@@ -3,44 +3,136 @@
 set -euo pipefail
 source "$DISTRO_LIB/lib.sh"
 
-# Speech-to-text runs locally with whisper.cpp; the audio never leaves the computer.
+# Speech-to-text runs locally with whisper.cpp (a default package); the audio
+# never leaves the computer. Only the speech model is downloaded, once, on
+# first use, into the user's own data directory.
 models=${XDG_DATA_HOME:-$HOME/.local/share}/$DISTRO_ID/whisper
 model_name=$(setting dictate.model base.en)
-model=$models/ggml-$model_name.bin
-model_url=https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-$model_name.bin
 runtime=$USER_RUNTIME/$DISTRO_ID-dictate
 pidfile=$runtime/record.pid
 audio=$runtime/speech.wav
+lock=$runtime/setup.lock
 
 usage() {
   cat <<USAGE
 Usage: $DISTRO_ID dictate <command>
 
   toggle    start listening; run again to stop and type what was said
-  setup     install whisper.cpp and download the speech model (~150 MB, once)
-  status    "listening", "ready" or "not set up"
+  setup     download the speech model (once; base.en is about 148 MB)
+  status    "listening", "ready", "setting up" or "not set up"
 
-The model is set by dictate.model in ~/.config/$DISTRO_ID/settings
-(tiny.en, base.en, small.en, ...; default base.en). Everything runs on this computer.
+The first use downloads the model from huggingface.co (whisper.cpp's own
+models) and checks it against a known checksum. The model is set by
+dictate.model in ~/.config/$DISTRO_ID/settings: tiny.en (78 MB), base.en
+(148 MB, default), small.en (488 MB), medium.en (1.5 GB), or the same without
+.en for other languages. Everything runs on this computer.
 USAGE
 }
 
+# The models setup can download: size in bytes and sha256, as huggingface.co
+# publishes them. Anything else is refused, so the name never reaches a URL
+# or path unchecked and a changed file is never used.
+model_info() {
+  case $1 in
+    tiny.en)   echo "77704715 921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f" ;;
+    tiny)      echo "77691713 be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21" ;;
+    base.en)   echo "147964211 a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002" ;;
+    base)      echo "147951465 60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe" ;;
+    small.en)  echo "487614201 c6138d6d58ecc8322097e0f987c32f1be8bb0a18532a3f88f734d1bbf9c41e5d" ;;
+    small)     echo "487601967 1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b" ;;
+    medium.en) echo "1533774781 cc37e93478338ec7700281a7ac30a10128929eb8f427dda2e865faa8f6da4356" ;;
+    medium)    echo "1533763059 6c14d5adee5f86394037b4e4e8b59f1673b6cee10e3cf0b11bbdbee79c156208" ;;
+    *) return 1 ;;
+  esac
+}
+model_size=0 model_sha="" model="" model_url=""
+if read -r model_size model_sha < <(model_info "$model_name"); then
+  model=$models/ggml-$model_name.bin
+  model_url=https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-$model_name.bin
+fi
+
+# Notifications replace each other (one "dictate" slot), so setup progress
+# updates in place instead of stacking up.
 note() { notify-send -a "$DISTRO_NAME" -h string:x-canonical-private-synchronous:dictate "$@" 2>/dev/null || true; }
-ready() { command -v whisper-cli >/dev/null && [[ -s $model ]]; }
+ready() { [[ -n $model && -s $model ]] && command -v whisper-cli >/dev/null && command -v wtype >/dev/null; }
 listening() { [[ -f $pidfile ]] && kill -0 "$(cat "$pidfile")" 2>/dev/null; }
+# Setup holds a lock while it runs; it goes away with the process.
+setting_up() { [[ -e $lock ]] && ! flock -n "$lock" true; }
 refresh_bar() { noctalia msg plugin "$DISTRO_ID/utilities:dictate" all refresh >/dev/null 2>&1 || true; }
+mb() { echo $(( ($1 + 500000) / 1000000 )); }
+
+# One clear message for a setup that couldn't finish, on screen and on stderr.
+setup_failed() { # setup_failed <title> <what to do>
+  note -u critical -i dialog-error -- "$1" "$2"
+  refresh_bar
+  die "$1. $2"
+}
+
+install_engine() {
+  note -i audio-input-microphone -- "Dictation needs its speech engine" \
+    "whisper.cpp isn't installed yet. A password prompt will ask to install it from the Arch repositories (about 6 MB)."
+  info "installing the speech engine (whisper.cpp) from the Arch repositories; this needs your password"
+  local rc=0
+  pkexec "$DISTRO_LIB/dictate-helper" install 9>&- || rc=$?
+  if (( rc == 126 || rc == 127 )); then
+    setup_failed "Dictation isn't set up" "The speech engine wasn't installed because the password prompt was cancelled. Click the microphone to try again, or run: $DISTRO_ID update"
+  elif (( rc != 0 )) || ! command -v whisper-cli >/dev/null || ! command -v wtype >/dev/null; then
+    setup_failed "Dictation isn't set up" "Installing the speech engine failed. Run $DISTRO_ID update in a terminal to see why, then click the microphone again."
+  fi
+}
+
+download_model() {
+  local part=$model.part pid have pct=-1 now rc=0 sum
+  mkdir -p "$models"
+  note -t 0 -i audio-input-microphone -h int:value:0 -- "Downloading the speech model" \
+    "$model_name, about $(mb "$model_size") MB, once, from huggingface.co. Dictation itself stays on this computer."
+  info "downloading the $model_name speech model (about $(mb "$model_size") MB) from huggingface.co"
+  # -C - resumes a download an earlier try left behind.
+  curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --connect-timeout 20 -C - -o "$part" "$model_url" 9>&- &
+  pid=$!
+  trap 'kill "$pid" 2>/dev/null' EXIT
+  while kill -0 "$pid" 2>/dev/null; do
+    have=$(stat -c %s "$part" 2>/dev/null || echo 0)
+    now=$(( have * 100 / model_size ))
+    if (( now != pct )); then
+      pct=$now
+      note -t 0 -i audio-input-microphone -h "int:value:$pct" -- "Downloading the speech model ($pct%)" \
+        "$model_name, $(mb "$have") of $(mb "$model_size") MB, from huggingface.co"
+      if [[ -t 1 ]]; then printf '\r%3d%%' "$pct"; fi
+    fi
+    sleep 1
+  done
+  wait "$pid" || rc=$?
+  trap - EXIT
+  if [[ -t 1 ]]; then printf '\r'; fi
+  if (( rc != 0 )); then
+    setup_failed "Couldn't download the speech model" "Check the internet connection, then click the microphone to try again (the download picks up where it stopped)."
+  fi
+  sum=$(sha256sum "$part" | cut -d' ' -f1)
+  if [[ $sum != "$model_sha" ]]; then
+    rm -f "$part"
+    setup_failed "The speech model didn't match its checksum" "The download was damaged or changed, and was deleted. Click the microphone to download it again."
+  fi
+  mv "$part" "$model"
+}
 
 setup() {
-  local missing=()
-  command -v whisper-cli >/dev/null || missing+=(whisper-cpp)
-  command -v wtype >/dev/null || missing+=(wtype)
-  if (( ${#missing[@]} )); then install_packages "${missing[@]}"; fi
-  if [[ ! -s $model ]]; then
-    mkdir -p "$models"
-    info "downloading the $model_name speech model"
-    curl -fL --progress-bar -o "$model.part" "$model_url"
-    mv "$model.part" "$model"
+  mkdir -p "$runtime"
+  exec 9>"$lock"
+  if ! flock -n 9; then
+    note -i audio-input-microphone -- "Dictation is still being set up" "A notification will say when it's ready."
+    info "dictation is still being set up"
+    return 0
   fi
+  if [[ -z $model ]]; then
+    setup_failed "Dictation isn't set up" "The dictate.model setting ($model_name) isn't a model dictation knows. Use tiny.en, base.en, small.en or medium.en (or the same without .en) in ~/.config/$DISTRO_ID/settings."
+  fi
+  refresh_bar
+  if ! command -v whisper-cli >/dev/null || ! command -v wtype >/dev/null; then install_engine; fi
+  if [[ ! -s $model ]]; then download_model; fi
+  exec 9>&-
+  refresh_bar
+  note -i audio-input-microphone -- "Dictation is ready" "Click the microphone in the bar (or press SUPER+CTRL+D), speak, then click again to type the words."
   info "dictation is ready: press the microphone button in the bar, or SUPER+CTRL+D"
 }
 
@@ -50,7 +142,7 @@ start() {
   setsid -f bash -c 'echo $$ > "$1"; exec pw-record --rate 16000 --channels 1 --format s16 "$2"' _ "$pidfile" "$audio"
   sleep 0.3
   refresh_bar
-  note -i audio-input-microphone "Listening" "Run dictation again to stop."
+  note -i audio-input-microphone -- "Listening" "Run dictation again to stop."
 }
 
 finish() {
@@ -59,13 +151,13 @@ finish() {
   kill -INT "$pid" 2>/dev/null || true
   for _ in $(seq 30); do kill -0 "$pid" 2>/dev/null || break; sleep 0.1; done
   refresh_bar
-  note -i audio-input-microphone "Transcribing…"
+  note -i audio-input-microphone -- "Transcribing…"
   text=$(whisper-cli -m "$model" -f "$audio" -nt -np -t "$(nproc)" 2>/dev/null \
     | sed -e 's/^[[:space:]]*//' -e '/^\[.*\]$/d' | tr '\n' ' ' | sed -e 's/[[:space:]]*$//')
   rm -f "$audio"
-  if [[ -z $text ]]; then note "Didn't catch that"; exit 1; fi
+  if [[ -z $text ]]; then note -- "Didn't catch that"; exit 1; fi
   wtype -- "$text"
-  note -t 1500 "Typed" "$text"
+  note -t 1500 -- "Typed" "$text"
 }
 
 case ${1:-} in
@@ -73,13 +165,19 @@ case ${1:-} in
     if listening; then finish
     elif ready; then start
     else
-      # First use: set up in a terminal so the download and password prompt are visible.
-      note "Setting up dictation" "Installing the speech engine and model (once)."
-      "/usr/bin/$DISTRO_ID" terminal launch -- bash -c "/usr/bin/$DISTRO_ID dictate setup; read -rsn1 -p 'Press any key to close'"
+      # First use: set up in the background (notifications show progress) and
+      # return at once. A click while it runs only says so.
+      if setting_up; then
+        note -i audio-input-microphone -- "Dictation is still being set up" "A notification will say when it's ready."
+      else
+        # Detached from the bar's click (which waits for this command), with its
+        # output in the journal: journalctl -t $DISTRO_ID-dictate
+        setsid -f systemd-cat -t "$DISTRO_ID-dictate" "/usr/bin/$DISTRO_ID" dictate setup </dev/null >/dev/null 2>&1
+      fi
     fi ;;
   setup) setup ;;
   status)
-    if listening; then echo listening; elif ready; then echo ready; else echo "not set up"; fi ;;
+    if listening; then echo listening; elif setting_up; then echo "setting up"; elif ready; then echo ready; else echo "not set up"; fi ;;
   -h|--help|"") usage ;;
   *) die "unknown dictate command: $1" ;;
 esac

@@ -425,6 +425,8 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       check "keyboard shortcuts listed"   "$hypr noctalia msg panel-close >/dev/null; $id keys --list | grep -q 'System menu'"
       check "screenshot saves a file"     "$hypr f=\$($id capture screenshot screen) && test -s \"\$f\""
       check "screen recording saves a file" "$hypr $id capture record screen >/dev/null && sleep 3 && f=\$($id capture stop | tail -1) && test -s \"\$f\""
+      check "dictation: engine installed, no password needed" "pacman -Q whisper-cpp wtype >/dev/null && command -v whisper-cli >/dev/null && grep -q 'speech engine' /usr/share/polkit-1/actions/$id.dictate.policy && test -x /usr/lib/$id/dictate-helper"
+      check "dictation: an unknown model is refused before any download" "out=\$(XDG_CONFIG_HOME=\$(mktemp -d) sh -c 'mkdir -p \$XDG_CONFIG_HOME/$id && echo dictate.model=../../x > \$XDG_CONFIG_HOME/$id/settings && $id dictate setup' 2>&1); grep -q \"isn't a model dictation knows\" <<<\"\$out\""
       check "a reminder fires"            "$hypr $id remind 'install test' in 3s >/dev/null && for i in \$(seq 15); do $id remind list | grep -q 'install test' || exit 0; sleep 1; done; exit 1"
       "$here/ssh" "$vm" "$user" -- "$hypr $id remind 'stretch' in 20m >/dev/null; noctalia msg panel-open $id/utilities:reminders-panel >/dev/null" || true
       screenshot reminders
@@ -455,6 +457,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
         check "lid binds: external monitor only" "$hypr hyprctl binds -j | jq -e '[.[] | select(.key == \"switch:on:Lid Switch\" or .key == \"switch:off:Lid Switch\")] | length == 2' >/dev/null"
         check "battery warning at 20%"       "$hypr noctalia config export | grep -A2 '^\[battery\]' | grep -q 'warning_threshold = 20'"
         check "charge limit: says when unsupported" "$id power charge-limit 80 2>&1 | grep -q \"doesn't support a charge limit\""
+        check "charge limit: 'on' accepted, status leads with the kind" "$id power charge-limit on 2>&1 | grep -q \"doesn't support a charge limit\" && $id power charge-limit | grep -qx 'Charge limit: no battery'"
         check "charge limit re-applied at boot" "test -L /usr/lib/systemd/system/multi-user.target.wants/$id-charge-limit.service && systemctl cat $id-charge-limit.service >/dev/null && test -x /usr/lib/systemd/system-sleep/$id-charge-limit"
         if (( encrypt )); then
           check "hibernate: swap file and resume" "echo '$password' | sudo -S -p '' $id power hibernate enable >/dev/null && swapon --show=NAME --noheadings | grep -qx /swap/swapfile && echo '$password' | sudo -S -p '' grep -q 'resume=UUID=.* resume_offset=' /boot/limine.conf"

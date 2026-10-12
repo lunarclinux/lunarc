@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Root side of `<distro id> dictate setup`: installs the dictation engine from
+# the Arch repositories on installs from before it was a default package. Run
+# through pkexec; the polkit action (<distro id>.dictate) says why it asks for
+# a password. It takes one fixed argument and installs a fixed list.
+#
+#   dictate-helper install
+set -euo pipefail
+(( EUID == 0 )) || { echo "dictate-helper: must run as root" >&2; exit 1; }
+[[ $# -eq 1 && $1 == install ]] || { echo "dictate-helper: usage: dictate-helper install" >&2; exit 2; }
+exec pacman -S --needed --noconfirm whisper-cpp wtype
