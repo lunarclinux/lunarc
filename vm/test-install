@@ -567,10 +567,14 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
   # (Noctalia Greeter, not its tuigreet fallback); the password logs back in.
   check "logging out shows the login screen" "$hypr"' uwsm stop >/dev/null 2>&1; for i in $(seq 30); do pgrep -u greeter -xf /usr/bin/noctalia-greeter >/dev/null && ! pgrep -x tuigreet >/dev/null && exit 0; sleep 1; done; pgrep -a -u greeter; exit 1'
   sleep 3
-  # The VM's own screen (no session to run grim in now).
+  # No session to run grim in now, and virsh can't capture a virgl screen:
+  # read the display's framebuffer (kmsgrab, as root).
   shot=$shots/$vm-$(date +%Y%m%d-%H%M%S)-login-screen.png
-  if virsh screenshot "$vm" --file "$shot.ppm" >/dev/null 2>&1 && magick "$shot.ppm" "$shot" 2>/dev/null; then log "screenshot: $shot"; else log "screenshot failed"; fi
-  rm -f "$shot.ppm"
+  if "$here/ssh" "$vm" "$user" -- "echo '$password' | sudo -S -p '' sh -c 'ffmpeg -loglevel error -y -device \$(ls /dev/dri/card* | head -1) -f kmsgrab -i - -vf hwmap=derive_device=vaapi,hwdownload,format=bgr0 -frames:v 1 -f image2 -c:v png - 2>/dev/null'" > "$shot" && [[ -s $shot ]]; then
+    log "screenshot: $shot"
+  else
+    rm -f "$shot"; log "screenshot failed"
+  fi
   vm_type "$password"; virsh send-key "$vm" KEY_ENTER >/dev/null
   check "logging in from the login screen" 'for i in $(seq 60); do pgrep -u "$USER" -x Hyprland >/dev/null && ! pgrep -u greeter -xf /usr/bin/noctalia-greeter >/dev/null && exit 0; sleep 1; done; exit 1'
 fi
