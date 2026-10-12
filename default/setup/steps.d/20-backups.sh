@@ -32,7 +32,7 @@ network_share() {
   fi
   printf '\n  %s%s%s%s\n\n' "$C_BOLD" "$C_GOLD" "${location:-?}" "$C_OFF"
   if [[ -n $location ]] && command -v wl-copy >/dev/null; then
-    printf '%s' "$location" | wl-copy 2>/dev/null && ui_text "$C_MUTED" "(Copied: paste it with CTRL+V.)"
+    printf '%s' "$location" | wl-copy 2>/dev/null && ui_text "$C_MUTED" "Copied. In the folder picker press CTRL+L, then CTRL+V and Enter. It's also in the picker's sidebar as \"NAS backups\"."
   fi
   return 0
 }

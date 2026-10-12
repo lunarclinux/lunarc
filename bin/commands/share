@@ -154,6 +154,17 @@ remember_backup_location() {
   local file=${XDG_STATE_HOME:-$HOME/.local/state}/$DISTRO_ID/setup/backup-location
   if (( EUID == 0 )) && [[ -n ${SUDO_USER:-} ]]; then return 0; fi
   mkdir -p "${file%/*}"; printf '%s\n' "$1" > "$file"
+  bookmark "$1" "NAS backups"
+}
+
+# A sidebar entry in every GTK file picker (Pika's included) and in Files.
+# The path is one of ours (/mnt/nas/<user>/<name>/<folder>, all from the safe
+# character set), so it needs no URL escaping.
+bookmark() { # bookmark <path> <label>
+  local file=${XDG_CONFIG_HOME:-$HOME/.config}/gtk-3.0/bookmarks uri="file://$1"
+  [[ $1 =~ ^/[A-Za-z0-9._/-]+$ ]] || return 0
+  mkdir -p "${file%/*}"; touch "$file"
+  if ! awk -v u="$uri" '$1 == u { found = 1 } END { exit !found }' "$file"; then printf '%s %s\n' "$uri" "$2" >> "$file"; fi
 }
 
 # --- adding ------------------------------------------------------------------
