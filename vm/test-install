@@ -236,7 +236,12 @@ if "$here/ssh" "$vm" "$user" -- "pacman -Q $id >/dev/null 2>&1"; then
   check "fastfetch uses the distro logo" "grep -q '/usr/share/$id/default/branding/fastfetch-logo.txt' /etc/xdg/fastfetch/config.jsonc && fastfetch --pipe >/dev/null"
   check "boot menu has the wallpaper"   "echo '$password' | sudo -S -p '' sh -c 'grep -q \"^wallpaper: boot():/$id/wallpaper.png\" /boot/limine.conf && test -s /boot/$id/wallpaper.png'"
   check "console uses the theme palette" "grep -q 'vt.default_red=11,' /proc/cmdline"
-  check "login screen is themed"        "grep -q -- \"--theme 'border=yellow\" /etc/greetd/$id.toml"
+  # The login screen (decision record 0041): Noctalia Greeter through the
+  # wrapper (tuigreet as its fallback), in the theme's colours and wallpaper.
+  check "login screen packages installed" "pacman -Q noctalia-greeter greetd-tuigreet >/dev/null"
+  check "login screen runs the wrapper"  "grep -qx 'command = \"/usr/lib/$id/greeter\"' /etc/greetd/$id.toml && test -x /usr/lib/$id/greeter && test -x /usr/lib/$id/greeter-client"
+  check "login screen is themed"        "grep -qx 'primary = \"#ebc77a\"' /var/lib/$id/greeter.toml && grep -q '^path = \"/usr/share/$id/themes/moonlit/wallpapers/' /var/lib/$id/greeter.toml && [ \"\$(echo '$password' | sudo -S -p '' readlink /var/lib/noctalia-greeter/greeter.toml)\" = /var/lib/$id/greeter.toml ]"
+  check "login screen starts the distro session" "noctalia-greeter sessions | grep -qx '$name' && grep -qx 'default = \"$name\"' /var/lib/$id/greeter.toml && grep -qx 'Exec=uwsm start -e -D Hyprland hyprland.desktop' /usr/share/wayland-sessions/$id.desktop"
   check "boot splash is the distro theme" "test -f /usr/share/plymouth/themes/$id/$id.script && [ \"\$(plymouth-set-default-theme)\" = $id ]"
   check "splash hook in the initramfs"   "grep -hE '^HOOKS=' /etc/mkinitcpio.conf.d/$id-hooks.conf | grep -qE 'systemd plymouth'"
   check "initramfs carries the splash"   "echo '$password' | sudo -S -p '' lsinitcpio /boot/initramfs-linux.img | grep -q 'usr/share/plymouth/themes/$id/$id.script'"
@@ -355,6 +360,10 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     screenshot paper
     check "all themes listed"             "[ \$($id theme list --plain | wc -l) -ge 17 ] && $id theme list --plain | grep -qP '^catppuccin\t'"
     check "switch to catppuccin"          "$hypr $id theme set catppuccin >/dev/null && sleep 2 && grep -q 'cba6f7' ~/.config/hypr/noctalia.lua && grep -qi '1e1e2e' ~/.config/ghostty/themes/noctalia"
+    # Over SSH the login screen is left alone (polkit: only the person at the
+    # computer); from the desktop it follows the theme without a password.
+    check "login screen theme: not from SSH" "! $id theme greeter >/dev/null 2>&1 && ! grep -q catppuccin /var/lib/$id/greeter.toml"
+    check "login screen theme: from the desktop" "$hypr hyprctl dispatch 'hl.dsp.exec_cmd(\"$id theme greeter\")' >/dev/null; for i in \$(seq 15); do grep -qx 'primary = \"#cba6f7\"' /var/lib/$id/greeter.toml && exit 0; sleep 1; done; cat /var/lib/$id/greeter.toml; exit 1"
     check "wallpaper cycles"              "$hypr $id theme wallpaper next | grep -q '^wallpaper 2 of ' && grep -q '^wallpaper.catppuccin = 2' ~/.config/$id/settings && $id theme wallpaper set 1 >/dev/null"
     screenshot catppuccin
     check "switch to eclipse"             "$hypr $id theme set eclipse >/dev/null && sleep 2 && grep -q 'f5c542' ~/.config/hypr/noctalia.lua"
@@ -363,7 +372,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     screenshot earthshine
 
     # Layer 5: crash inbox, agents, updates.
-    "$here/ssh" "$vm" "$user" -- "$hypr $id theme set moonlit >/dev/null" || true
+    "$here/ssh" "$vm" "$user" -- "$hypr $id theme set moonlit >/dev/null; hyprctl dispatch 'hl.dsp.exec_cmd(\"$id theme greeter\")' >/dev/null" || true
     check "crash watcher running"         "systemctl --user is-active --quiet $id-crash-watch"
     check "crash plugin enabled"          "$hypr noctalia msg plugins list 2>&1 | grep -E '$id/crashes' | grep -qiE 'enabled|on|yes|true'"
     check "a crash is captured"           "$id crash test >/dev/null; for i in \$(seq 20); do [ \"\$($id crash list --json | jq length)\" = 1 ] && exit 0; sleep 1; done; exit 1"
@@ -554,8 +563,20 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     check "update: an untrusted key is repaired" "$sp pacman-key --delete $fpr >/dev/null 2>&1; $sp env HOME=/root /usr/bin/$id update doctor 2>&1 | tail -3 | tee /dev/stderr | grep -q 'look right' && $sp gpg --homedir /etc/pacman.d/gnupg --batch --with-colons --list-keys $fpr 2>/dev/null | awk -F: '\$1 == \"pub\" { print \$2; exit }' | grep -qE '^[fu]\$'"
   fi
 
-  # Last: logging out of the autologin session should bring up the login screen.
-  check "logging out shows the login screen" "$hypr"' uwsm stop >/dev/null 2>&1; for i in $(seq 20); do pgrep -x tuigreet >/dev/null && exit 0; sleep 1; done; exit 1'
+  # Last: logging out of the autologin session brings up the login screen
+  # (Noctalia Greeter, not its tuigreet fallback); the password logs back in.
+  check "logging out shows the login screen" "$hypr"' uwsm stop >/dev/null 2>&1; for i in $(seq 30); do pgrep -u greeter -xf /usr/bin/noctalia-greeter >/dev/null && ! pgrep -x tuigreet >/dev/null && exit 0; sleep 1; done; pgrep -a -u greeter; exit 1'
+  sleep 3
+  # No session to run grim in now, and virsh can't capture a virgl screen:
+  # read the display's framebuffer (kmsgrab, as root).
+  shot=$shots/$vm-$(date +%Y%m%d-%H%M%S)-login-screen.png
+  if "$here/ssh" "$vm" "$user" -- "echo '$password' | sudo -S -p '' sh -c 'ffmpeg -loglevel error -y -device \$(ls /dev/dri/card* | head -1) -f kmsgrab -i - -vf hwmap=derive_device=vaapi,hwdownload,format=bgr0 -frames:v 1 -f image2 -c:v png - 2>/dev/null'" > "$shot" && [[ -s $shot ]]; then
+    log "screenshot: $shot"
+  else
+    rm -f "$shot"; log "screenshot failed"
+  fi
+  vm_type "$password"; virsh send-key "$vm" KEY_ENTER >/dev/null
+  check "logging in from the login screen" 'for i in $(seq 60); do pgrep -u "$USER" -x Hyprland >/dev/null && ! pgrep -u greeter -xf /usr/bin/noctalia-greeter >/dev/null && exit 0; sleep 1; done; exit 1'
 fi
 
 # Optional: start the snapshot taken before the `tree` install from the boot

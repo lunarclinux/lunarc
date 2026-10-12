@@ -2,6 +2,9 @@
 hyprland
 uwsm
 greetd
+# The login screen (from the distro repository; decision record 0041) and the
+# text greeter it falls back to.
+noctalia-greeter
 greetd-tuigreet
 xdg-desktop-portal-hyprland
 xdg-desktop-portal-gtk

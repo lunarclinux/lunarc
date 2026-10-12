@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!-- `@DISTRO_ID@ theme` showing the chosen theme on the login screen too. Only
+     this helper, which picks among the installed themes. No password for the
+     person at the computer (the active local session); refused otherwise. -->
+<policyconfig>
+  <vendor>@DISTRO_NAME@</vendor>
+  <action id="@DISTRO_ID@.greeter-theme">
+    <description>Use the desktop theme on the login screen</description>
+    <message>Using the desktop theme on the login screen</message>
+    <icon_name>preferences-desktop-theme</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/lib/@DISTRO_ID@/greeter-theme</annotate>
+  </action>
+</policyconfig>

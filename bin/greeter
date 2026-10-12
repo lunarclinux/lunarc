@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# The login screen. greetd runs this as the unprivileged greeter user (see
+# etc/greetd/config.toml): Noctalia Greeter, or the tuigreet text greeter when
+# Noctalia Greeter is missing or fails, so there is always a way to log in.
+# The greeters talk to greetd themselves; this never sees a password.
+#
+# Noctalia Greeter runs inside its own small compositor, which exits 0 however
+# the greeter inside it ended. greeter-client records the greeter's own exit
+# status: 0 means a session was started (or the screen restarts after sleep),
+# anything else, or no status at all, is a failure. NOCTALIA_GREETER_NO_HOLD
+# (our patch) makes a greeter that can't start exit instead of holding an empty
+# screen. greetd gives up after five quick greeter exits, so a failure goes
+# straight to tuigreet rather than exiting.
+set -uo pipefail
+
+text_greeter() {
+  # Colour names refer to the console palette, which the kernel command line
+  # sets to the default theme's (yellow = moon gold, gray = moonlight, black = night).
+  exec tuigreet --time --remember --remember-session --asterisks --greeting '@DISTRO_NAME@' \
+    --theme 'border=yellow;title=yellow;greet=yellow;prompt=yellow;button=yellow;text=gray;time=gray;input=gray;action=blue;container=black' \
+    --cmd 'uwsm start -e -D Hyprland hyprland.desktop'
+}
+
+for bin in /usr/bin/noctalia-greeter-session /usr/bin/noctalia-greeter-compositor /usr/bin/noctalia-greeter; do
+  [[ -x $bin ]] || text_greeter
+done
+# A private folder (mktemp: random name, mode 700) for the greeter's exit status.
+status=$(mktemp -d) || text_greeter
+
+NOCTALIA_GREETER_BIN=/usr/lib/@DISTRO_ID@/greeter-client GREETER_EXIT_FILE=$status/exit \
+  NOCTALIA_GREETER_NO_HOLD=1 /usr/bin/noctalia-greeter-session
+rc=$?
+greeter_rc=$(cat "$status/exit" 2>/dev/null || true)
+rm -rf "$status"
+if [[ $greeter_rc == 0 ]]; then exit 0; fi
+
+logger -t @DISTRO_ID@-greeter "Noctalia Greeter failed (compositor exit $rc, greeter exit ${greeter_rc:-none}); using tuigreet" || true
+text_greeter

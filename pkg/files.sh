@@ -39,6 +39,10 @@ case $part in
     # the polkit action gives the password prompt a plain reason.
     put "$src/bin/dictate-helper" "$dest/usr/lib/$id/dictate-helper" 755
     put "$src/etc/polkit/dictate.policy" "$dest/usr/share/polkit-1/actions/$id.dictate.policy"
+    # The login screen follows `theme` (decision record 0041): a root helper,
+    # allowed without a password for the person at the computer.
+    put "$src/bin/greeter-theme" "$dest/usr/lib/$id/greeter-theme" 755
+    put "$src/etc/polkit/greeter-theme.policy" "$dest/usr/share/polkit-1/actions/$id.greeter-theme.policy"
     put "$src/distro.conf" "$dest/usr/lib/$id/distro.conf"
     put "$src/repo.conf" "$dest/usr/lib/$id/repo.conf"
     for cmd in "$src"/bin/commands/*; do put "$cmd" "$dest/usr/lib/$id/commands/${cmd##*/}" 755; done
@@ -166,6 +170,11 @@ case $part in
     # greetd's own package owns /etc/greetd/config.toml, so ours lives beside it
     # and a drop-in points greetd at it.
     put "$src/etc/greetd/config.toml" "$dest/etc/greetd/$id.toml"
+    # The login wrapper that config names ships with it, so the two always
+    # arrive together (decision record 0041), and the session it starts.
+    put "$src/bin/greeter" "$dest/usr/lib/$id/greeter" 755
+    put "$src/bin/greeter-client" "$dest/usr/lib/$id/greeter-client" 755
+    put "$src/etc/greetd/session.desktop" "$dest/usr/share/wayland-sessions/$id.desktop"
     install -d "$dest/usr/lib/systemd/system/greetd.service.d"
     printf '[Service]\nExecStart=\nExecStart=/usr/bin/greetd --config /etc/greetd/%s.toml\n' "$id" \
       > "$dest/usr/lib/systemd/system/greetd.service.d/$id.conf"

@@ -69,7 +69,7 @@ SUPER+ALT+Space (or `/m` in the launcher). Type part of a name and press Enter t
 
 | Command | Does |
 |---|---|
-| `lunarc theme list` / `set <name> [dark\|light]` | Switch the desktop theme (colours, wallpaper, terminal, apps) |
+| `lunarc theme list` / `set <name> [dark\|light]` | Switch the desktop theme (colours, wallpaper, terminal, apps, login screen) |
 | `lunarc theme preview` | Colour swatches of every theme, in the terminal |
 | `lunarc theme wallpaper next` / `prev` / `set <n>` | Cycle the current theme's wallpapers (each theme remembers its pick) |
 | `lunarc terminal set ghostty\|alacritty\|kitty\|wezterm\|foot` | Change the terminal (installs it if needed) |
@@ -163,6 +163,13 @@ nano is installed as well, with colours, line numbers and Ctrl+S to save. Prefer
 - Screensaver effects: the distro's in `/usr/share/lunarc/default/screensaver/effects/`; add your own as `~/.config/terminaltexteffects/effects/<name>.py` and they join the rotation.
 - The system's name: `/etc/os-release` (`ID=lunarc`, `ID_LIKE=arch`), rewritten by a pacman hook whenever Arch's `filesystem` package updates.
 - Package signing: Lunarc's packages are signed; `lunarc-keyring` holds the key pacman checks them against (`pacman-key --list-keys 798A81A89261BC4E49D0784BFD4EE07A81DE46AE`). Lunarc's own repository isn't hosted yet, so for now its packages come from the installer only.
+
+## The login screen
+After a restart (unless you chose automatic login) and after logging out, the
+login screen asks for your password. It shows the theme and wallpaper last
+chosen on this computer: changing the theme changes it too (from the desktop,
+not over SSH; `lunarc theme greeter` does it again). If it ever can't start, a
+plain text login appears instead and works the same way.
 
 ## Locking the screen
 SUPER+L locks the screen and plays the screensaver behind the lock; nothing

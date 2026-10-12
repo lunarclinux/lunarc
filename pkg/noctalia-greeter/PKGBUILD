@@ -1,0 +1,80 @@
+# The login screen: a greetd greeter in Noctalia's look, which draws its own
+# screen with a small bundled wlroots compositor (no Hyprland or cage needed).
+# Not in Arch's official repositories, so the distro's repository carries it.
+# Built from the tagged release, checksum-pinned. It never connects anywhere.
+#
+# no-hold.patch (ours): with NOCTALIA_GREETER_NO_HOLD set, a greeter that
+# can't start exits instead of holding an empty screen forever, so the
+# distro's login wrapper can fall back to the text greeter.
+#
+# The build machine may lack the libraries it builds against (pkg/build skips
+# makedepends). Then the exact Arch packages below are unpacked into a private
+# folder for the build only, checksum-pinned; installed systems get the same
+# libraries through depends. meson and ninja: from Arch, else PyPI via uv.
+pkgname=noctalia-greeter
+pkgver=1.6.0
+pkgrel=1
+pkgdesc="greetd login greeter in Noctalia's look, with a bundled wlroots compositor"
+arch=(x86_64)
+url="https://github.com/noctalia-dev/noctalia-greeter"
+license=(MIT)
+depends=(cairo dbus fontconfig freetype2 glib2 glibc greetd libglvnd libinput librsvg
+         libwebp libxkbcommon libxml2 pango tomlplusplus wayland wlroots0.20)
+makedepends=(meson ninja nlohmann-json pkgconf stb wayland-protocols)
+options=(!debug)
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz"
+        no-hold.patch)
+sha256sums=('f23ebf07cbe4508971c08b0b81d2b5bfc4ec1ec45605d8f8fb01b799743a70b6'
+            '1c4e98c66a4ee89715fbfc513b06bf488168d892782e2632745a709a5231b9af')
+
+# Build-only libraries, when this machine doesn't have them (signatures checked
+# against Arch's keyring when these were pinned).
+_archive=https://archive.archlinux.org/packages
+_buildlibs=()
+if ! pkg-config --exists wlroots-0.20 nlohmann_json 2>/dev/null || [[ ! -f /usr/include/stb/stb_image_resize2.h ]]; then
+  _buildlibs=(wlroots0.20-0.20.2-1-x86_64 libliftoff-0.5.0-1-x86_64
+              nlohmann-json-3.12.0-2-any stb-20260415.205329.g31c1ad374564-1-any)
+  source+=("$_archive/w/wlroots0.20/${_buildlibs[0]}.pkg.tar.zst"
+           "$_archive/l/libliftoff/${_buildlibs[1]}.pkg.tar.zst"
+           "$_archive/n/nlohmann-json/${_buildlibs[2]}.pkg.tar.zst"
+           "$_archive/s/stb/${_buildlibs[3]}.pkg.tar.zst")
+  sha256sums+=('8b1da3fbf29cc45908d8de771bd22a5813b298a9049462df5b8952f23c3ffb8f'
+               '59cf08c21500673a14287b83b89b6db5389134cc24c97d9222c7cddefa639ccf'
+               '55968568ee1c8f3ffe691b51d4f6660acb40ee82f474d41fc6e18c571e87ddc4'
+               '286f2694dccf92acd197940b6ca068d3a6d5c763123e02a0e4fe26e611a97f25')
+  noextract=("${_buildlibs[@]/%/.pkg.tar.zst}")
+fi
+
+_meson() {
+  if command -v meson >/dev/null && command -v ninja >/dev/null; then meson "$@"
+  else uvx --quiet --from meson --with ninja meson "$@"
+  fi
+}
+
+prepare() {
+  patch -d "$pkgname-$pkgver" -p1 < no-hold.patch
+  local lib
+  for lib in "${_buildlibs[@]}"; do
+    mkdir -p buildlibs
+    bsdtar -xf "$lib.pkg.tar.zst" -C buildlibs --exclude '.*'
+  done
+}
+
+build() {
+  if (( ${#_buildlibs[@]} )); then
+    local root=$srcdir/buildlibs
+    export PKG_CONFIG_PATH=$root/usr/lib/pkgconfig:$root/usr/share/pkgconfig
+    export PKG_CONFIG_RELOCATE_PATHS=1 CPATH=$root/usr/include
+    export LDFLAGS="$LDFLAGS -Wl,-rpath-link,$root/usr/lib"
+  fi
+  CXXFLAGS+=" -Wno-unused-result"
+  _meson setup --prefix=/usr --libexecdir=lib --sbindir=bin --buildtype=plain \
+    --wrap-mode=nodownload -Db_pie=true -Db_ndebug=true \
+    build "$pkgname-$pkgver"
+  _meson compile -C build
+}
+
+package() {
+  _meson install -C build --destdir "$pkgdir"
+  install -Dm644 "$pkgname-$pkgver/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
