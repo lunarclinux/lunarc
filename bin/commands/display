@@ -16,6 +16,8 @@ source "$DISTRO_LIB/lib.sh"
 state=$CONFIG_DIR/displays.json
 generated=$CONFIG_DIR/hypr/displays.lua
 scales=(1 1.25 1.5 1.6 1.75 2)
+# The steps "smaller", "larger" and the Display size choices move between.
+steps=(1 1.25 1.5 2)
 
 usage() {
   cat <<USAGE
@@ -32,12 +34,16 @@ Usage: $DISTRO_ID display <command>
   profiles                   the saved profiles (* = in use)
   apply [profile]            apply a profile, or the arrangement for the screens now connected
   forget <profile>           delete a profile
+  scale [size] [screen]      show or set how big things look: 100%, 125%, 150%,
+                             200% (or 1, 1.25, ...), smaller, larger or default
+  size [screen]              try a size, then keep it or go back
   auto on|off                rearrange automatically when screens are plugged in (default on)
   xwayland sharp|default     how older (X11) apps look at fractional scales
   preview                    a sketch of the current arrangement
 
 A screen can be named by its port (DP-1), its number in 'list', part of its
-description ("Dell"), or "internal" for a laptop's built-in screen.
+description ("Dell"), or "internal" for a laptop's built-in screen. scale and
+size use the built-in screen (else the focused one) when none is named.
 Positions: right-of, left-of, above or below another screen; XxY; or auto.
 Rotation: normal, 90, 180, 270, flipped, flipped-90, flipped-180, flipped-270.
 Scales most screens look right at: ${scales[*]}.
@@ -75,11 +81,24 @@ lua_string() { local s=$1; s=${s//\\/\\\\}; s=${s//\"/\\\"}; printf '"%s"' "$s";
 # while an external one is connected, whatever the saved arrangement says.
 lid_flag=$USER_RUNTIME/$DISTRO_ID-lid-closed
 
+# The scale for a screen nobody chose one for, from its pixel density (pixels
+# across / physical width). Laptop panels sit closer to the eyes than desk
+# monitors, so they get their own steps. Only scales that divide common
+# resolutions evenly (1, 1.25, 1.5, 2). Screens that report no size get 1.
+# Examples: 15.6" 1080p 141 dpi -> 1; 15.6" 1440p 188 -> 1.25; 14" 1440p 210
+# -> 1.5; 13" 4K -> 2; 27" 1440p 109 -> 1; 27" 4K 163 -> 1.5.
+scale_jq='def default_scale:
+  if ((.physicalWidth // 0) > 0) then
+    (.width / (.physicalWidth / 25.4)) as $dpi
+    | if .builtin then (if $dpi < 150 then 1 elif $dpi < 200 then 1.25 elif $dpi < 250 then 1.5 else 2 end)
+      else (if $dpi < 125 then 1 elif $dpi < 175 then 1.5 else 2 end) end
+  else 1 end;'
+
 rules() { # rules <monitors-json> <state-json>
   local mons=$1 st=$2 key lid=0
   key=$(set_key "$mons")
   if [[ -e $lid_flag ]]; then lid=1; fi
-  jq -r --arg key "$key" --argjson st "$st" --arg lid "$lid" '
+  jq -r --arg key "$key" --argjson st "$st" --arg lid "$lid" "$scale_jq"'
     ([.[] | select(.builtin | not)] | length > 0) as $external
     | ($st.layouts[$key] // {}) as $layout
     | (if ([.[] | select(($layout.off // {})[.id] != true)] | length) == 0 then {} else ($layout.off // {}) end) as $off
@@ -87,7 +106,7 @@ rules() { # rules <monitors-json> <state-json>
     | ($st.monitors[$m.id] // {}) as $saved
     | [$m.id,
        ($saved.mode // "preferred"),
-       (($saved.scale // "auto") | tostring),
+       (($saved.scale // ($m | default_scale)) | tostring),
        (($layout.positions // {})[$m.id] // "auto"),
        (($saved.transform // 0) | tostring),
        (if ($lid == "1" and $m.builtin and $external) or $off[$m.id] == true then "off" else "on" end)] | @tsv' <<<"$mons"
@@ -311,8 +330,9 @@ set_screen() {
     mode=$(pick_mode "$mon" "$mode")
     st=$(jq --arg id "$id" --arg v "$mode" '.monitors[$id].mode = $v' <<<"$st")
   fi
+  [[ $scale != default ]] || scale=auto
   if [[ $scale != - ]]; then
-    valid_scale "$scale" || die "scale '$scale' should be a number like 1, 1.25, 1.5 or 2 (or auto)"
+    valid_scale "$scale" || die "scale '$scale' should be a number like 1, 1.25, 1.5 or 2 (or default)"
     if [[ $scale == auto ]]; then
       st=$(jq --arg id "$id" '.monitors[$id] |= ((. // {}) | del(.scale))' <<<"$st")
     else
@@ -468,7 +488,7 @@ edit() {
           | {r, hz: (.hz | tonumber | . * 100 | round / 100)}] | unique | sort_by(-(.r | split("x") | map(tonumber) | .[0] * .[1]), -.hz) | .[] | "\(.r)@\(.hz)"' <<<"$mon")
         choice=$(ask_choice "Resolution:" "${modes[@]}") && set_screen "$id" "$choice" ;;
       Scale)
-        choice=$(ask_choice "Scale (bigger number = bigger text):" "${scales[@]}" auto) && set_screen "$id" - "$choice" ;;
+        choice=$(ask_choice "Scale (bigger number = bigger text):" "${scales[@]}" default) && set_screen "$id" - "$choice" ;;
       Position)
         mapfile -t others < <(jq -r --arg n "$id" '.[] | select(.name != $n) | .name' <<<"$mons")
         if (( ${#others[@]} == 0 )); then info "Only one screen is connected."; read -rp "Press Enter " _; continue; fi
@@ -484,9 +504,95 @@ edit() {
   done
 }
 
+# --- display size -----------------------------------------------------------
+
+# The screen scale and size act on when none is named: the built-in screen,
+# else the focused one.
+main_screen() { # main_screen <monitors-json> [screen] → monitor JSON
+  if [[ -n ${2:-} ]]; then resolve "$1" "$2"; return; fi
+  jq -c '([.[] | select(.builtin and (.disabled | not))] + [.[] | select(.focused)] + .) | .[0] // empty' <<<"$1"
+}
+
+percent() { awk -v s="$1" 'BEGIN{printf "%d%%", s * 100 + 0.5}'; }
+
+default_for() { jq -r "$scale_jq default_scale" <<<"$1"; } # default_for <monitor-json>
+
+# step_from <scale> up|down → the next step above or below, or nothing
+step_from() {
+  local s=$1 i
+  if [[ $2 == up ]]; then
+    for i in "${steps[@]}"; do
+      if awk -v a="$i" -v b="$s" 'BEGIN{exit !(a > b + 0.01)}'; then echo "$i"; return; fi
+    done
+  else
+    for (( i = ${#steps[@]} - 1; i >= 0; i-- )); do
+      if awk -v a="${steps[i]}" -v b="$s" 'BEGIN{exit !(a < b - 0.01)}'; then echo "${steps[i]}"; return; fi
+    done
+  fi
+}
+
+scale_cmd() { # scale_cmd [size|smaller|larger|default] [screen]
+  need_hyprland
+  local mons mon want=${1:-} cur name
+  mons=$(monitors); mon=$(main_screen "$mons" "${2:-}")
+  [[ -n $mon ]] || die "no screen is connected"
+  name=$(jq -r .name <<<"$mon"); cur=$(jq -r .scale <<<"$mon")
+  case $want in
+    "") info "$(label "$mon"): $(percent "$cur") (default for this screen: $(percent "$(default_for "$mon")"))"; return ;;
+    smaller|larger)
+      want=$(step_from "$cur" "$([[ $1 == larger ]] && echo up || echo down)")
+      if [[ -z $want ]]; then info "Already the $([[ $1 == larger ]] && echo largest || echo smallest) size ($(percent "$cur"))."; return; fi ;;
+    default) want=auto ;;
+    *%)
+      [[ ${want%\%} =~ ^[0-9]+$ ]] || die "size '$want' should be like 100%, 125%, 150% or 200%"
+      want=$(awk -v p="${want%\%}" 'BEGIN{print p / 100}') ;;
+  esac
+  set_screen "$name" - "$want"
+  mon=$(resolve "$(monitors)" "$name")
+  info "$(label "$mon"): $(percent "$(jq -r .scale <<<"$mon")")"
+}
+
+# Try a size and keep it only when asked to, so a size too big (or small) to
+# answer in goes back by itself after 10 seconds.
+size() { # size [screen]
+  need_hyprland
+  local mons mon name cur def before choice want opts=() s
+  mons=$(monitors); mon=$(main_screen "$mons" "${1:-}")
+  [[ -n $mon ]] || die "no screen is connected"
+  name=$(jq -r .name <<<"$mon"); cur=$(jq -r .scale <<<"$mon"); def=$(default_for "$mon")
+  s=$(step_from "$def" down); [[ -z $s ]] || opts+=("Smaller ($(percent "$s"))")
+  opts+=("Default ($(percent "$def"))")
+  s=$(step_from "$def" up); [[ -z $s ]] || opts+=("Larger ($(percent "$s"))")
+  [[ -z $s ]] || s=$(step_from "$s" up); [[ -z $s ]] || opts+=("Largest ($(percent "$s"))")
+  opts+=("Keep $(percent "$cur")")
+  choice=$(ask_choice "Display size for $(label "$mon"), now $(percent "$cur"):" "${opts[@]}") || return 0
+  case $choice in Keep*|"") return 0 ;; esac
+  want=$(sed -E 's/.*\(([0-9]+)%\)$/\1/' <<<"$choice")
+  before=$(load)
+  # Default stores nothing, so the screen keeps following its default.
+  if [[ $choice == Default* ]]; then set_screen "$name" - auto; else set_screen "$name" - "$(awk -v p="$want" 'BEGIN{print p / 100}')"; fi
+  if keep_it; then
+    info "Display size: $want%. Change it any time in Setup › Display size."
+  else
+    store "$before"; apply_now
+    info "Back to $(percent "$cur")."
+  fi
+}
+
+keep_it() { # true when the answer is keep, within 10 seconds
+  if command -v gum >/dev/null && [[ -t 0 ]]; then
+    gum confirm --timeout=10s --default=false --affirmative "Keep" --negative "Go back" "Keep this size? It goes back in 10 seconds."
+  else
+    local a
+    read -rt 10 -p "Keep this size? It goes back in 10 seconds. [y/N] " a || { echo; return 1; }
+    [[ $a == [yY]* ]]
+  fi
+}
+
 # Lines for the system menu (Setup › Displays): title, subtitle, command, icon.
 menu_items() {
   local mons st profile
+  printf '%s\t%s\t%s\t%s\n' "Display size" "Make everything bigger or smaller" "term: $DISTRO_ID display size" "zoom-in"
   printf '%s\t%s\t%s\t%s\n' "Arrange displays" "Resolution, scale, position and rotation" "term: $DISTRO_ID display edit" "device-desktop"
   if [[ -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then
     mons=$(monitors); st=$(load); profile=$(active_profile "$mons" "$st")
@@ -511,6 +617,8 @@ case ${1:-} in
   apply)
     if [[ ${2:-} == --hotplug ]]; then hotplug; else apply_profile "${2:-}"; fi ;;
   forget) forget "${2:-}" ;;
+  scale) shift; scale_cmd "$@" ;;
+  size) shift; size "$@" ;;
   auto)
     case ${2:-} in on|off) set_setting display.auto "$2"; info "automatic switching: $2" ;; *) die "auto on or off?" ;; esac ;;
   xwayland)

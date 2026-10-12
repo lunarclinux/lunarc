@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Noctalia Settings
+Comment=Bar, launcher, notifications and other desktop shell settings
+Exec=noctalia msg settings-open
+Icon=noctalia
+Terminal=false
+Categories=Settings;DesktopSettings;
+Keywords=noctalia;shell;bar;settings;

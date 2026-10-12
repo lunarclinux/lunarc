@@ -16,5 +16,5 @@ Optional:
 - `step_skip` — run instead of `step_run` by `setup welcome --skip`
   (non-interactive: tests, or "skip all").
 
-Numbering: 10 welcome, 20 backups, 50 privacy choices, 90 done. Add a step by
+Numbering: 10 welcome, 20 backups, 30 display size, 50 privacy choices, 90 done. Add a step by
 dropping a new file in between; nothing else needs changing.

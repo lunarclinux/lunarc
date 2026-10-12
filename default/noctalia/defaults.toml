@@ -6,6 +6,10 @@ font_family = "Inter"
 polkit_agent = true          # Noctalia's own password prompt, themed like the rest
 telemetry_enabled = false     # no usage ping to noctalia.dev
 setup_wizard_enabled = false  # the distro applies its own theme and settings at first login
+# Each app opened from the launcher runs as its own systemd unit, not inside
+# the shell's, so restarting or updating the shell doesn't close the apps it
+# opened.
+launch_apps_as_systemd_services = true
 
 # After 5 minutes idle: lock, with the screensaver playing behind the lock
 # (`@DISTRO_ID@ lock --idle`; type the password to come back). Screens off at

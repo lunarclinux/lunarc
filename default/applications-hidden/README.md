@@ -7,3 +7,8 @@ same name in /usr/share/applications (the installer copies them to
 - lstopo: hwloc's hardware viewer, pulled in as a dependency.
 - qt6ct: Qt settings; the theme command manages Qt colours and icons.
 - qv4l2, qvidcap: v4l-utils test tools, pulled in as dependencies.
+
+Some are replaced rather than hidden:
+
+- dev.noctalia.Noctalia: the package's entry runs `noctalia --daemon`, which does
+  nothing while the shell is already running; this one opens its settings.

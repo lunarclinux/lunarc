@@ -449,6 +449,17 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg panel-open launcher '/m Setup › Displays › ' >/dev/null" || true
       screenshot displays-menu
       "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg panel-close >/dev/null" || true
+      check "display size: density default, scale, keep or go back" "$(sed "s/@ID@/$id/g" "$here/checks/display-size.sh")"
+      # The first-login step on its own: the choices, then Larger applied with
+      # the keep-or-go-back question, then back to 100% on its own.
+      check "display size step opens" "$hypr hyprctl dispatch 'hl.dsp.exec_cmd(\"ghostty --class=$id.sizetest -e $id setup welcome --only display-size\")' >/dev/null; for i in \$(seq 20); do hyprctl clients -j | jq -e '.[] | select(.class == \"$id.sizetest\")' >/dev/null && sleep 2 && exit 0; sleep 1; done; exit 1"
+      screenshot setup-display-size
+      check "display size step previews Larger" "$hypr hyprctl dispatch 'hl.dsp.focus({ window = \"class:^$id.sizetest\$\" })' >/dev/null; sleep 0.3; wtype -k Down; wtype -k Return; sleep 2; hyprctl monitors -j | jq -e '.[0].scale == 1.25' >/dev/null"
+      screenshot setup-display-size-keep
+      check "display size step goes back unanswered" "$hypr sleep 11; hyprctl monitors -j | jq -e '.[0].scale == 1' >/dev/null"
+      screenshot setup-display-size-back
+      check "display size step closes" "$hypr pkill -f -- '^(/usr/bin/)?ghostty --class=${id}[.]sizetest'; true"
+      check "launcher opens apps as their own units" "$(sed "s/@ID@/$id/g" "$here/checks/launcher-apps.sh")"
       check "idle: lock stays up; inhibitors respected" "$(sed "s/@ID@/$id/g" "$here/checks/idle.sh")"
       if "$here/ssh" "$vm" "$user" -- "test -x /usr/lib/$id/commands/power"; then
         check "idle counts again after a video" "$(sed "s/@ID@/$id/g" "$here/checks/idle-rearm.sh")"

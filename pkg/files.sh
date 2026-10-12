@@ -34,6 +34,7 @@ case $part in
     put "$src/bin/workspace-watch" "$dest/usr/lib/$id/workspace-watch" 755
     put "$src/bin/power-helper" "$dest/usr/lib/$id/power-helper" 755
     put "$src/bin/share-helper" "$dest/usr/lib/$id/share-helper" 755
+    put "$src/bin/terminal-exec" "$dest/usr/lib/$id/terminal-exec" 755
     put "$src/distro.conf" "$dest/usr/lib/$id/distro.conf"
     put "$src/repo.conf" "$dest/usr/lib/$id/repo.conf"
     for cmd in "$src"/bin/commands/*; do put "$cmd" "$dest/usr/lib/$id/commands/${cmd##*/}" 755; done
@@ -68,6 +69,9 @@ case $part in
       # micro is the default editor (git, sudoedit and others follow EDITOR);
       # override in ~/.config/environment.d/. Truecolour for its theme.
       printf 'EDITOR=micro\nVISUAL=micro\nMICRO_TRUECOLOR=1\n'
+      # Programs that open a terminal ($TERMINAL -e cmd), the launcher's
+      # Terminal=true apps among them, get the one chosen with `terminal set`.
+      printf 'TERMINAL=/usr/lib/%s/terminal-exec\n' "$id"
     } > "$dest/usr/lib/environment.d/50-$id.conf"
 
     # User services, enabled for every user through static wants links.

@@ -58,6 +58,7 @@ Setup | Set up @DISTRO_NAME@ | The first-login choices again | @DISTRO_ID@ setup
 Setup | Wi-Fi | Networks and connections | noctalia msg panel-open control-center network | wifi
 Setup | Bluetooth | Pair and connect devices | noctalia msg panel-open control-center bluetooth | bluetooth
 Setup | Sound | Outputs, inputs and volume | noctalia msg panel-open control-center audio | volume
+Setup | Display size | Make text and everything on screen bigger or smaller | term: @DISTRO_ID@ display size | zoom-in
 Setup | Displays | Resolution, scale, arrangement and profiles | menu: list display | device-desktop
 Setup | Power profile | Cycle performance, balanced and power saver | noctalia msg power-cycle | bolt
 Setup | Reminders | Upcoming reminders | noctalia msg panel-toggle @DISTRO_ID@/utilities:reminders-panel | alarm
