@@ -68,8 +68,8 @@ diff --color -ruN -x build base/main.c swaylock-plugin-1.8.7/main.c
  		.thickness = 10,
 diff --color -ruN -x build base/render.c swaylock-plugin-1.8.7/render.c
 --- a/render.c	2026-10-11 20:22:51.792093671 -0500
-+++ b/render.c	2026-10-11 20:24:00.660366468 -0500
-@@ -90,8 +90,200 @@
++++ b/render.c	2026-10-11 20:26:40.881577337 -0500
+@@ -90,8 +90,217 @@
  	cairo_font_options_destroy(fo);
  }
  
@@ -215,24 +215,41 @@ diff --color -ruN -x build base/render.c swaylock-plugin-1.8.7/render.c
 +			box_text_line(cairo, status, cx, by + (box_h - sfe.height) / 2,
 +				font_size * 0.8);
 +		} else {
-+			// One dot per character, as many as fit; the newest ones show.
-+			double dot_r = 5 * s, step = 18 * s, inner = 22 * s;
-+			size_t max_dots = (size_t)((box_w - 2 * inner) / step);
-+			size_t len = state->password.len;
-+			size_t dots = len < max_dots ? len : max_dots;
-+			double x = bx + inner + dot_r, y = by + box_h / 2;
-+			for (size_t i = 0; i < dots; ++i) {
-+				cairo_arc(cairo, x + i * step, y, dot_r, 0, 2 * M_PI);
-+				cairo_fill(cairo);
++			// A fixed row of dim dots, whatever was typed: the box never shows
++			// how many characters there are. Each key lights one dot, picked
++			// from upstream's random highlight position (the same randomness the
++			// ring uses); backspace lights it in the backspace colour.
++			const int ndots = 8;
++			double dot_r = 5 * s, step = 26 * s;
++			double x0 = cx - (ndots - 1) * step / 2, y = by + box_h / 2;
++			int lit = -1;
++			if (state->input_state == INPUT_STATE_LETTER ||
++					state->input_state == INPUT_STATE_BACKSPACE) {
++				lit = (int)((state->highlight_start % 2048) * ndots / 2048);
 +			}
-+			// A soft caret after the dots while typing.
-+			if (state->auth_state == AUTH_STATE_IDLE) {
-+				double caret_x = x + dots * step - dot_r;
-+				cairo_set_line_width(cairo, 2 * s);
-+				set_color_for_state(cairo, state, &state->args.colors.ring);
-+				cairo_move_to(cairo, caret_x, y - 12 * s);
-+				cairo_line_to(cairo, caret_x, y + 12 * s);
-+				cairo_stroke(cairo);
++			for (int i = 0; i < ndots; ++i) {
++				cairo_arc(cairo, x0 + i * step, y, dot_r, 0, 2 * M_PI);
++				if (i == lit) {
++					bool caps_on = state->xkb.caps_lock &&
++						state->args.show_caps_lock_indicator;
++					if (state->input_state == INPUT_STATE_LETTER) {
++						cairo_set_source_u32(cairo, caps_on ?
++							state->args.colors.caps_lock_key_highlight :
++							state->args.colors.key_highlight);
++					} else {
++						cairo_set_source_u32(cairo, caps_on ?
++							state->args.colors.caps_lock_bs_highlight :
++							state->args.colors.bs_highlight);
++					}
++					cairo_fill(cairo);
++				} else {
++					// Dim: the state's ring colour at a third strength.
++					cairo_push_group(cairo);
++					set_color_for_state(cairo, state, &state->args.colors.ring);
++					cairo_fill(cairo);
++					cairo_pop_group_to_source(cairo);
++					cairo_paint_with_alpha(cairo, 0.35);
++				}
 +			}
 +		}
 +
