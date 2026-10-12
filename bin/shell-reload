@@ -1,14 +1,91 @@
 #!/usr/bin/env bash
-# Run by the package's pacman hook (as root): ask the Noctalia shell of every
-# logged-in user to reload its config once, which picks up the new plugin
-# directory. Fixed arguments only; quiet and never fails the transaction.
+# Run by the package's pacman hooks (as root) so an update takes effect for
+# everyone logged in, without logging out:
+#
+#   shell-reload           after the distro package changes: reload systemd's
+#                          user units, start the session services the package
+#                          wants that aren't running (new ones included),
+#                          restart our stateless watchers so they run the new
+#                          code, apply user migrations, and reload Noctalia once
+#   shell-reload --hypr    after the Hyprland defaults change: reload Hyprland
+#
+# Acts as each user only through fixed argument lists (runuser / systemctl
+# --machine=<user>@); usernames, uids and Hyprland instance names are checked
+# first. Quiet, and never fails the transaction.
 set -u
+mode=${1:-shell}
+case $mode in shell|--hypr) ;; *) exit 0 ;; esac
+lib=$(dirname "$(readlink -f "$0")")
+# shellcheck source=/dev/null
+source "$lib/distro.conf"
+wants=/usr/lib/systemd/user/graphical-session.target.wants
+
+# Watchers restarted on every update so they run the new code; they keep no
+# state. The crash watcher is left alone when running: it follows the journal
+# from "now", so a restart could miss a crash in the gap.
+restartable() {
+  case $1 in
+    "$DISTRO_ID-battery-watch.service"|"$DISTRO_ID-idle-watch.service"|\
+    "$DISTRO_ID-lock-watch.service"|"$DISTRO_ID-workspace-watch.service") return 0 ;;
+  esac
+  return 1
+}
+
+user_systemctl() { # user_systemctl <user> <args...>
+  local user=$1; shift
+  timeout 20 systemctl --user --machine="$user@" "$@"
+}
+
+session_services() { # session_services <user>
+  local user=$1 path unit type restart state
+  user_systemctl "$user" daemon-reload >/dev/null 2>&1 || return 0
+  for path in "$wants"/noctalia.service "$wants/$DISTRO_ID"-*; do
+    [[ -e $path ]] || continue
+    unit=${path##*/}
+    [[ $unit =~ ^[A-Za-z0-9@._-]+$ ]] || continue
+    type=$(user_systemctl "$user" show -P Type "$unit" 2>/dev/null)
+    restart=$(user_systemctl "$user" show -P Restart "$unit" 2>/dev/null)
+    state=$(user_systemctl "$user" show -P ActiveState "$unit" 2>/dev/null)
+    if [[ $unit == *.timer ]]; then
+      if [[ $state != active ]]; then user_systemctl "$user" start --no-block "$unit" >/dev/null 2>&1; fi
+      continue
+    fi
+    # Long-running services only: first-login and the snapshot notice are
+    # once-per-login jobs; migrations are run below.
+    if [[ $type == oneshot || $restart == no ]]; then continue; fi
+    if [[ $state != active ]]; then
+      user_systemctl "$user" start --no-block "$unit" >/dev/null 2>&1
+    elif restartable "$unit"; then
+      user_systemctl "$user" try-restart --no-block "$unit" >/dev/null 2>&1
+    fi
+  done
+  # New user migrations apply now rather than at the next login.
+  user_systemctl "$user" start --no-block "$DISTRO_ID-migrate.service" >/dev/null 2>&1
+}
+
+hypr_reload() { # hypr_reload <user> <runtime dir>
+  local user=$1 runtime=$2 dir sig
+  for dir in "$runtime"/hypr/*/; do
+    sig=${dir%/}; sig=${sig##*/}
+    [[ $sig =~ ^[A-Za-z0-9_]+$ ]] || continue
+    [[ -S $runtime/hypr/$sig/.socket.sock ]] || continue
+    timeout 10 runuser -u "$user" -- env XDG_RUNTIME_DIR="$runtime" HYPRLAND_INSTANCE_SIGNATURE="$sig" \
+      hyprctl reload >/dev/null 2>&1
+  done
+}
+
 while read -r _session uid user _rest; do
   [[ $uid =~ ^[0-9]+$ ]] || continue
   (( uid >= 1000 && uid < 60000 )) || continue
   [[ $user =~ ^[a-z_][a-z0-9_-]*$ ]] || continue
+  [[ $(id -u "$user" 2>/dev/null) == "$uid" ]] || continue
   runtime=/run/user/$uid
   [[ -d $runtime ]] || continue
-  timeout 5 runuser -u "$user" -- env XDG_RUNTIME_DIR="$runtime" noctalia msg config-reload >/dev/null 2>&1 || true
+  if [[ $mode == --hypr ]]; then
+    hypr_reload "$user" "$runtime"
+  else
+    session_services "$user"
+    timeout 5 runuser -u "$user" -- env XDG_RUNTIME_DIR="$runtime" noctalia msg config-reload >/dev/null 2>&1
+  fi
 done < <(loginctl list-sessions --no-legend 2>/dev/null | awk '{print $1, $2, $3}' | sort -u -k2,2)
 exit 0

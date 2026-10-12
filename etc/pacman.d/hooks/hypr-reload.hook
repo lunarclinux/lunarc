@@ -1,0 +1,12 @@
+# When an update changes the distro's Hyprland defaults (binds, rules,
+# settings), reload Hyprland for everyone logged in, so new keys work at once.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Path
+Target = usr/share/@DISTRO_ID@/default/hypr/*
+
+[Action]
+Description = Reloading Hyprland's settings...
+When = PostTransaction
+Exec = /usr/lib/@DISTRO_ID@/shell-reload --hypr
