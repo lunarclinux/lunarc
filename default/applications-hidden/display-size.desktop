@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Display Size
+Comment=Make text and everything on screen bigger or smaller
+Exec=@DISTRO_ID@ display size
+Icon=zoom-in
+Terminal=true
+Categories=Settings;HardwareSettings;
+Keywords=display;scale;scaling;zoom;size;text;resolution;

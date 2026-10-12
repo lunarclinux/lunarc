@@ -12,3 +12,8 @@ Some are replaced rather than hidden:
 
 - dev.noctalia.Noctalia: the package's entry runs `noctalia --daemon`, which does
   nothing while the shell is already running; this one opens its settings.
+
+Some are added:
+
+- display-size: the Display size step from the menu, so the launcher finds it
+  by "display", "scale" or "size".

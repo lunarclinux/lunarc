@@ -52,8 +52,15 @@ if read -r model_size model_sha < <(model_info "$model_name"); then
 fi
 
 # Notifications replace each other (one "dictate" slot), so setup progress
-# updates in place instead of stacking up.
-note() { notify-send -a "$DISTRO_NAME" -h string:x-canonical-private-synchronous:dictate "$@" 2>/dev/null || true; }
+# updates in place instead of stacking up. Noctalia ignores the synchronous
+# hint, so each one also replaces the last by its id.
+note_id=""
+note() {
+  local id
+  id=$(notify-send -p ${note_id:+-r "$note_id"} -a "$DISTRO_NAME" -h string:x-canonical-private-synchronous:dictate "$@" 2>/dev/null) || true
+  [[ $id =~ ^[0-9]+$ ]] && note_id=$id
+  return 0
+}
 # "Still being set up" gets its own slot so the download's progress doesn't
 # replace it at once.
 note_busy() { notify-send -a "$DISTRO_NAME" -t 4000 -h string:x-canonical-private-synchronous:dictate-busy -i audio-input-microphone \
@@ -97,7 +104,9 @@ download_model() {
   trap 'kill "$pid" 2>/dev/null' EXIT
   while kill -0 "$pid" 2>/dev/null; do
     have=$(stat -c %s "$part" 2>/dev/null || echo 0)
-    now=$(( have * 100 / model_size ))
+    # Progress moves in steps of 10%, so the notification changes now and
+    # then rather than every second.
+    now=$(( have * 100 / model_size / 10 * 10 ))
     if (( now != pct )); then
       pct=$now
       note -t 0 -i audio-input-microphone -h "int:value:$pct" -- "Downloading the speech model ($pct%)" \
