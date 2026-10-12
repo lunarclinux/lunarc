@@ -52,9 +52,9 @@ screensaver_lock() {
     --command-each "$background"
     --ignore-empty-password
     --show-failed-attempts
-    # The ring appears with the first key and fades back to the screensaver,
-    # with one line under it saying what the lock expects (our swaylock-plugin
-    # patch); nothing static is drawn on the screensaver itself.
+    # The password box (or ring) appears with the first key and fades back to
+    # the screensaver, with one line under it saying what the lock expects (our
+    # swaylock-plugin patches); nothing static is drawn on the screensaver.
     --hint-text "Type your password · Enter to unlock · Esc clears"
     --hint-color "$text"
     --font "Inter" --font-size 22
@@ -72,6 +72,15 @@ screensaver_lock() {
     --text-wrong-color "$wrong" --text-caps-lock-color "$gold"
     --layout-bg-color "${night}cc" --layout-border-color 00000000 --layout-text-color "$text"
   )
+  # A password box instead of the ring (our swaylock-plugin patch); setting
+  # lock.indicator = ring keeps the ring. Only passed when the installed
+  # swaylock-plugin knows the option, so a half-finished update still locks.
+  # (--help exits 1, so read its text rather than piping it under pipefail.)
+  local help
+  help=$(swaylock-plugin --help 2>&1 || true)
+  if [[ $(setting lock.indicator box) == box && $help == *--indicator-style* ]]; then
+    args+=(--indicator-style box)
+  fi
   timeout 10 swaylock-plugin "${args[@]}" >/dev/null 2>&1
 }
 

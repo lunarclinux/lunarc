@@ -1,0 +1,306 @@
+diff --color -ruN -x build base/include/swaylock.h swaylock-plugin-1.8.7/include/swaylock.h
+--- a/include/swaylock.h	2026-10-11 20:22:51.791941750 -0500
++++ b/include/swaylock.h	2026-10-11 20:23:30.601095591 -0500
+@@ -62,6 +62,8 @@
+ 	char *font;
+ 	/* one line shown under the indicator while it is visible (NULL: none) */
+ 	char *hint;
++	/* draw a password box instead of the ring (--indicator-style box) */
++	bool indicator_box;
+ 	uint32_t font_size;
+ 	uint32_t radius;
+ 	uint32_t thickness;
+diff --color -ruN -x build base/main.c swaylock-plugin-1.8.7/main.c
+--- a/main.c	2026-10-11 20:22:51.792023871 -0500
++++ b/main.c	2026-10-11 20:23:30.601452964 -0500
+@@ -820,6 +820,7 @@
+ 		LO_TEXT_WRONG_COLOR,
+ 		LO_HINT_TEXT,
+ 		LO_HINT_COLOR,
++		LO_IND_STYLE,
+ 		LO_PLUGIN_GRACE,
+ 		LO_PLUGIN_POINTER_HYSTERESIS,
+ 		LO_PLUGIN_COMMAND,
+@@ -867,6 +868,7 @@
+ 		{"layout-text-color", required_argument, NULL, LO_LAYOUT_TXT_COLOR},
+ 		{"hint-text", required_argument, NULL, LO_HINT_TEXT},
+ 		{"hint-color", required_argument, NULL, LO_HINT_COLOR},
++		{"indicator-style", required_argument, NULL, LO_IND_STYLE},
+ 		{"line-color", required_argument, NULL, LO_LINE_COLOR},
+ 		{"line-clear-color", required_argument, NULL, LO_LINE_CLEAR_COLOR},
+ 		{"line-caps-lock-color", required_argument, NULL, LO_LINE_CAPS_LOCK_COLOR},
+@@ -972,6 +974,8 @@
+ 			"One line shown under the indicator while it is visible.\n"
+ 		"  --hint-color <color>             "
+ 			"Sets the color of the hint text (its box uses the layout background).\n"
++		"  --indicator-style <ring|box>     "
++			"Draw the indicator as the ring (default) or as a password box.\n"
+ 		"  --line-color <color>             "
+ 			"Sets the color of the line between the inside and ring.\n"
+ 		"  --line-clear-color <color>       "
+@@ -1233,6 +1237,19 @@
+ 				state->args.colors.hint_text = parse_color(optarg);
+ 			}
+ 			break;
++		case LO_IND_STYLE:
++			if (state) {
++				if (strcmp(optarg, "box") == 0) {
++					state->args.indicator_box = true;
++				} else if (strcmp(optarg, "ring") == 0) {
++					state->args.indicator_box = false;
++				} else {
++					swaylock_log(LOG_ERROR, "Invalid indicator style: %s "
++						"(ring or box)", optarg);
++					return 1;
++				}
++			}
++			break;
+ 		case LO_LINE_COLOR:
+ 			if (state) {
+ 				state->args.colors.line.input = parse_color(optarg);
+@@ -2272,6 +2289,7 @@
+ 		.mode = BACKGROUND_MODE_FILL,
+ 		.font = strdup("sans-serif"),
+ 		.hint = NULL,
++		.indicator_box = false,
+ 		.font_size = 0,
+ 		.radius = 50,
+ 		.thickness = 10,
+diff --color -ruN -x build base/render.c swaylock-plugin-1.8.7/render.c
+--- a/render.c	2026-10-11 20:22:51.792093671 -0500
++++ b/render.c	2026-10-11 20:26:40.881577337 -0500
+@@ -90,8 +90,217 @@
+ 	cairo_font_options_destroy(fo);
+ }
+ 
++static void rounded_rect(cairo_t *cairo, double x, double y, double w, double h,
++		double r) {
++	cairo_new_sub_path(cairo);
++	cairo_arc(cairo, x + w - r, y + r, r, -M_PI / 2, 0);
++	cairo_arc(cairo, x + w - r, y + h - r, r, 0, M_PI / 2);
++	cairo_arc(cairo, x + r, y + h - r, r, M_PI / 2, M_PI);
++	cairo_arc(cairo, x + r, y + r, r, M_PI, 3 * M_PI / 2);
++	cairo_close_path(cairo);
++}
++
++// Text of one line, centred on cx, its top at y; returns the line height.
++static double box_text_line(cairo_t *cairo, const char *text, double cx,
++		double y, double size) {
++	cairo_text_extents_t extents;
++	cairo_font_extents_t fe;
++	cairo_set_font_size(cairo, size);
++	cairo_text_extents(cairo, text, &extents);
++	cairo_font_extents(cairo, &fe);
++	cairo_move_to(cairo, cx - (extents.width / 2 + extents.x_bearing),
++		y + fe.ascent);
++	cairo_show_text(cairo, text);
++	cairo_new_path(cairo);
++	return fe.height;
++}
++
++// --indicator-style box: a password box instead of the ring. Shown exactly
++// when the ring would be; draws one dot per typed character (never the
++// characters), state text in place of the dots, a Caps Lock line under the
++// box and the hint line under that.
++static bool render_box_frame(struct swaylock_surface *surface) {
++	struct swaylock_state *state = surface->state;
++	double s = surface->scale;
++
++	bool draw_indicator = state->args.show_indicator &&
++		(state->auth_state != AUTH_STATE_IDLE ||
++			state->input_state != INPUT_STATE_IDLE ||
++			state->args.indicator_idle_visible);
++	bool active = state->auth_state != AUTH_STATE_IDLE ||
++		state->input_state != INPUT_STATE_IDLE;
++
++	const char *status = NULL;
++	if (state->input_state == INPUT_STATE_CLEAR) {
++		status = "Cleared";
++	} else if (state->auth_state == AUTH_STATE_VALIDATING) {
++		status = "Checking\xe2\x80\xa6";
++	} else if (state->auth_state == AUTH_STATE_INVALID) {
++		status = "Wrong password";
++	}
++	const char *caps = (state->xkb.caps_lock && state->args.show_caps_lock_text &&
++		active) ? "Caps Lock is on" : NULL;
++	const char *hint = (active && state->args.hint) ? state->args.hint : NULL;
++
++	double font_size = (state->args.font_size > 0 ? state->args.font_size : 18) * s;
++	double label_size = font_size * 0.72;
++	double small_size = font_size * 0.62;
++	double box_w = 360 * s, box_h = 56 * s, radius = 12 * s;
++	double border = 2.5 * s, gap = 10 * s, pad = 6 * s;
++
++	// Measure, so the buffer fits the widest line.
++	cairo_set_antialias(state->test_cairo, CAIRO_ANTIALIAS_BEST);
++	configure_font_drawing(state->test_cairo, state, surface->subpixel, (int)box_h);
++	cairo_font_extents_t fe;
++	cairo_text_extents_t te;
++	double width = box_w + 2 * border;
++	cairo_set_font_size(state->test_cairo, label_size);
++	cairo_font_extents(state->test_cairo, &fe);
++	double label_h = fe.height;
++	cairo_set_font_size(state->test_cairo, small_size);
++	cairo_font_extents(state->test_cairo, &fe);
++	double small_h = fe.height;
++	if (hint) {
++		cairo_text_extents(state->test_cairo, hint, &te);
++		if (width < te.width + 2 * pad) {
++			width = te.width + 2 * pad;
++		}
++	}
++	double height = label_h + gap + box_h + 2 * border;
++	if (caps) {
++		height += gap + small_h;
++	}
++	if (hint) {
++		height += gap + small_h + 2 * pad;
++	}
++	int buffer_width = (int)ceil(width);
++	int buffer_height = (int)ceil(height);
++	buffer_height += surface->scale - (buffer_height % surface->scale);
++	buffer_width += surface->scale - (buffer_width % surface->scale);
++
++	// Centre the box itself on the screen (label above, lines below).
++	double box_top = label_h + gap;
++	int subsurf_xpos = surface->width / 2 - buffer_width / (2 * surface->scale);
++	int subsurf_ypos = surface->height / 2 -
++		(int)((box_top + border + box_h / 2) / surface->scale);
++	if (state->args.override_indicator_x_position) {
++		subsurf_xpos = state->args.indicator_x_position -
++			buffer_width / (2 * surface->scale);
++	}
++	if (state->args.override_indicator_y_position) {
++		subsurf_ypos = state->args.indicator_y_position -
++			(int)((box_top + border + box_h / 2) / surface->scale);
++	}
++
++	struct pool_buffer *buffer = get_next_buffer(state->shm,
++			surface->indicator_buffers, buffer_width, buffer_height);
++	if (buffer == NULL) {
++		swaylock_log(LOG_ERROR, "No buffer");
++		return false;
++	}
++	cairo_t *cairo = buffer->cairo;
++	cairo_set_antialias(cairo, CAIRO_ANTIALIAS_BEST);
++	cairo_identity_matrix(cairo);
++	cairo_save(cairo);
++	cairo_set_source_rgba(cairo, 0, 0, 0, 0);
++	cairo_set_operator(cairo, CAIRO_OPERATOR_SOURCE);
++	cairo_paint(cairo);
++	cairo_restore(cairo);
++
++	if (draw_indicator) {
++		double cx = buffer_width / 2.0;
++		double bx = cx - box_w / 2, by = box_top + border;
++		configure_font_drawing(cairo, state, surface->subpixel, (int)box_h);
++
++		// Label above the box.
++		cairo_set_source_u32(cairo, state->args.colors.hint_text);
++		box_text_line(cairo, "Password", cx, 0, label_size);
++
++		// The box: inside colour, border in the state's ring colour.
++		rounded_rect(cairo, bx, by, box_w, box_h, radius);
++		set_color_for_state(cairo, state, &state->args.colors.inside);
++		cairo_fill_preserve(cairo);
++		cairo_set_line_width(cairo, border);
++		set_color_for_state(cairo, state, &state->args.colors.ring);
++		cairo_stroke(cairo);
++
++		set_color_for_state(cairo, state, &state->args.colors.text);
++		if (status) {
++			cairo_font_extents_t sfe;
++			cairo_set_font_size(cairo, font_size * 0.8);
++			cairo_font_extents(cairo, &sfe);
++			box_text_line(cairo, status, cx, by + (box_h - sfe.height) / 2,
++				font_size * 0.8);
++		} else {
++			// A fixed row of dim dots, whatever was typed: the box never shows
++			// how many characters there are. Each key lights one dot, picked
++			// from upstream's random highlight position (the same randomness the
++			// ring uses); backspace lights it in the backspace colour.
++			const int ndots = 8;
++			double dot_r = 5 * s, step = 26 * s;
++			double x0 = cx - (ndots - 1) * step / 2, y = by + box_h / 2;
++			int lit = -1;
++			if (state->input_state == INPUT_STATE_LETTER ||
++					state->input_state == INPUT_STATE_BACKSPACE) {
++				lit = (int)((state->highlight_start % 2048) * ndots / 2048);
++			}
++			for (int i = 0; i < ndots; ++i) {
++				cairo_arc(cairo, x0 + i * step, y, dot_r, 0, 2 * M_PI);
++				if (i == lit) {
++					bool caps_on = state->xkb.caps_lock &&
++						state->args.show_caps_lock_indicator;
++					if (state->input_state == INPUT_STATE_LETTER) {
++						cairo_set_source_u32(cairo, caps_on ?
++							state->args.colors.caps_lock_key_highlight :
++							state->args.colors.key_highlight);
++					} else {
++						cairo_set_source_u32(cairo, caps_on ?
++							state->args.colors.caps_lock_bs_highlight :
++							state->args.colors.bs_highlight);
++					}
++					cairo_fill(cairo);
++				} else {
++					// Dim: the state's ring colour at a third strength.
++					cairo_push_group(cairo);
++					set_color_for_state(cairo, state, &state->args.colors.ring);
++					cairo_fill(cairo);
++					cairo_pop_group_to_source(cairo);
++					cairo_paint_with_alpha(cairo, 0.35);
++				}
++			}
++		}
++
++		double y = by + box_h + border + gap;
++		if (caps) {
++			cairo_set_source_u32(cairo, state->args.colors.text.caps_lock);
++			y += box_text_line(cairo, caps, cx, y, small_size) + gap;
++		}
++		if (hint) {
++			cairo_set_font_size(cairo, small_size);
++			cairo_text_extents(cairo, hint, &te);
++			cairo_font_extents(cairo, &fe);
++			double hx = cx - te.width / 2 - pad;
++			cairo_rectangle(cairo, hx, y, te.width + 2 * pad, fe.height + 2 * pad);
++			cairo_set_source_u32(cairo, state->args.colors.layout_background);
++			cairo_fill(cairo);
++			cairo_set_source_u32(cairo, state->args.colors.hint_text);
++			box_text_line(cairo, hint, cx, y + pad, small_size);
++		}
++	}
++
++	wl_subsurface_set_position(surface->subsurface, subsurf_xpos, subsurf_ypos);
++	wl_surface_set_buffer_scale(surface->child, surface->scale);
++	wl_surface_attach(surface->child, buffer->buffer, 0, 0);
++	wl_surface_damage_buffer(surface->child, 0, 0, INT32_MAX, INT32_MAX);
++	wl_surface_commit(surface->child);
++	return true;
++}
++
+ static bool render_frame(struct swaylock_surface *surface) {
+ 	struct swaylock_state *state = surface->state;
++	if (state->args.indicator_box) {
++		return render_box_frame(surface);
++	}
+ 
+ 	// First, compute the text that will be drawn, if any, since this
+ 	// determines the size/positioning of the surface
+diff --color -ruN -x build base/swaylock.1.scd swaylock-plugin-1.8.7/swaylock.1.scd
+--- a/swaylock.1.scd	2026-10-11 20:22:51.792122692 -0500
++++ b/swaylock.1.scd	2026-10-11 20:23:30.601479444 -0500
+@@ -184,6 +184,13 @@
+ *--hint-color* <rrggbb[aa]>
+ 	Sets the color of the hint text.
+ 
++*--indicator-style* ring|box
++	Draw the indicator as the ring (the default) or as a password box: a
++	rounded box with one dot per typed character, state text (checking,
++	wrong, cleared) in place of the dots, and a Caps Lock line under it. The
++	box uses the ring, inside, text and line colors of each state and is
++	shown exactly when the ring would be.
++
+ *--line-color* <rrggbb[aa]>
+ 	Sets the color of the line between the inside and ring.
+ 

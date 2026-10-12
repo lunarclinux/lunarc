@@ -160,11 +160,14 @@ nano is installed as well, with colours, line numbers and Ctrl+S to save. Prefer
 
 ## Locking the screen
 SUPER+L locks the screen and plays the screensaver behind the lock; nothing
-else is on screen. Just start typing your password and press Enter: a ring
-appears as you type, with "Type your password · Enter to unlock · Esc clears"
-under it. It says "Verifying" after Enter, turns red with "Wrong" for a wrong
-password, shows "Caps Lock" when caps lock is on, and fades a moment after
-you stop typing. Esc clears what you typed ("Cleared"). The computer also locks after 5
+else is on screen. Just start typing your password and press Enter: a
+password box appears as you type (a dot lights with each key; the box never
+shows how many characters you typed), with "Type your
+password · Enter to unlock · Esc clears" under it. It says "Checking…" after
+Enter, turns red with "Wrong password" for a wrong password, warns "Caps Lock
+is on", and fades a moment after you stop typing. Esc clears what you typed
+("Cleared"). Prefer the ring? Set `lock.indicator = ring` in
+`~/.config/lunarc/settings`. The computer also locks after 5
 minutes idle and before it sleeps. If the lock screen ever hangs, press
 CTRL+ALT+L to start it again. To use Noctalia's lock screen instead, set
 `lock.style = noctalia` in `~/.config/lunarc/settings`.
