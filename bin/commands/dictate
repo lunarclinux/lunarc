@@ -54,6 +54,10 @@ fi
 # Notifications replace each other (one "dictate" slot), so setup progress
 # updates in place instead of stacking up.
 note() { notify-send -a "$DISTRO_NAME" -h string:x-canonical-private-synchronous:dictate "$@" 2>/dev/null || true; }
+# "Still being set up" gets its own slot so the download's progress doesn't
+# replace it at once.
+note_busy() { notify-send -a "$DISTRO_NAME" -t 4000 -h string:x-canonical-private-synchronous:dictate-busy -i audio-input-microphone \
+  -- "Dictation is still being set up" "A notification will say when it's ready." 2>/dev/null || true; }
 ready() { [[ -n $model && -s $model ]] && command -v whisper-cli >/dev/null && command -v wtype >/dev/null; }
 listening() { [[ -f $pidfile ]] && kill -0 "$(cat "$pidfile")" 2>/dev/null; }
 # Setup holds a lock while it runs; it goes away with the process.
@@ -120,7 +124,7 @@ setup() {
   mkdir -p "$runtime"
   exec 9>"$lock"
   if ! flock -n 9; then
-    note -i audio-input-microphone -- "Dictation is still being set up" "A notification will say when it's ready."
+    note_busy
     info "dictation is still being set up"
     return 0
   fi
@@ -156,7 +160,10 @@ finish() {
     | sed -e 's/^[[:space:]]*//' -e '/^\[.*\]$/d' | tr '\n' ' ' | sed -e 's/[[:space:]]*$//')
   rm -f "$audio"
   if [[ -z $text ]]; then note -- "Didn't catch that"; exit 1; fi
-  wtype -- "$text"
+  if ! wtype -- "$text" 2>/dev/null; then
+    note -u critical -i dialog-error -- "Couldn't type the text" "No window took the typing. Click into a text field and try again. What was heard: $text"
+    exit 1
+  fi
   note -t 1500 -- "Typed" "$text"
 }
 
@@ -168,7 +175,7 @@ case ${1:-} in
       # First use: set up in the background (notifications show progress) and
       # return at once. A click while it runs only says so.
       if setting_up; then
-        note -i audio-input-microphone -- "Dictation is still being set up" "A notification will say when it's ready."
+        note_busy
       else
         # Detached from the bar's click (which waits for this command), with its
         # output in the journal: journalctl -t $DISTRO_ID-dictate
