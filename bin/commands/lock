@@ -75,7 +75,10 @@ screensaver_lock() {
   # A password box instead of the ring (our swaylock-plugin patch); setting
   # lock.indicator = ring keeps the ring. Only passed when the installed
   # swaylock-plugin knows the option, so a half-finished update still locks.
-  if [[ $(setting lock.indicator box) == box ]] && swaylock-plugin --help 2>&1 | grep -q -- --indicator-style; then
+  # (--help exits 1, so read its text rather than piping it under pipefail.)
+  local help
+  help=$(swaylock-plugin --help 2>&1 || true)
+  if [[ $(setting lock.indicator box) == box && $help == *--indicator-style* ]]; then
     args+=(--indicator-style box)
   fi
   timeout 10 swaylock-plugin "${args[@]}" >/dev/null 2>&1
