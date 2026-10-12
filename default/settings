@@ -6,3 +6,6 @@ agent = claude
 crash.notify = first
 crash.diagnose_all = terminal
 crash.keep_resolved = system
+
+# Lock screen: a password box (box) or the ring (ring) appears while typing.
+lock.indicator = box
