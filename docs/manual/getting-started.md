@@ -87,7 +87,7 @@ SUPER+ALT+Space (or `/m` in the launcher). Type part of a name and press Enter t
 | `lunarc firewall allow <app>` / `deny` | Let LocalSend, KDE Connect, Syncthing, SSH or a port through the firewall (closed by default) |
 | `lunarc capture screenshot\|record\|stop\|color\|text\|qr` | Screenshots (`~/Pictures/Screenshots`), recordings (`~/Videos/Recordings`), colour picker, copy text or a QR code from the screen |
 | `lunarc remind "stretch" in 20m` / `at 15:30` / `list` / `cancel <id>` | Reminders (also the alarm icon in the bar) |
-| `lunarc dictate toggle` / `setup` | Dictation; runs locally with whisper.cpp (first use downloads a ~150 MB model) |
+| `lunarc dictate toggle` / `setup` | Dictation; runs locally with whisper.cpp (the first click downloads the speech model, about 148 MB) |
 | `lunarc menu` / `lunarc keys` | The system menu / the shortcut list |
 | `lunarc keyboard add de` / `remove` / `list` / `next` | Keyboard layouts (`lunarc keyboard available` lists them) |
 | `lunarc migrate --list --user` | See which config migrations have run |
@@ -175,10 +175,20 @@ CTRL+ALT+L to start it again. To use Noctalia's lock screen instead, set
 ## Laptop power
 
 - **Lid closed with an external monitor:** the laptop's screen turns off and you keep working on the external one. With no external monitor, closing the lid sleeps (and locks).
-- **Battery charge limit:** `lunarc power charge-limit 80` stops charging at 80%, which keeps the battery healthier if the laptop is plugged in most of the time; `off` charges to 100%. Not every laptop's firmware supports it; the command says so.
+- **Battery charge limit:** `lunarc power charge-limit on` stops charging early, which keeps the battery healthier if the laptop is plugged in most of the time; `off` charges to 100%. There are two kinds of battery, and `lunarc power charge-limit` says which one you have:
+  - **Charge limit: N%.** You choose the level: `on` is 80%, or give a number from 50 to 100.
+  - **Battery care: on/off.** The firmware decides the level (about 60–80%), as on Lenovo laptops. Only on and off apply; a number turns battery care on.
+
+  Some laptops support neither; the command says so.
 - **Low battery:** a warning at 20%, a persistent alert at 10%, and a last one at 5% (at 2% the laptop hibernates if hibernation is on, otherwise it shuts down).
 - **Hibernate:** `lunarc power hibernate enable` (encrypted installs only, since the hibernation image is a copy of everything in memory). Then Power › Hibernate in the menu, or `lunarc power hibernate now`.
 - `lunarc power status` shows all of this at a glance.
+
+## Dictation
+
+Click the microphone in the bar (or press SUPER+CTRL+D), speak, and click again: the words are typed into the window you're in. Speech is turned into text on this computer by whisper.cpp; nothing is sent anywhere.
+
+The first click downloads the speech model once (base.en, about 148 MB, from huggingface.co) into `~/.local/share/lunarc/whisper`. A notification shows the progress and another says when it's ready; clicking again in the meantime only says it's still being set up. The download is checked against a known checksum. Installs from before whisper.cpp was a default package ask for a password once, with a prompt that says what it's for. `dictate.model` in `~/.config/lunarc/settings` picks another model: tiny.en (78 MB, faster, less accurate), small.en (488 MB) or medium.en (1.5 GB), or the same without `.en` for other languages.
 
 ## Passwords, lock-outs and staying awake
 
