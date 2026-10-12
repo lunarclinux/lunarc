@@ -1,6 +1,6 @@
-diff --color -ruN -x build base/include/swaylock.h swaylock-plugin-1.8.7/include/swaylock.h
---- a/include/swaylock.h	2026-10-11 20:22:51.791941750 -0500
-+++ b/include/swaylock.h	2026-10-11 20:23:30.601095591 -0500
+diff --color -ruN base/include/swaylock.h new/include/swaylock.h
+--- a/include/swaylock.h	2026-10-11 21:45:47.571613941 -0500
++++ b/include/swaylock.h	2026-10-11 21:45:47.572832590 -0500
 @@ -62,6 +62,8 @@
  	char *font;
  	/* one line shown under the indicator while it is visible (NULL: none) */
@@ -10,9 +10,9 @@ diff --color -ruN -x build base/include/swaylock.h swaylock-plugin-1.8.7/include
  	uint32_t font_size;
  	uint32_t radius;
  	uint32_t thickness;
-diff --color -ruN -x build base/main.c swaylock-plugin-1.8.7/main.c
---- a/main.c	2026-10-11 20:22:51.792023871 -0500
-+++ b/main.c	2026-10-11 20:23:30.601452964 -0500
+diff --color -ruN base/main.c new/main.c
+--- a/main.c	2026-10-11 21:45:47.571706702 -0500
++++ b/main.c	2026-10-11 21:45:47.572911441 -0500
 @@ -820,6 +820,7 @@
  		LO_TEXT_WRONG_COLOR,
  		LO_HINT_TEXT,
@@ -66,10 +66,10 @@ diff --color -ruN -x build base/main.c swaylock-plugin-1.8.7/main.c
  		.font_size = 0,
  		.radius = 50,
  		.thickness = 10,
-diff --color -ruN -x build base/render.c swaylock-plugin-1.8.7/render.c
---- a/render.c	2026-10-11 20:22:51.792093671 -0500
-+++ b/render.c	2026-10-11 20:26:40.881577337 -0500
-@@ -90,8 +90,217 @@
+diff --color -ruN base/render.c new/render.c
+--- a/render.c	2026-10-11 21:45:47.571802173 -0500
++++ b/render.c	2026-10-11 21:46:01.065510682 -0500
+@@ -90,8 +90,226 @@
  	cairo_font_options_destroy(fo);
  }
  
@@ -99,9 +99,9 @@ diff --color -ruN -x build base/render.c swaylock-plugin-1.8.7/render.c
 +}
 +
 +// --indicator-style box: a password box instead of the ring. Shown exactly
-+// when the ring would be; draws one dot per typed character (never the
-+// characters), state text in place of the dots, a Caps Lock line under the
-+// box and the hint line under that.
++// when the ring would be; draws a fixed row of dots with one lit per key
++// (never the characters or their count), state text in place of the dots,
++// a Caps Lock line under the box and the hint line under that.
 +static bool render_box_frame(struct swaylock_surface *surface) {
 +	struct swaylock_state *state = surface->state;
 +	double s = surface->scale;
@@ -216,16 +216,25 @@ diff --color -ruN -x build base/render.c swaylock-plugin-1.8.7/render.c
 +				font_size * 0.8);
 +		} else {
 +			// A fixed row of dim dots, whatever was typed: the box never shows
-+			// how many characters there are. Each key lights one dot, picked
-+			// from upstream's random highlight position (the same randomness the
-+			// ring uses); backspace lights it in the backspace colour.
++			// how many characters there are. Each key lights one dot at random
++			// (never the same dot twice in a row); backspace lights it in the
++			// backspace colour. A new key is noticed through upstream's
++			// highlight_start, which changes on every key.
 +			const int ndots = 8;
 +			double dot_r = 5 * s, step = 26 * s;
 +			double x0 = cx - (ndots - 1) * step / 2, y = by + box_h / 2;
 +			int lit = -1;
 +			if (state->input_state == INPUT_STATE_LETTER ||
 +					state->input_state == INPUT_STATE_BACKSPACE) {
-+				lit = (int)((state->highlight_start % 2048) * ndots / 2048);
++				// Shared by every output's surface, so all screens agree.
++				static uint32_t seen_highlight = UINT32_MAX;
++				static int lit_dot = 0;
++				if (state->highlight_start != seen_highlight) {
++					seen_highlight = state->highlight_start;
++					int next = rand() % (ndots - 1);
++					lit_dot = next >= lit_dot ? next + 1 : next;
++				}
++				lit = lit_dot;
 +			}
 +			for (int i = 0; i < ndots; ++i) {
 +				cairo_arc(cairo, x0 + i * step, y, dot_r, 0, 2 * M_PI);
@@ -287,16 +296,17 @@ diff --color -ruN -x build base/render.c swaylock-plugin-1.8.7/render.c
  
  	// First, compute the text that will be drawn, if any, since this
  	// determines the size/positioning of the surface
-diff --color -ruN -x build base/swaylock.1.scd swaylock-plugin-1.8.7/swaylock.1.scd
---- a/swaylock.1.scd	2026-10-11 20:22:51.792122692 -0500
-+++ b/swaylock.1.scd	2026-10-11 20:23:30.601479444 -0500
-@@ -184,6 +184,13 @@
+diff --color -ruN base/swaylock.1.scd new/swaylock.1.scd
+--- a/swaylock.1.scd	2026-10-11 21:45:47.571834853 -0500
++++ b/swaylock.1.scd	2026-10-11 21:46:01.065542852 -0500
+@@ -184,6 +184,14 @@
  *--hint-color* <rrggbb[aa]>
  	Sets the color of the hint text.
  
 +*--indicator-style* ring|box
 +	Draw the indicator as the ring (the default) or as a password box: a
-+	rounded box with one dot per typed character, state text (checking,
++	rounded box with a fixed row of dots (one lights at random per key, so the
++	password's length is never shown), state text (checking,
 +	wrong, cleared) in place of the dots, and a Caps Lock line under it. The
 +	box uses the ring, inside, text and line colors of each state and is
 +	shown exactly when the ring would be.
