@@ -487,7 +487,14 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       # The password box sits at the screen's centre: its "Password" label just
       # above, the hint line below it.
       hint_seen() { band_says "$1" 520 160 unlock; }
-      label_seen() { band_says "$1" 400 80 password; }
+      # The box's left edge (360 px wide, centred on the 1280x800 VM screen):
+      # a solid run of the theme's gold border while typing, none while idle
+      # (the animation behind it defeats OCR of the small label).
+      box_seen() { # box_seen <png>: 0 = border found, 1 = not, 2 = no tools
+        command -v magick >/dev/null || return 2
+        local n; n=$(magick "$1" -crop 4x50+457+375 +repage txt:- | grep -c '#EBC77A')
+        (( n >= 40 ))
+      }
       report() { # report <ok?> <description>
         if [[ $1 == 0 ]]; then printf '  \033[32mok\033[0m   %s\n' "$2"; else printf '  \033[31mFAIL\033[0m %s\n' "$2"; fail=1; fi
       }
@@ -498,8 +505,8 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
         vm_type "abc"; quick_shot lock-typing
         rc=0; hint_seen "$last_shot" || rc=$?
         report "$rc" "lock: hint under the password box while typing"
-        rc=0; label_seen "$last_shot" || rc=$?
-        report "$rc" "lock: password box (labelled) while typing"
+        rc=0; box_seen "$last_shot" || rc=$?
+        report "$rc" "lock: password box while typing"
       fi
       virsh send-key "$vm" KEY_ENTER >/dev/null; sleep 1; quick_shot lock-wrong; sleep 3
       virsh send-key "$vm" KEY_CAPSLOCK >/dev/null; vm_type "x"; quick_shot lock-capslock
