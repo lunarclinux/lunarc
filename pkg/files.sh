@@ -32,6 +32,7 @@ case $part in
     put "$src/bin/ui.sh" "$dest/usr/lib/$id/ui.sh"
     put "$src/bin/agent-usage.jq" "$dest/usr/lib/$id/agent-usage.jq"
     put "$src/bin/workspace-watch" "$dest/usr/lib/$id/workspace-watch" 755
+    put "$src/bin/app-entries" "$dest/usr/lib/$id/app-entries" 755
     put "$src/bin/power-helper" "$dest/usr/lib/$id/power-helper" 755
     put "$src/bin/share-helper" "$dest/usr/lib/$id/share-helper" 755
     put "$src/bin/terminal-exec" "$dest/usr/lib/$id/terminal-exec" 755

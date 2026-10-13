@@ -64,6 +64,24 @@ install_packages() {
   fi
 }
 
+# Stay awake and night light: on or off for this login session, in the runtime
+# directory, so `<id> awake apply` can put the shell back after it restarts.
+switch_state() { # switch_state <name> → on|off, or nothing if not set this session
+  local f=$USER_RUNTIME/$DISTRO_ID-$1
+  if owned_file "$f"; then head -1 "$f" | grep -xE 'on|off' || true; fi
+}
+switch_store() { # switch_store <name> on|off
+  local f=$USER_RUNTIME/$DISTRO_ID-$1 tmp
+  tmp=$(mktemp "$f.XXXXXX"); printf '%s\n' "$2" > "$tmp"; mv "$tmp" "$f"
+}
+# Tell a toggle's bar widget and its quick-settings tile to read the state again.
+switch_refresh() { # switch_refresh <widget entry>
+  local e
+  for e in "$1" "$1-shortcut"; do
+    noctalia msg plugin "$DISTRO_ID/utilities:$e" all refresh >/dev/null 2>&1 || true
+  done
+}
+
 # Start a desktop app as part of the session when uwsm is available.
 launch_app() {
   if command -v uwsm >/dev/null && [[ -n ${WAYLAND_DISPLAY:-} ]]; then
@@ -89,7 +107,7 @@ bar_apply() {
   fi
   start='["menu", "workspaces"]'
   if [[ $(setting bar.workspaces moon) == noctalia ]]; then start='["menu", "workspaces-noctalia"]'; fi
-  center='["stay-awake", "nightlight", "gravity", "silence", "reminders", "recorder", "dictate", "clock"'
+  center='["toggles", "stay-awake", "night-light", "gravity", "silence", "reminders", "recorder", "dictate", "clock"'
   if [[ $(setting privacy.weather off) == on ]]; then center+=', "weather"'; fi
   center+=']'
   printf '%s\n# Written by `%s` from its settings (workspaces style, weather).\n[bar.default]\nstart = %s\ncenter = %s\n%s\n' \

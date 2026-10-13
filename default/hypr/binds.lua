@@ -10,7 +10,7 @@ local function bind(keys, description, action, opts)
 end
 
 bind(mod .. " + Return", "Open a terminal", run(terminal))
-bind(mod .. " + ALT + Space", "System menu", run("@DISTRO_ID@ menu"))
+bind(mod .. " + ALT + Space", "System menu (same as SUPER+Space)", run("@DISTRO_ID@ menu"))
 bind(mod .. " + CTRL + Space", "Next keyboard layout", run("@DISTRO_ID@ keyboard next"))
 bind(mod .. " + K", "Keyboard shortcuts", run("@DISTRO_ID@ keys"))
 bind(mod .. " + W", "Close the window", hl.dsp.window.close())

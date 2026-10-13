@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# summary: Stay awake: keep the screen on and the computer from sleeping
+set -euo pipefail
+source "$DISTRO_LIB/lib.sh"
+
+usage() {
+  cat <<USAGE
+Usage: $DISTRO_ID awake [on|off|toggle|status]
+
+Keeps the screen on and the computer awake (the cup in the bar). It stays on
+until you turn it off or log out, and comes back if the shell restarts.
+USAGE
+}
+
+state() { local s; s=$(switch_state awake); echo "${s:-off}"; }
+
+set_to() { # set_to on|off
+  local verb=disable
+  if [[ $1 == on ]]; then verb=enable; fi
+  noctalia msg "caffeine-$verb" >/dev/null || die "the shell didn't answer"
+  switch_store awake "$1"
+  switch_refresh stay-awake
+}
+
+case ${1:-} in
+  on|off) set_to "$1" ;;
+  toggle) if [[ $(state) == on ]]; then set_to off; else set_to on; fi ;;
+  status) state ;;
+  # Run by the bar widget when it loads: after a shell restart, turn it back on.
+  apply) if [[ $(switch_state awake) == on ]]; then noctalia msg caffeine-enable >/dev/null; fi ;;
+  -h|--help|"") usage ;;
+  *) die "unknown awake command: $1" ;;
+esac

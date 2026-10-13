@@ -2,21 +2,20 @@
 -- Screen recording: click to start recording the screen, click again to stop.
 -- Right-click records a region. Red while recording.
 local common = require("./common.luau")
+local toggle = require("./toggle.luau").new(barWidget, "recorder")
 local recording = false
 local startedMs = 0
 
 local function render()
   if recording then
     local s = math.floor((noctalia.nowMs() - startedMs) / 1000)
-    barWidget.setGlyph("player-record-filled")
-    barWidget.setGlyphColor("error")
-    barWidget.setText(string.format("%d:%02d", math.floor(s / 60), s % 60))
-    barWidget.setColor("error")
+    toggle.show({
+      ui.glyph({ name = "player-record-filled", color = "error" }),
+      ui.label({ text = string.format("%d:%02d", math.floor(s / 60), s % 60), color = "error" }),
+    }, true)
     barWidget.setTooltip("Recording. Click to stop.")
   else
-    barWidget.setGlyph("video")
-    barWidget.setGlyphColor("on_surface")
-    barWidget.setText("")
+    toggle.show({ ui.glyph({ name = "video" }) }, false)
     barWidget.setTooltip("Record the screen (right-click: a region)")
   end
 end

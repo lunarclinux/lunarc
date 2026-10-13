@@ -138,7 +138,7 @@ first_login() {
   # The live system has nothing to keep; installed systems get the setup window.
   if [[ -d /run/archiso ]] || recorded finished; then
     notify-send -a "$DISTRO_NAME" "Welcome to $DISTRO_NAME" \
-      "SUPER+ALT+Space: menu. SUPER+Space: apps. SUPER+Return: terminal. SUPER+K: all shortcuts. SUPER+L: lock." 2>/dev/null || true
+      "SUPER+Space: apps and the menu. SUPER+Return: terminal. SUPER+K: all shortcuts. SUPER+L: lock." 2>/dev/null || true
   else
     # Applying the theme makes Noctalia tell every Ghostty to reload (SIGUSR2);
     # a Ghostty still starting up dies from it, so let that pass first.

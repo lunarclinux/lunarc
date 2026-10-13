@@ -1,11 +1,11 @@
 --!nonstrict
 -- Silence notifications: one click toggles Do Not Disturb. New notifications
 -- still go to the history; they just don't pop up.
+local toggle = require("./toggle.luau").new(barWidget, "silence")
 local silenced = false
 
 local function render()
-  barWidget.setGlyph(silenced and "bell-off" or "bell")
-  barWidget.setGlyphColor(silenced and "primary" or "on_surface")
+  toggle.show({ ui.glyph({ name = silenced and "bell-off" or "bell", color = silenced and "primary" or nil }) }, silenced)
   barWidget.setTooltip(silenced and "Notifications silenced" or "Silence notifications")
 end
 
@@ -25,7 +25,7 @@ function onClick()
 end
 
 function update()
-  noctalia.setUpdateInterval(10000)
+  noctalia.setUpdateInterval(5000)
   refresh()
 end
 

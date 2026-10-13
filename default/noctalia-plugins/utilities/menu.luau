@@ -1,12 +1,18 @@
 --!nonstrict
--- The system menu as a launcher provider (/m). The query is a path: groups are
--- joined by " › " and the text after the last one filters that level, so
--- "/m Install › AI › cla" lists AI apps matching "cla". Choosing a group sets
--- the query to its path and the launcher stays open; choosing an item runs it.
--- Items come from the menu file; Install, Remove, Theme, Terminal and Agent
--- lists are generated, and "menu: list <command>" asks `<cli> <command> menu-items`.
+-- The system menu and app search as a launcher provider (/m; SUPER+Space).
+-- The query is a path: groups are joined by " › " and the text after the last
+-- one filters that level, so "/m Install › AI › cla" lists AI apps matching
+-- "cla". Choosing a group sets the query to its path and the launcher stays
+-- open; choosing an item runs it. Empty, the top level is Apps then the menu's
+-- groups; typing there searches apps and every menu item (decision record 0042).
+-- Items come from the menu file; Apps, Install, Remove, Theme, Terminal and
+-- Agent lists are generated, and "menu: list <command>" asks `<cli> <command> menu-items`.
+local apps = require("./apps.luau")
 local cli = "@DISTRO_ID@"
 local sep = " › "
+local lastText = ""
+local installed = {}
+local appCache = nil
 
 local userMenu = noctalia.expandPath("~/.config/" .. cli .. "/menu")
 local systemMenu = "/usr/share/" .. cli .. "/default/menu/menu"
@@ -23,7 +29,7 @@ local categoryGlyph = {
   sharing = "share", passwords = "key", system = "cpu", dev = "terminal-2", development = "terminal-2",
 }
 
-local function trim(s) return (string.gsub(s or "", "^%s*(.-)%s*$", "%1")) end
+local function trim(s) return noctalia.string.trim(s or "") end
 
 local function readLines(path)
   local text = noctalia.readFile(path)
@@ -64,6 +70,26 @@ local function catalogRows()
   return rows
 end
 
+-- Installed packages, for the install and remove searches; refreshed whenever
+-- the top level opens.
+local function refreshInstalled()
+  noctalia.runAsync({ "pacman", "-Qq" }, function(result)
+    local set = {}
+    for _, n in ipairs(string.split(result.stdout or "", "\n")) do set[n] = true end
+    installed = set
+  end)
+end
+
+local function isInstalled(a)
+  local pkg = string.split(a.target, " ")[1]
+  return (a.src == "repo" or a.src == "multilib" or a.src == "aur") and installed[pkg] == true
+end
+
+local function allApps()
+  if not appCache then appCache = apps.list() end
+  return appCache
+end
+
 local function label(cat) return categoryLabel[cat] or (string.upper(string.sub(cat, 1, 1)) .. string.sub(cat, 2)) end
 
 -- Split "Install › AI › cla" into { "Install", "AI" } and "cla".
@@ -92,9 +118,12 @@ local function group(path, title, subtitle, glyph)
 end
 
 local function item(title, subtitle, cmd, glyph)
-  -- "launcher: <text>" switches the launcher to that query (e.g. the app search).
+  -- "launcher: <text>" switches the launcher to that query (e.g. "/keys ");
+  -- an empty one (older menu files) is the Apps group.
   if string.sub(cmd, 1, 9) == "launcher:" then
-    return { id = "query", title = title, subtitle = subtitle, glyph = glyph or "point", query = trim(string.sub(cmd, 10)) }
+    local q = trim(string.sub(cmd, 10))
+    if q == "" then return group({}, "Apps", subtitle, glyph or "apps") end
+    return { id = "launcher:" .. q .. " ", title = title, subtitle = subtitle, glyph = glyph or "point" }
   end
   return { id = "run:" .. cmd, title = title, subtitle = subtitle, glyph = glyph or "point" }
 end
@@ -105,8 +134,17 @@ local function level(path, done)
   local rows = menuRows()
   if #path == 0 then
     local list, seen = {}, {}
+    local hasApps = false
+    for _, r in ipairs(rows) do if r.group == "Apps" then hasApps = true end end
+    if not hasApps then
+      seen.Apps = true
+      table.insert(list, group(path, "Apps", "Every installed app", groupGlyph.Apps))
+    end
     for _, r in ipairs(rows) do
-      if r.group == "" then
+      if r.group == "" and r.title == "Apps" and trim(string.sub(r.cmd, 10)) == "" and string.sub(r.cmd, 1, 9) == "launcher:" then
+        -- An older menu file's Apps item: the group above replaces it.
+        if not seen.Apps then seen.Apps = true; table.insert(list, 1, group(path, "Apps", r.desc, groupGlyph.Apps)) end
+      elseif r.group == "" then
         table.insert(list, item(r.title, r.desc, r.cmd, r.glyph ~= "" and r.glyph or groupGlyph[r.title]))
       elseif not seen[r.group] then
         seen[r.group] = true
@@ -128,7 +166,13 @@ local function level(path, done)
     end
   end
 
-  if generator == "install" then
+  if top == "Apps" then generator = "apps" end
+
+  if generator == "apps" then
+    local list = {}
+    for _, e in ipairs(allApps()) do table.insert(list, apps.result(e)) end
+    return done(list)
+  elseif generator == "install" then
     local seen, list = {}, {}
     local catalog = catalogRows()
     if #path == 1 then
@@ -213,54 +257,151 @@ local function level(path, done)
   return done(list)
 end
 
--- Typing at the top level also searches inside the groups, so "screenshot"
--- or "steam" finds the item directly: every static item, and every app in the
--- install catalog. They rank just below a group with an equal match.
+-- Typing at the top level searches apps and the whole menu at once, on one
+-- scale with apps.score: a menu title containing the text ranks like an app
+-- name (an app wins a tie), then a word in an item's description, a looser
+-- title match, a word of its command (so "reboot" finds Restart), then apps
+-- from the install catalog. "install <name>" and "remove <name>" search the
+-- catalog directly.
 local function contains(text, filter)
-  return string.find(string.lower(text), string.lower(filter), 1, true) ~= nil
+  return string.find(string.lower(text), filter, 1, true) ~= nil
 end
 
-local function nested(filter)
+-- Does a word of text start with filter?
+local function hasWord(text, filter)
+  local pattern = "%f[%w]" .. string.gsub(filter, "[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%0")
+  return string.find(string.lower(text), pattern) ~= nil
+end
+
+-- A command's arguments: without "term:", the program and noctalia's "msg".
+local function cmdArgs(cmd)
+  return (string.gsub(string.gsub(string.gsub(cmd, "^term:%s*", ""), "^%S+%s*", ""), "^msg%s+", ""))
+end
+
+local function menuScore(f, title, desc, cmd)
+  local t = noctalia.fuzzyScore(f, title)
+  if t and contains(title, f) then
+    return 3000 + t * 5 + (string.sub(string.lower(title), 1, #f) == f and 500 or 0) - 1
+  end
+  if #f >= 3 and hasWord(desc or "", f) then return 1500 + (noctalia.fuzzyScore(f, desc) or 0) * 2 end
+  if t then return 1200 + t end
+  if #f >= 3 and hasWord(cmdArgs(cmd or ""), f) then return 1000 end
+  return nil
+end
+
+local function catalogItem(a, verb, score)
+  if verb == "remove" then
+    return { id = "run:term: " .. cli .. " app remove " .. a.id, title = a.name, subtitle = "Remove", glyph = "trash", score = score }
+  end
+  local it = item(a.name, "Install" .. sep .. label(a.cat), "term: " .. cli .. " app install " .. a.id,
+    categoryGlyph[a.cat] or "download")
+  it.score = score
+  return it
+end
+
+local function search(filter)
+  local f = string.lower(trim(filter))
   local out = {}
-  if string.len(filter) < 2 then return out end
-  for _, r in ipairs(menuRows()) do
-    if r.group ~= "" and r.title ~= "" and string.sub(r.cmd, 1, 5) ~= "menu:" and contains(r.title, filter) then
-      local score = noctalia.fuzzyScore(filter, r.title)
-      if score then
-        local it = item(r.title, r.group .. (r.desc ~= "" and (" · " .. r.desc) or ""), r.cmd,
-          r.glyph ~= "" and r.glyph or groupGlyph[r.group])
-        it.score = score - 1
+
+  local verb, name = string.match(f, "^(install)%s+(.+)$")
+  if not verb then verb, name = string.match(f, "^(remove)%s+(.+)$") end
+  if verb then
+    for _, a in ipairs(catalogRows()) do
+      local s = noctalia.fuzzyScore(name, string.lower(a.name .. " " .. a.id))
+      if s and (contains(a.name, name) or contains(a.id, name)) then
+        if isInstalled(a) == (verb == "remove") then
+          table.insert(out, catalogItem(a, verb, 3000 + s * 5))
+        elseif verb == "install" then
+          table.insert(out, { id = "installed", title = a.name, subtitle = "Installed", glyph = "circle-check", score = 3000 + s * 5 })
+        end
+      end
+    end
+  end
+
+  for _, e in ipairs(allApps()) do
+    local s = apps.score(f, e)
+    if s then table.insert(out, apps.result(e, s)) end
+  end
+
+  local rows = menuRows()
+  local seenGroup = {}
+  for _, r in ipairs(rows) do
+    local glyph = r.glyph ~= "" and r.glyph or groupGlyph[r.group]
+    if r.group ~= "" and not seenGroup[r.group] then
+      seenGroup[r.group] = true
+      local desc = ""
+      for _, d in ipairs(rows) do if d.group == r.group and d.title == "" then desc = d.desc end end
+      local s = menuScore(f, r.group, desc, "")
+      if s then
+        local g = group({}, r.group, desc, groupGlyph[r.group])
+        g.score = s
+        table.insert(out, g)
+      end
+    end
+    if r.title ~= "" and not (r.group == "" and string.sub(r.cmd, 1, 9) == "launcher:" and trim(string.sub(r.cmd, 10)) == "") then
+      local s = menuScore(f, r.title, r.desc, r.cmd)
+      if s then
+        local where = r.group ~= "" and (r.group .. (r.desc ~= "" and (" · " .. r.desc) or "")) or r.desc
+        local it
+        if string.sub(r.cmd, 1, 5) == "menu:" then
+          it = group(r.group ~= "" and { r.group } or {}, r.title, where, glyph or "folder")
+        else
+          it = item(r.title, where, r.cmd, glyph)
+        end
+        it.score = s
         table.insert(out, it)
       end
     end
   end
-  for _, a in ipairs(catalogRows()) do
-    local score = noctalia.fuzzyScore(filter, a.name .. " " .. a.id)
-    if score and (contains(a.name, filter) or contains(a.id, filter)) then
-      local it = item(a.name, "Install" .. sep .. label(a.cat), "term: " .. cli .. " app install " .. a.id,
-        categoryGlyph[a.cat] or "download")
-      it.score = score - 2
-      table.insert(out, it)
+
+  if not verb and #f >= 2 then
+    for _, a in ipairs(catalogRows()) do
+      local s = noctalia.fuzzyScore(f, string.lower(a.name .. " " .. a.id))
+      if s and (contains(a.name, f) or contains(a.id, f)) and not isInstalled(a) then
+        table.insert(out, catalogItem(a, "install", 500 + s))
+      end
     end
   end
+
+  table.sort(out, function(a, b) return a.score > b.score end)
+  while #out > 60 do table.remove(out) end
   return out
 end
 
 function onQuery(text)
+  lastText = text
   local path, filter = parse(text)
+  if (#path == 0 and filter == "") or not apps.loaded then
+    -- The launcher just opened, or came back to the top: read the apps and
+    -- installed packages again so new ones show up. Results that need the
+    -- apps are redone when they're in.
+    refreshInstalled()
+    apps.refresh(function()
+      appCache = nil
+      if lastText ~= "" then onQuery(lastText) end
+    end)
+  end
+  if #path == 0 and filter ~= "" then
+    launcher.setResults(text, search(filter))
+    return
+  end
   level(path, function(list)
     local out = {}
-    if #path == 0 and filter ~= "" then
-      for _, r in ipairs(nested(filter)) do table.insert(out, r) end
-    end
     if #path > 0 and filter == "" then
       local up = table.clone(path); table.remove(up)
       table.insert(out, { id = "back", title = "Back", subtitle = "Or press Backspace", glyph = "arrow-left",
         query = pathQuery(up), score = -1 })
     end
+    local f = string.lower(filter)
     for i, r in ipairs(list) do
       local score = 10000 - i
-      if filter ~= "" then score = noctalia.fuzzyScore(filter, r.title .. " " .. (r.subtitle or "")) end
+      if filter ~= "" then
+        if string.sub(r.id, 1, 4) == "app:" then
+          score = apps.score(f, allApps()[i])
+        else
+          score = noctalia.fuzzyScore(filter, r.title .. " " .. (r.subtitle or ""))
+        end
+      end
       if score then r.score = score; table.insert(out, r) end
     end
     launcher.setResults(text, out)
@@ -268,6 +409,17 @@ function onQuery(text)
 end
 
 function onActivate(id)
+  if string.sub(id, 1, 4) == "app:" then
+    apps.open(string.sub(id, 5))
+    return
+  end
+  if string.sub(id, 1, 9) == "launcher:" then
+    -- Another provider's search (e.g. "/keys "): keep the launcher open and
+    -- hand it the new query.
+    launcher.setQuery(lastText)
+    noctalia.runAsync({ "noctalia", "msg", "panel-open", "launcher", string.sub(id, 10) })
+    return
+  end
   if string.sub(id, 1, 4) ~= "run:" then return end
   local cmd = string.sub(id, 5)
   if string.sub(cmd, 1, 5) == "term:" then

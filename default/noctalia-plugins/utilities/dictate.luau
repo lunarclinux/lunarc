@@ -3,16 +3,16 @@
 -- window. The first click sets it up in the background (downloads the speech
 -- model once; notifications show progress).
 local common = require("./common.luau")
+local toggle = require("./toggle.luau").new(barWidget, "dictate")
 local state = "not set up"
 
 local function render()
   if state == "listening" then
-    barWidget.setGlyph("microphone-filled")
-    barWidget.setGlyphColor("error")
+    toggle.show({ ui.glyph({ name = "microphone-filled", color = "error" }) }, true)
     barWidget.setTooltip("Listening. Click to stop and type.")
   else
-    barWidget.setGlyph("microphone")
-    barWidget.setGlyphColor("on_surface")
+    -- Setting up (the first click downloads the speech model) counts as on.
+    toggle.show({ ui.glyph({ name = "microphone", color = state == "setting up" and "primary" or nil }) }, state == "setting up")
     if state == "ready" then
       barWidget.setTooltip("Dictate")
     elseif state == "setting up" then

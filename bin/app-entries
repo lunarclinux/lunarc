@@ -1,0 +1,110 @@
+#!/usr/bin/python3
+# The apps the launcher palette lists (decision record 0042), as JSON on stdout:
+# the desktop entries Noctalia's own app list shows, found and filtered the
+# same way. XDG data dirs in order (XDG_DATA_HOME first, then XDG_DATA_DIRS,
+# whose first entry is the distro's overlay of hidden entries), the first file
+# with an id wins (the id is the file name without .desktop, as Noctalia uses),
+# Type=Application only, no NoDisplay or Hidden, OnlyShowIn/NotShowIn against
+# XDG_CURRENT_DESKTOP. Run by the utilities plugin (apps.luau); it can't do
+# this itself within Noctalia's per-call time limit.
+# Usage: app-entries
+import json
+import os
+import sys
+
+
+def data_dirs():
+    dirs = [os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")]
+    dirs += (os.environ.get("XDG_DATA_DIRS") or "").split(":")
+    dirs += ["/usr/local/share", "/usr/share"]
+    seen, out = set(), []
+    for d in dirs:
+        if d and d not in seen:
+            seen.add(d)
+            out.append(d)
+    return out
+
+
+def unescape(value):
+    out, i = [], 0
+    while i < len(value):
+        c = value[i]
+        if c == "\\" and i + 1 < len(value):
+            n = value[i + 1]
+            out.append({"s": " ", "n": "\n", "t": "\t", "r": "\r"}.get(n, n))
+            i += 2
+            continue
+        out.append(c)
+        i += 1
+    return "".join(out)
+
+
+def split_list(value):
+    return [p for p in (value or "").split(";") if p]
+
+
+def shown_here(only, never):
+    desktops = [d for d in os.environ.get("XDG_CURRENT_DESKTOP", "").split(":") if d]
+    for d in desktops:
+        if d in only:
+            return True
+        if d in never:
+            return False
+    return not only
+
+
+def parse(path):
+    keys, main = {}, False
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("["):
+                    if main:
+                        break
+                    main = line == "[Desktop Entry]"
+                elif main and "=" in line and not line.startswith("#"):
+                    k, v = line.split("=", 1)
+                    keys.setdefault(k.strip(), v.strip())
+    except OSError:
+        return None
+    if (keys.get("Type") != "Application" or keys.get("NoDisplay") == "true"
+            or keys.get("Hidden") == "true" or not keys.get("Name")):
+        return None
+    if not shown_here(split_list(keys.get("OnlyShowIn")), split_list(keys.get("NotShowIn"))):
+        return None
+    return {
+        "path": path,
+        "name": unescape(keys["Name"]),
+        "icon": keys.get("Icon", ""),
+        "comment": unescape(keys.get("Comment", "")),
+        "generic": unescape(keys.get("GenericName", "")),
+        "keywords": [k.lower() for k in split_list(unescape(keys.get("Keywords", "")))],
+        "categories": [c.lower() for c in split_list(keys.get("Categories", ""))],
+        "exec": unescape(keys.get("Exec", "")),
+        "terminal": keys.get("Terminal") == "true",
+    }
+
+
+def main():
+    seen, apps = set(), []
+    for d in data_dirs():
+        root = os.path.join(d, "applications")
+        for dirpath, dirnames, files in os.walk(root):
+            dirnames.sort()
+            for name in sorted(files):
+                if not name.endswith(".desktop"):
+                    continue
+                app_id = name[: -len(".desktop")]
+                # Hidden entries still claim their id, so an override hides the original.
+                if app_id in seen:
+                    continue
+                seen.add(app_id)
+                entry = parse(os.path.join(dirpath, name))
+                if entry:
+                    entry["id"] = app_id
+                    apps.append(entry)
+    json.dump(apps, sys.stdout, ensure_ascii=False)
+
+
+main()

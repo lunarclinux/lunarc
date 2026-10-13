@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# summary: Night light: warmer screen colours, now
+set -euo pipefail
+source "$DISTRO_LIB/lib.sh"
+
+usage() {
+  cat <<USAGE
+Usage: $DISTRO_ID nightlight [on|off|toggle|status]
+
+Turns the night light on or off (the moon in the bar): on warms the screen
+straight away. It lasts until you log out, and comes back if the shell
+restarts. With a sunset/sunrise schedule set in the shell's settings, off
+hands back to the schedule.
+USAGE
+}
+
+# This is Noctalia's "forced" night light. Noctalia can only toggle it and
+# can't report it, and it resets when the shell restarts, so this keeps a
+# marker of the shell instance (pid and start time) it was toggled in. The
+# lock stops two bars that load at once from toggling it twice.
+marker=$USER_RUNTIME/$DISTRO_ID-nightlight-forced
+
+shell_instance() {
+  local pid
+  pid=$(systemctl --user show -p MainPID --value noctalia.service 2>/dev/null || true)
+  if ! [[ $pid =~ ^[1-9][0-9]*$ ]]; then pid=$(pgrep -xo -u "$(id -u)" noctalia || true); fi
+  [[ $pid =~ ^[1-9][0-9]*$ && -r /proc/$pid/stat ]] || return 1
+  printf '%s:%s\n' "$pid" "$(awk '{ print $22 }' "/proc/$pid/stat")"
+}
+
+# [nightlight] force in the shell's config: forced from the start.
+config_force() {
+  noctalia config export 2>/dev/null | awk '/^\[/ { s = ($0 == "[nightlight]") } s && /^force *=/ { print $3; exit }'
+}
+
+# This session's choice, else the config.
+state() {
+  local s; s=$(switch_state nightlight)
+  if [[ -z $s ]]; then
+    if [[ $(config_force) == true ]]; then s=on; else s=off; fi
+  fi
+  echo "$s"
+}
+
+# Make the shell's forced state match: force_to on|off.
+force_to() {
+  local instance toggled=0 actual=0 want=0
+  if [[ $1 == on ]]; then want=1; fi
+  exec 9>"$USER_RUNTIME/$DISTRO_ID-nightlight.lock"
+  flock -w 10 9 || die "night light is busy"
+  instance=$(shell_instance) || die "the shell isn't running"
+  if owned_file "$marker" && [[ $(head -1 "$marker") == "$instance" ]]; then toggled=1; fi
+  actual=$toggled
+  if [[ $(config_force) == true ]]; then actual=$((1 - toggled)); fi
+  if (( actual != want )); then
+    noctalia msg nightlight-force-toggle >/dev/null || die "the shell didn't answer"
+    if (( toggled )); then rm -f "$marker"; else printf '%s\n' "$instance" > "$marker"; fi
+  fi
+  exec 9>&-
+}
+
+set_to() { # set_to on|off
+  force_to "$1"
+  switch_store nightlight "$1"
+  switch_refresh nightlight
+}
+
+case ${1:-} in
+  on|off) set_to "$1" ;;
+  toggle) if [[ $(state) == on ]]; then set_to off; else set_to on; fi ;;
+  status) state ;;
+  # Run by the bar widget when it loads: after a shell restart, put back this
+  # session's choice (nothing set this session: the config decides).
+  apply)
+    s=$(switch_state nightlight)
+    if [[ -n $s ]]; then force_to "$s"; fi ;;
+  -h|--help|"") usage ;;
+  *) die "unknown nightlight command: $1" ;;
+esac

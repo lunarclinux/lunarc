@@ -58,15 +58,14 @@ kind = "path"
 location = "/usr/share/@DISTRO_ID@/noctalia-plugins"
 enabled = true
 
-# The bar: workspaces on the left; in the centre the clock and weather with a
-# group of one-click utilities just before them; status icons on the right,
-# each opening its own panel. The crescent on the far left opens the system
-# menu (right-click: apps).
+# The bar: workspaces on the left; in the centre the clock and weather with the
+# toggles just before them; status icons on the right, each opening its own
+# panel. The crescent on the far left opens the system menu (right-click: apps).
 [widget.menu]
 type = "custom_button"
 custom_image = "/usr/share/icons/hicolor/symbolic/apps/@DISTRO_ID@-logo-symbolic.svg"
 custom_image_colorize = true
-tooltip = "Menu (SUPER+ALT+Space)"
+tooltip = "Menu (SUPER+Space)"
 
 [widget.menu.actions]
 left = "exec @DISTRO_ID@ menu"
@@ -84,8 +83,17 @@ style = "regular"
 show_labels = true
 labels_only_when_occupied = false
 
+# The toggles (decision record 0042): an anchor icon, then only the toggles
+# that are on, in gold. Hovering the anchor shows them all. Stay awake and night
+# light are the plugin's own widgets, so they can hide when off.
+[widget.toggles]
+type = "@DISTRO_ID@/utilities:toggles"
+
 [widget.stay-awake]
-type = "caffeine"
+type = "@DISTRO_ID@/utilities:stay-awake"
+
+[widget.night-light]
+type = "@DISTRO_ID@/utilities:nightlight"
 
 [widget.gravity]
 type = "@DISTRO_ID@/utilities:gravity"
@@ -150,8 +158,28 @@ type = "@DISTRO_ID@/agents:usage"
 
 [bar.default]
 start  = ["menu", "workspaces"]
-center = ["stay-awake", "nightlight", "gravity", "silence", "reminders", "recorder", "dictate", "clock"]  # + "weather" when turned on (bar_apply)
+center = ["toggles", "stay-awake", "night-light", "gravity", "silence", "reminders", "recorder", "dictate", "clock"]  # + "weather" when turned on (bar_apply)
 end    = ["media", "tray", "ai-usage", "crashes", "notifications", "keyboard_layout", "network", "bluetooth", "volume", "brightness", "battery", "session"]
+
+# Quick settings (SUPER+S): Noctalia's default tiles, with the plugin's stay
+# awake and night light in place of the built-in ones so they match the bar.
+[[control_center.shortcuts]]
+type = "wifi"
+
+[[control_center.shortcuts]]
+type = "bluetooth"
+
+[[control_center.shortcuts]]
+type = "@DISTRO_ID@/utilities:stay-awake-shortcut"
+
+[[control_center.shortcuts]]
+type = "@DISTRO_ID@/utilities:nightlight-shortcut"
+
+[[control_center.shortcuts]]
+type = "notification"
+
+[[control_center.shortcuts]]
+type = "power_profile"
 
 # Location and weather are off until you turn them on (they send your city to
 # Noctalia's geocoder and Open-Meteo): first-login setup asks, or run

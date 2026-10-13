@@ -1,15 +1,15 @@
-# The system menu (SUPER+ALT+Space, or /m in the launcher). One item per line:
+# The system menu (SUPER+Space, or /m in the launcher). One item per line:
 #   group | title | description | command | glyph (optional, a Tabler icon name)
 # A top-level item has an empty group. A group appears as soon as an item uses
 # it; give it a description with a line whose title is empty.
 # Commands run detached. Prefixes:
 #   term:      run in a terminal and wait for a key before closing
-#   menu:      a generated submenu (install, remove, theme, terminal, agent),
+#   menu:      a generated submenu (apps, install, remove, theme, terminal, agent),
 #              or "menu: list <command>" for the lines of `@DISTRO_ID@ <command> menu-items`
 #   launcher:  switch the launcher to this search (e.g. "/keys ")
 # Copy this file to ~/.config/@DISTRO_ID@/menu to change your own.
 
-| Apps | Search and open apps | launcher: | apps
+Apps | | Every installed app | menu: apps
 
 Learn | | Shortcuts, commands and documentation |
 Learn | Keyboard shortcuts | Every key binding, searchable (SUPER+K) | launcher: /keys | keyboard
@@ -33,8 +33,8 @@ Capture | Copy text from the screen | Select an area; its text is copied | @DIST
 Capture | Read a QR code | Select the code; its contents are copied | @DISTRO_ID@ capture qr | qrcode
 
 Toggle | | Quick switches |
-Toggle | Stay awake | Keep the screen on and the computer awake | noctalia msg caffeine-toggle | coffee
-Toggle | Night light | Warmer colours in the evening | noctalia msg nightlight-toggle | moon
+Toggle | Stay awake | Keep the screen on and the computer awake | @DISTRO_ID@ awake toggle | mug
+Toggle | Night light | Warmer screen colours | @DISTRO_ID@ nightlight toggle | moon
 Toggle | Low Gravity | Float the windows on this workspace, or tile them again (SUPER+G) | @DISTRO_ID@ gravity toggle | feather
 Toggle | Silence notifications | Notifications still go to the history | noctalia msg notification-dnd-toggle | bell-off
 Toggle | Dictation | Speak to type (SUPER+CTRL+D) | @DISTRO_ID@ dictate toggle | microphone
