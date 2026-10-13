@@ -235,7 +235,17 @@ update_all() { # update_all [1 = take held-back Hyprland too]
   fi
   before=$(pacman -Q)
   snap_before=$(latest_snapshot)
-  if ! sudo pacman -Syu "${ignore[@]}" 2> >(tee -a "$errlog" >&2); then
+  # pacman asks its questions on stderr. sudo relays stdout through its own
+  # terminal, so a stderr redirected out here could put "Proceed with
+  # installation?" on screen before the list it asks about. The log copy is
+  # made inside sudo instead, where both streams share that terminal. Root
+  # only appends to the log if it's still the user's own plain file.
+  # shellcheck disable=SC2016  # expanded by the root shell
+  if ! sudo bash -c 'log=$1; shift
+    [[ -f $log && ! -L $log && $(stat -c %u "$log") == "${SUDO_UID:-}" ]] || log=/dev/null
+    pacman -Syu "$@" 2> >(tee -a "$log" >&2); rc=$?
+    wait $!
+    exit "$rc"' _ "$errlog" "${ignore[@]}"; then
     explain_failure "$errlog"
     if (( ${#held[@]} )); then
       info "Holding back Hyprland may be blocking other updates; try: $DISTRO_ID update --all"
