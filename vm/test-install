@@ -406,8 +406,55 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       check "idle locks with the screensaver" "$hypr noctalia config export | grep -A4 'idle.behavior.screensaver' | grep -q 'lock --idle'"
     fi
     if "$here/ssh" "$vm" "$user" -- "test -x /usr/lib/$id/commands/menu"; then
-      check "bar has the utility group"   "$hypr noctalia config export | grep -qE 'center *=.*stay-awake.*silence.*reminders.*recorder.*dictate.*clock'"
+      check "bar has the utility group"   "$hypr noctalia config export | grep -qE 'center *=.*toggles.*stay-awake.*night-light.*silence.*reminders.*recorder.*dictate.*clock'"
       check "utilities plugin enabled"    "$hypr noctalia msg plugins list 2>&1 | grep -E '$id/utilities' | grep -qiE 'enabled'"
+      # The bar's toggles (decision record 0042): the anchor, plus only the
+      # toggles that are on (gold); hovering the anchor shows them all. Read
+      # from screenshots of the bar's centre (the moonlit theme's gold).
+      report() { # report <ok?> <description>
+        if [[ $1 == 0 ]]; then printf '  \033[32mok\033[0m   %s\n' "$2"; else printf '  \033[31mFAIL\033[0m %s\n' "$2"; fail=1; fi
+      }
+      bar_shot() { # bar_shot <label>: screenshot to $last_shot
+        last_shot=$shots/$vm-$(date +%Y%m%d-%H%M%S)-$1.png
+        "$here/ssh" "$vm" "$user" -- "$hypr grim -" > "$last_shot" 2>/dev/null || true
+        log "screenshot: $last_shot"
+      }
+      bar_centre() { # bar_centre <png> → "<content width> <left edge x> <gold pixels>" of the bar's centre
+        local box gold
+        box=$(magick "$1" -crop 520x26+380+4 +repage -colorspace gray -threshold 35% -format '%@' info:)
+        gold=$(magick "$1" -crop 520x26+380+4 +repage -fuzz 12% -fill black +opaque '#ebc77a' -fill white -opaque '#ebc77a' -colorspace gray -format '%[fx:round(mean*w*h)]' info:)
+        if [[ $box =~ ^([0-9]+)x[0-9]+\+([0-9]+) ]]; then echo "${BASH_REMATCH[1]} $((380 + BASH_REMATCH[2])) $gold"; fi
+      }
+      point() { "$here/ssh" "$vm" "$user" -- "$hypr hyprctl dispatch 'hl.dsp.cursor.move({ x = $1, y = $2 })' >/dev/null" || true; }
+      if command -v magick >/dev/null; then
+        point 640 500; sleep 1; bar_shot bar-rest; read -r rest_w anchor_x rest_gold < <(bar_centre "$last_shot")
+        report "$(( rest_gold < 20 && rest_w < 140 ? 0 : 1 ))" "toggles: only the anchor and the clock at rest (width $rest_w, gold $rest_gold)"
+        # Hover the anchor (the leftmost icon). Hyprland's cursor warps only
+        # reach the bar as it enters, so warp straight onto it from below.
+        point "$((anchor_x + 7))" 16; sleep 0.5
+        bar_shot bar-hovered; read -r w _ _ < <(bar_centre "$last_shot")
+        report "$(( w > rest_w + 120 ? 0 : 1 ))" "toggles: hovering the anchor shows them all (width $rest_w → $w)"
+        point 640 500; sleep 1.5; bar_shot bar-left; read -r w _ _ < <(bar_centre "$last_shot")
+        report "$(( w <= rest_w + 4 ? 0 : 1 ))" "toggles: moving away hides them again (width $w)"
+        "$here/ssh" "$vm" "$user" -- "$hypr $id awake on >/dev/null; sleep 2" || true
+        bar_shot bar-stay-awake; read -r w _ gold < <(bar_centre "$last_shot")
+        report "$(( w > rest_w + 10 && gold >= 20 ? 0 : 1 ))" "toggles: stay awake on shows the gold cup (width $w, gold $gold)"
+        "$here/ssh" "$vm" "$user" -- "$hypr $id awake off >/dev/null; noctalia msg notification-dnd-set on >/dev/null; sleep 6" || true
+        bar_shot bar-silence; read -r w _ gold < <(bar_centre "$last_shot")
+        report "$(( w > rest_w + 10 && gold >= 20 ? 0 : 1 ))" "toggles: silence on shows the gold bell (width $w, gold $gold)"
+        "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg notification-dnd-set off >/dev/null; sleep 6" || true
+        bar_shot bar-off; read -r w _ gold < <(bar_centre "$last_shot")
+        report "$(( w <= rest_w + 4 && gold < 20 ? 0 : 1 ))" "toggles: both off, only the anchor again (width $w, gold $gold)"
+      else
+        log "no magick here: skipping the bar's screenshot checks"
+      fi
+      check "stay awake: inhibits idle, survives a shell restart" "$hypr $id awake on >/dev/null && systemd-inhibit --list | grep -q 'noctalia.*Caffeine' && systemctl --user restart noctalia && sleep 6 && [ \"\$($id awake status)\" = on ] && systemd-inhibit --list | grep -q 'noctalia.*Caffeine' && $id awake off >/dev/null && ! systemd-inhibit --list | grep -q 'noctalia.*Caffeine'"
+      check "night light: on and off"     "$hypr $id nightlight on >/dev/null && [ \"\$($id nightlight status)\" = on ] && $id nightlight off >/dev/null && [ \"\$($id nightlight status)\" = off ]"
+      check "night light: warms now, off, back after a shell restart, no double toggle" "$(sed "s/@ID@/$id/g" "$here/checks/nightlight.sh")"
+      check "quick settings use the plugin's tiles" "$hypr noctalia config export | grep -q 'utilities:stay-awake-shortcut' && noctalia config export | grep -q 'utilities:nightlight-shortcut' && ! noctalia config export | grep -qE '^type = \"(caffeine|nightlight)\"'"
+      "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg panel-open control-center >/dev/null" || true
+      screenshot quick-settings
+      "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg panel-close >/dev/null" || true
       # Workspaces (decision record 0037): numbers, the active one as its moon
       # phase, a gold dot for a window asking for attention.
       check "workspaces widget in the bar"  "$hypr noctalia config export | grep -qE '^start *= *\\[ *\"menu\", *\"workspaces\" *\\]' && noctalia config export | grep -qE 'type *= *\"$id/utilities:workspaces\"'"
@@ -450,9 +497,28 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
         check "no passwordless keyring"    "! test -e ~/.local/share/keyrings/login.keyring || ! grep -q '^\[keyring\]' ~/.local/share/keyrings/login.keyring"
       fi
       check "plugins: per-version dir behind one link" "t=\$(readlink /usr/share/$id/noctalia-plugins) && [[ \$t == noctalia-plugins.d/* ]] && [ -f /usr/share/$id/noctalia-plugins/utilities/plugin.toml ] && [ ! -e /usr/share/$id/default/noctalia-plugins ] && [ -f /usr/share/libalpm/hooks/$id-shell-reload.hook ]"
-      check "menu searches inside groups" "grep -q 'local function nested' /usr/share/$id/noctalia-plugins/utilities/menu.luau && $hypr noctalia msg panel-open launcher '/m steam' >/dev/null && sleep 1 && noctalia msg status | jq -e '.activePanelId == \"launcher\"' >/dev/null"
-      screenshot menu-search
+      # SUPER+Space is the palette (decision record 0042): groups only, Apps
+      # first, when empty; typing finds apps and menu items. Read by OCR.
+      palette_says() { # palette_says <query> <regex for the first result> [regex nowhere in the list]
+        "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg panel-open launcher '/m $1' >/dev/null; sleep 1.5" || true
+        local label=${1:-empty}; bar_shot "palette-${label//[^A-Za-z0-9]/}"
+        command -v tesseract >/dev/null || return 2
+        local text; text=$(magick "$last_shot" -crop 580x520+350+140 +repage -resize 200% -colorspace gray -negate png:- | tesseract - - --psm 6 2>/dev/null)
+        local first; first=$(grep -v '/m' <<<"$text" | grep -m1 -E '[A-Za-z]{3}')
+        grep -qE "$2" <<<"$first" && { [[ -z ${3:-} ]] || ! grep -qE "$3" <<<"$text"; } || { printf '%s\n' "$text" | head -12 | sed 's/^/         /'; return 1; }
+      }
+      rc=0; palette_says "" 'Apps' 'Firefox|Files' || rc=$?
+      if (( rc == 2 )); then log "no tesseract here: skipping the palette's OCR checks"; else
+        report "$rc" "palette: empty shows the groups, Apps first, no app list"
+        rc=0; palette_says "Apps › " 'Audio|btop|Calculator' || rc=$?; report "$rc" "palette: Apps lists the apps by name"
+        rc=0; palette_says "fire" 'Firefox' || rc=$?; report "$rc" "palette: \"fire\" finds Firefox first"
+        rc=0; palette_says "reboot" 'Restart' || rc=$?; report "$rc" "palette: \"reboot\" finds Restart"
+        rc=0; palette_says "theme" 'Theme' || rc=$?; report "$rc" "palette: \"theme\" finds Style › Theme first"
+      fi
       "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg panel-close >/dev/null" || true
+      sleep 0.5; virsh send-key "$vm" KEY_LEFTMETA KEY_SPACE >/dev/null; sleep 1
+      check "palette: SUPER+Space, type, Return opens the app" "$(sed "s/@ID@/$id/g" "$here/checks/palette.sh")"
+      check "plugins load without errors" "journalctl --user -u noctalia -b --no-pager | grep -E '\\[luau\\]|script-runtime.*(error|failed)' | grep '$id/' ; ! journalctl --user -u noctalia -b --no-pager | grep -E '\\[luau\\]|script-runtime.*(error|failed)' | grep -q '$id/'"
       check "keyboard layouts switch"      "$hypr $id keyboard add de >/dev/null && sleep 1 && hyprctl devices -j | jq -e '[.keyboards[] | select(.main)][0].layout == \"us,de\"' >/dev/null && $id keyboard next && sleep 1 && hyprctl devices -j | jq -r '.keyboards[] | select(.main) | .active_keymap' | grep -q German"
       screenshot keyboard-layout
       check "keyboard layout removed"      "$hypr $id keyboard remove de >/dev/null && sleep 1 && hyprctl devices -j | jq -e '[.keyboards[] | select(.main)][0].layout == \"us\"' >/dev/null"

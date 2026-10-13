@@ -29,8 +29,8 @@ SUPER is the Windows key. SUPER+K lists every shortcut, searchable.
 
 | Key | Does |
 |---|---|
-| SUPER+ALT+Space | System menu: apps, capture, toggles, style, setup, install, update, power |
-| SUPER+Space | App launcher |
+| SUPER+Space | Apps and the system menu: capture, toggles, style, setup, install, update, power |
+| SUPER+ALT+Space | The same |
 | SUPER+K | Keyboard shortcuts |
 | SUPER+Return | Terminal |
 | SUPER+S | Quick settings (Wi-Fi, Bluetooth, sound) |
@@ -55,15 +55,15 @@ SUPER is the Windows key. SUPER+K lists every shortcut, searchable.
 
 ## Opening apps
 
-SUPER+Space opens the launcher: type part of an app's name and press Enter. **Noctalia Settings** there opens the settings for the bar, launcher, notifications and the rest of the desktop shell. Apps that run in a terminal (btop, for example) open in your default terminal (`lunarc terminal set`).
+SUPER+Space opens the launcher with your apps and the system menu: type part of an app's name and press Enter. **Noctalia Settings** there opens the settings for the bar, launcher, notifications and the rest of the desktop shell. Apps that run in a terminal (btop, for example) open in your default terminal (`lunarc terminal set`).
 
 ## The bar
 
-Left: the menu (crescent; right-click for apps) and workspaces: numbers, dim when empty and bright with windows; the one you're on shows its moon phase in gold instead of its number (1 a waxing crescent, 2 first quarter, 3 waxing gibbous, 4 full, and on round the cycle); a small gold dot marks a workspace where a window is asking for attention (SUPER+U goes there). Click to switch, scroll to step through, hover for the active workspace's number. `lunarc workspaces style noctalia` switches to Noctalia's own pills. Centre: stay awake, night light, Low Gravity (the feather: floats every window on this workspace, spread out, and tiles them again on the next click; SUPER+G), silence notifications, reminders, screen recording and dictation, then the clock and weather. Right: media, tray, AI usage, crashes, the keyboard layout (only with more than one; click to switch), and status icons (network, Bluetooth, sound, brightness, battery, power), each opening its own panel.
+Left: the menu (crescent; right-click for apps) and workspaces: numbers, dim when empty and bright with windows; the one you're on shows its moon phase in gold instead of its number (1 a waxing crescent, 2 first quarter, 3 waxing gibbous, 4 full, and on round the cycle); a small gold dot marks a workspace where a window is asking for attention (SUPER+U goes there). Click to switch, scroll to step through, hover for the active workspace's number. `lunarc workspaces style noctalia` switches to Noctalia's own pills. Centre: the toggles, then the clock and weather. At rest only a small sliders icon shows, plus any toggle that is on (gold; red while recording or listening). Hover the icon (or click it) and all of them show: stay awake, night light, Low Gravity (the feather: floats every window on this workspace, spread out, and tiles them again on the next click; SUPER+G), silence notifications, reminders (shown while any are pending), screen recording and dictation. Move away and the ones that are off hide again. Stay awake and night light last until you log out (`lunarc awake`, `lunarc nightlight`). Night light on warms the screen straight away; if you've set a sunset/sunrise schedule in Settings, off hands back to the schedule. Right: media, tray, AI usage, crashes, the keyboard layout (only with more than one; click to switch), and status icons (network, Bluetooth, sound, brightness, battery, power), each opening its own panel.
 
 ## The system menu
 
-SUPER+ALT+Space (or `/m` in the launcher). Type part of a name and press Enter to open it; keep typing to filter the next level; Backspace goes back. Typing at the top also finds items inside the groups, so "screenshot" or "steam" goes straight to the item. Items are in `/usr/share/lunarc/default/menu/menu`; copy it to `~/.config/lunarc/menu` to make your own.
+SUPER+Space (or SUPER+ALT+Space, or `/m` in the launcher). Empty, it lists Apps (every installed app, pinned ones first) and the menu's groups. Typing searches apps and every menu item at once: "fire" finds Firefox, "screenshot" or "reboot" the item, "install steam" the install entry. Press Enter on a group to open it and keep typing to filter that level; Backspace goes back. Backspace past `/m` gives Noctalia's own app launcher (also a right-click on the crescent). Items are in `/usr/share/lunarc/default/menu/menu`; copy it to `~/.config/lunarc/menu` to make your own.
 
 ## The `lunarc` command
 
@@ -94,6 +94,7 @@ SUPER+ALT+Space (or `/m` in the launcher). Type part of a name and press Enter t
 | `lunarc remind "stretch" in 20m` / `at 15:30` / `list` / `cancel <id>` | Reminders (also the alarm icon in the bar) |
 | `lunarc dictate toggle` / `setup` | Dictation; runs locally with whisper.cpp (the first click downloads the speech model, about 148 MB) |
 | `lunarc menu` / `lunarc keys` | The system menu / the shortcut list |
+| `lunarc awake on` / `off` / `toggle` · `lunarc nightlight on` / `off` / `toggle` | Stay awake, night light (also in the bar and quick settings) |
 | `lunarc keyboard add de` / `remove` / `list` / `next` | Keyboard layouts (`lunarc keyboard available` lists them) |
 | `lunarc migrate --list --user` | See which config migrations have run |
 | `lunarc screensaver effects` / `preview [effect]` | List the screensaver's effects / play one now (any key closes it) |
@@ -103,8 +104,8 @@ Settings for these live in `~/.config/lunarc/settings` (`key = value`); defaults
 ## Displays
 Each screen keeps its own resolution, scale and rotation, wherever it's plugged in. Arrangements are remembered per set of connected screens, so docking and undocking a laptop puts things back the way you left them.
 
-- **Display size**: how big text and everything else looks. Each screen starts at a size chosen from its dimensions (a 15" 1080p laptop screen at 100%, a 15" 1440p one at 125%). To change it, open **Setup › Display size** in the system menu (SUPER+ALT+Space) or run `lunarc display size`. Pick Smaller, Default or Larger. The new size is applied straight away; keep it, or it goes back after 10 seconds. `lunarc display scale 125%` (or `smaller`, `larger`, `default`) sets it directly.
-- **Setup › Displays** in the system menu (SUPER+ALT+Space), or `lunarc display edit`: pick a screen, then resolution, scale, position (right of, left of, above, below another) or rotation.
+- **Display size**: how big text and everything else looks. Each screen starts at a size chosen from its dimensions (a 15" 1080p laptop screen at 100%, a 15" 1440p one at 125%). To change it, open **Setup › Display size** in the system menu (SUPER+Space) or run `lunarc display size`. Pick Smaller, Default or Larger. The new size is applied straight away; keep it, or it goes back after 10 seconds. `lunarc display scale 125%` (or `smaller`, `larger`, `default`) sets it directly.
+- **Setup › Displays** in the system menu (SUPER+Space), or `lunarc display edit`: pick a screen, then resolution, scale, position (right of, left of, above, below another) or rotation.
 - `lunarc display list` shows what's connected; `lunarc display set DP-1 2560x1440@144 1.25 right-of eDP-1` changes a screen in one go (`-` keeps a value).
 - `lunarc display save docked` names the current arrangement; it's applied again whenever exactly those screens are connected. `lunarc display profiles`, `apply <name>`, `forget <name>`.
 - `lunarc display off internal` / `on internal` turns the built-in screen off or on.
@@ -113,7 +114,7 @@ Each screen keeps its own resolution, scale and rotation, wherever it's plugged 
 
 ## Backups
 
-At the first login a setup window helps you set up backups with Pika Backup (installed by default): pick an external drive, a network share or online storage, and Pika opens on its setup screen. Keep **Encryption** on and save the password in your password manager; then set **Schedule** to Daily. Skipped it? You'll get one reminder a few days later, or open **Setup › Backups** from the menu (SUPER+ALT+Space) any time.
+At the first login a setup window helps you set up backups with Pika Backup (installed by default): pick an external drive, a network share or online storage, and Pika opens on its setup screen. Keep **Encryption** on and save the password in your password manager; then set **Schedule** to Daily. Skipped it? You'll get one reminder a few days later, or open **Setup › Backups** from the menu (SUPER+Space) any time.
 
 **Backing up to a NAS.** Choose *A network share* in the setup window (or run `lunarc share add`): pick NFS, SMB or SSH, the NAS address and the shared folder. Lunarc mounts it at `/mnt/nas/<you>/backups` only when it's used (a NAS that's switched off never slows down starting up), checks you can write there, creates a folder for this computer and shows its path; pick that folder in Pika Backup under *Location on Disk*. If the write check fails, it tells you what to change on the NAS: the shared folder must belong to your NAS user, and for NFS every request must be mapped to that user (TrueNAS: *Mapall User/Group*) because NFS sends user numbers, not names; the share must also allow this computer's address. `lunarc share list`, `share test <name>` and `share remove <name>` manage shares later (also under Setup in the menu). SMB passwords are kept in a root-only file; nothing on a share can run as a program here.
 

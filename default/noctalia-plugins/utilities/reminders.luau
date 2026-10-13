@@ -2,12 +2,15 @@
 -- Reminders: an alarm glyph with the number of upcoming reminders; click to
 -- see them and add one.
 local common = require("./common.luau")
+local toggle = require("./toggle.luau").new(barWidget, "reminders")
 local count = 0
 
 local function render()
-  barWidget.setGlyph("alarm")
-  barWidget.setGlyphColor(count > 0 and "primary" or "on_surface")
-  barWidget.setText(count > 0 and tostring(count) or "")
+  if count > 0 then
+    toggle.show({ ui.glyph({ name = "alarm", color = "primary" }), ui.label({ text = tostring(count), color = "primary" }) }, true)
+  else
+    toggle.show({ ui.glyph({ name = "alarm" }) }, false)
+  end
   barWidget.setTooltip(count == 0 and "Reminders" or (count == 1 and "1 reminder" or (tostring(count) .. " reminders")))
 end
 

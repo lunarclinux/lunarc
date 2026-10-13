@@ -79,6 +79,9 @@ render = function()
   panel.render(ui.column({ flexGrow = 1, gap = 12 }, children))
 end
 
-function onOpen(_context) reload() end
+-- While it's open the bar's toggles stay revealed, so the alarm it hangs from
+-- doesn't hide (toggles.luau).
+function onOpen(_context) noctalia.state.set("hold", true); reload() end
+function onClose() noctalia.state.set("hold", false) end
 function update() reload() end
 function onIpc(event, _payload) if event == "refresh" then reload() end end

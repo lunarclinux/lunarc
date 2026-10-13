@@ -7,7 +7,9 @@ local function bind(keys, description, action, opts)
     hl.bind(keys, action, opts)
 end
 
-bind(mod .. " + Space", "Apps", shell("panel-toggle launcher"))
+-- Apps and the system menu in one: the launcher's /m provider (decision record
+-- 0042). Empty it lists Apps and the menu's groups; typing searches both.
+bind(mod .. " + Space", "Apps and system menu", shell("panel-toggle launcher '/m '"))
 bind(mod .. " + S", "Quick settings", shell("panel-toggle control-center"))
 bind(mod .. " + comma", "Shell settings", shell("settings-toggle"))
 -- The lock: the screensaver plays behind it (`@DISTRO_ID@ lock`); falls back to

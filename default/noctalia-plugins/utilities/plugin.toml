@@ -5,7 +5,7 @@ plugin_api = 28
 author = "@DISTRO_ID@"
 license = "GPL-3.0-or-later"
 icon = "tool"
-description = "The bar's workspaces and one-click utilities: Low Gravity, silence notifications, screen recording, dictation and reminders."
+description = "The bar's workspaces and toggles (stay awake, night light, Low Gravity, silence, reminders, recording, dictation), and the system menu in the launcher."
 tags = ["system"]
 
 # Workspaces: numbers, the active one as its moon phase, a gold dot for
@@ -13,6 +13,22 @@ tags = ["system"]
 [[widget]]
 id = "workspaces"
 entry = "workspaces.luau"
+
+# The toggles (decision record 0042). "toggles" is their anchor: the others
+# show only while on, or while the anchor is hovered (toggle.luau).
+[[widget]]
+id = "toggles"
+entry = "toggles.luau"
+
+# Stay awake and night light (`@DISTRO_ID@ awake`, `@DISTRO_ID@ nightlight`), in
+# place of Noctalia's own widgets, which can't hide when off.
+[[widget]]
+id = "stay-awake"
+entry = "stay-awake.luau"
+
+[[widget]]
+id = "nightlight"
+entry = "nightlight.luau"
 
 # Low Gravity: float this workspace's windows (`@DISTRO_ID@ gravity --help`).
 [[widget]]
@@ -35,6 +51,15 @@ entry = "dictate.luau"
 id = "reminders"
 entry = "reminders.luau"
 
+# The same two as quick-settings tiles, in place of the built-in ones.
+[[shortcut]]
+id = "stay-awake-shortcut"
+entry = "stay-awake-shortcut.luau"
+
+[[shortcut]]
+id = "nightlight-shortcut"
+entry = "nightlight-shortcut.luau"
+
 [[panel]]
 id = "reminders-panel"
 entry = "reminders-panel.luau"
@@ -42,8 +67,9 @@ width = 420
 height = 460
 placement = "attached"
 
-# The system menu (SUPER+ALT+Space): /m in the launcher. Groups drill in and
-# the launcher stays open; type to filter each level.
+# The system menu and app search (SUPER+Space): /m in the launcher. Empty, it
+# lists Apps and the menu's groups; typing searches apps and every menu item.
+# Groups drill in and the launcher stays open (decision record 0042).
 [[launcher_provider]]
 id = "menu"
 entry = "menu.luau"
