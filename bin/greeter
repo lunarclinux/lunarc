@@ -11,6 +11,11 @@
 # (our patch) makes a greeter that can't start exit instead of holding an empty
 # screen. greetd gives up after five quick greeter exits, so a failure goes
 # straight to tuigreet rather than exiting.
+#
+# Hyprland's own session entries are hidden (our patch): one is the same as the
+# distro session, the other starts Hyprland without uwsm, so without the bar,
+# idle lock or battery alerts. Sessions installed later still show, and the
+# distro session is preselected.
 set -uo pipefail
 
 text_greeter() {
@@ -28,7 +33,8 @@ done
 status=$(mktemp -d) || text_greeter
 
 NOCTALIA_GREETER_BIN=/usr/lib/@DISTRO_ID@/greeter-client GREETER_EXIT_FILE=$status/exit \
-  NOCTALIA_GREETER_NO_HOLD=1 /usr/bin/noctalia-greeter-session
+  NOCTALIA_GREETER_NO_HOLD=1 NOCTALIA_GREETER_HIDE_SESSIONS=hyprland.desktop:hyprland-uwsm.desktop \
+  /usr/bin/noctalia-greeter-session --session '@DISTRO_NAME@'
 rc=$?
 greeter_rc=$(cat "$status/exit" 2>/dev/null || true)
 rm -rf "$status"

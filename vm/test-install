@@ -565,18 +565,54 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
 
   # Last: logging out of the autologin session brings up the login screen
   # (Noctalia Greeter, not its tuigreet fallback); the password logs back in.
-  check "logging out shows the login screen" "$hypr"' uwsm stop >/dev/null 2>&1; for i in $(seq 30); do pgrep -u greeter -xf /usr/bin/noctalia-greeter >/dev/null && ! pgrep -x tuigreet >/dev/null && exit 0; sleep 1; done; pgrep -a -u greeter; exit 1'
+  greeter_up='for i in $(seq 30); do pgrep -u greeter -xf "/usr/bin/noctalia-greeter( .*)?" >/dev/null && ! pgrep -x tuigreet >/dev/null && exit 0; sleep 1; done; pgrep -a -u greeter; exit 1'
+  check "logging out shows the login screen" "$hypr uwsm stop >/dev/null 2>&1; $greeter_up"
   sleep 3
   # No session to run grim in now, and virsh can't capture a virgl screen:
   # read the display's framebuffer (kmsgrab, as root).
-  shot=$shots/$vm-$(date +%Y%m%d-%H%M%S)-login-screen.png
-  if "$here/ssh" "$vm" "$user" -- "echo '$password' | sudo -S -p '' sh -c 'ffmpeg -loglevel error -y -device \$(ls /dev/dri/card* | head -1) -f kmsgrab -i - -vf hwmap=derive_device=vaapi,hwdownload,format=bgr0 -frames:v 1 -f image2 -c:v png - 2>/dev/null'" > "$shot" && [[ -s $shot ]]; then
-    log "screenshot: $shot"
-  else
-    rm -f "$shot"; log "screenshot failed"
-  fi
+  login_shot() { # login_shot <label>
+    last_shot=$shots/$vm-$(date +%Y%m%d-%H%M%S)-$1.png
+    if "$here/ssh" "$vm" "$user" -- "echo '$password' | sudo -S -p '' sh -c 'ffmpeg -loglevel error -y -device \$(ls /dev/dri/card* | head -1) -f kmsgrab -i - -vf hwmap=derive_device=vaapi,hwdownload,format=bgr0 -frames:v 1 -f image2 -c:v png - 2>/dev/null'" > "$last_shot" && [[ -s $last_shot ]]; then
+      log "screenshot: $last_shot"
+    else
+      rm -f "$last_shot"; last_shot=""; log "screenshot failed"
+    fi
+  }
+  # The text in the login panel (screen centre), read here on the host;
+  # empty without OCR tools or a screenshot.
+  login_text() {
+    command -v tesseract >/dev/null && command -v magick >/dev/null && [[ -n $last_shot ]] || return 0
+    local w h crop
+    read -r w h < <(magick identify -format '%w %h' "$last_shot")
+    crop=$(mktemp --suffix=.png)
+    magick "$last_shot" -crop "$((w / 2))x$((h * 2 / 5))+$((w / 4))+$((h * 2 / 5))" +repage -resize 300% -colorspace gray -negate "$crop"
+    tesseract "$crop" - --psm 6 2>/dev/null; rm -f "$crop"
+  }
+  ocr_check() { # ocr_check <description> <regex that must match> <regex that must not>
+    local text; text=$(login_text)
+    if [[ -z $text ]]; then log "no screenshot or OCR tools: skipping '$1'"
+    elif grep -qiE "$2" <<<"$text" && ! grep -qiE "$3" <<<"$text"; then printf '  \033[32mok\033[0m   %s\n' "$1"
+    else printf '  \033[31mFAIL\033[0m %s\n%s\n' "$1" "$(sed 's/^/         /' <<<"$text")"; fail=1
+    fi
+  }
+  # The sessions the running greeter offers: its own discovery, with the hide
+  # list read from its environment (set by the wrapper).
+  greeter_sessions="hide=\$(echo '$password' | sudo -S -p '' cat /proc/\$(pgrep -u greeter -xf \"/usr/bin/noctalia-greeter( .*)?\")/environ | xargs -0 printf '%s\n' | sed -n 's/^NOCTALIA_GREETER_HIDE_SESSIONS=//p'); NOCTALIA_GREETER_HIDE_SESSIONS=\$hide noctalia-greeter sessions | sort | paste -sd '|'"
+  check "login screen hides Hyprland's own sessions" "noctalia-greeter sessions | grep -qx Hyprland && s=\$($greeter_sessions) && echo \"\$s\" && [ \"\$s\" = '$name' ]"
+  login_shot login-screen
+  ocr_check "login screen: no session picker with one session" "tester" "$name"
+  # Another session installed: the picker appears, the distro session chosen.
+  two=$(printf '%s\n' "$name" "Test Extra" | sort | paste -sd '|')
+  extra="printf '[Desktop Entry]\nName=Test Extra\nExec=/usr/bin/true\nType=Application\n' > /usr/share/wayland-sessions/test-extra.desktop"
+  check "an extra session shows the picker" "echo '$password' | sudo -S -p '' sh -c \"$extra\" && echo '$password' | sudo -S -p '' systemctl restart greetd && sleep 2 && ($greeter_up) && s=\$($greeter_sessions) && echo \"\$s\" && [ \"\$s\" = '$two' ]"
+  sleep 3
+  login_shot login-screen-two-sessions
+  ocr_check "login screen: picker shows the distro session" "$name" "Test Extra"
+  check "removing it hides the picker again" "echo '$password' | sudo -S -p '' sh -c 'rm /usr/share/wayland-sessions/test-extra.desktop && systemctl restart greetd' && sleep 2 && ($greeter_up) && s=\$($greeter_sessions) && [ \"\$s\" = '$name' ]"
+  sleep 3
   vm_type "$password"; virsh send-key "$vm" KEY_ENTER >/dev/null
-  check "logging in from the login screen" 'for i in $(seq 60); do pgrep -u "$USER" -x Hyprland >/dev/null && ! pgrep -u greeter -xf /usr/bin/noctalia-greeter >/dev/null && exit 0; sleep 1; done; exit 1'
+  check "logging in from the login screen" 'for i in $(seq 60); do pgrep -u "$USER" -x Hyprland >/dev/null && ! pgrep -u greeter -xf "/usr/bin/noctalia-greeter( .*)?" >/dev/null && exit 0; sleep 1; done; exit 1'
+  check "...into the uwsm-run desktop" 'for i in $(seq 30); do systemctl --user is-active --quiet graphical-session.target && exit 0; sleep 1; done; exit 1'
 fi
 
 # Optional: start the snapshot taken before the `tree` install from the boot

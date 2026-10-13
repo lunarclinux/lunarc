@@ -171,6 +171,10 @@ chosen on this computer: changing the theme changes it too (from the desktop,
 not over SSH; `lunarc theme greeter` does it again). If it ever can't start, a
 plain text login appears instead and works the same way.
 
+It starts the Lunarc desktop. If you install another desktop (GNOME, Plasma…),
+a session list appears under the password box to choose it; Lunarc is
+preselected each time.
+
 ## Locking the screen
 SUPER+L locks the screen and plays the screensaver behind the lock; nothing
 else is on screen. Just start typing your password and press Enter: a

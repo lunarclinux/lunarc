@@ -1,0 +1,140 @@
+diff -ruN a/src/greeter/greeter_sessions.cpp b/src/greeter/greeter_sessions.cpp
+--- a/src/greeter/greeter_sessions.cpp	2026-10-12 21:23:53.292707138 -0500
++++ b/src/greeter/greeter_sessions.cpp	2026-10-12 21:24:11.624019488 -0500
+@@ -138,9 +138,24 @@
+     return colon == std::string::npos ? current : current.substr(0, colon);
+   }
+ 
++  // Session files to leave out, by file name: NOCTALIA_GREETER_HIDE_SESSIONS=a.desktop:b.desktop.
++  [[nodiscard]] std::unordered_set<std::string> hiddenSessionFiles() {
++    std::unordered_set<std::string> hidden;
++    const char* value = std::getenv("NOCTALIA_GREETER_HIDE_SESSIONS");
++    std::istringstream stream(value != nullptr ? value : "");
++    std::string file;
++    while (std::getline(stream, file, ':')) {
++      if (!trim(file).empty()) {
++        hidden.insert(trim(file));
++      }
++    }
++    return hidden;
++  }
++
+   void discoverSessionsInDirectory(
+       const std::filesystem::path& dir, std::vector<greeter::SessionOption>& sessions,
+-      std::unordered_set<std::string>& seenNames, std::string_view sessionType
++      std::unordered_set<std::string>& seenNames, std::string_view sessionType,
++      const std::unordered_set<std::string>& hiddenFiles
+   ) {
+     std::error_code ec;
+     for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
+@@ -150,6 +165,9 @@
+       if (entry.path().extension() != ".desktop") {
+         continue;
+       }
++      if (hiddenFiles.contains(entry.path().filename().string())) {
++        continue;
++      }
+ 
+       std::ifstream in(entry.path());
+       if (!in.is_open()) {
+@@ -200,14 +218,15 @@
+   std::vector<SessionOption> discoverSessions() {
+     std::vector<SessionOption> sessions;
+     std::unordered_set<std::string> seenNames;
++    const std::unordered_set<std::string> hiddenFiles = hiddenSessionFiles();
+ 
+     // Shared seenNames: a Name= collision between the two keeps the wayland-sessions
+     // entry, since it is scanned first.
+     for (const auto& dir : sessionSearchDirectories("wayland-sessions")) {
+-      discoverSessionsInDirectory(dir, sessions, seenNames, "wayland");
++      discoverSessionsInDirectory(dir, sessions, seenNames, "wayland", hiddenFiles);
+     }
+     for (const auto& dir : sessionSearchDirectories("xsessions")) {
+-      discoverSessionsInDirectory(dir, sessions, seenNames, "x11");
++      discoverSessionsInDirectory(dir, sessions, seenNames, "x11", hiddenFiles);
+     }
+ 
+     if (sessions.empty()) {
+diff -ruN a/src/greeter/greeter_surface.cpp b/src/greeter/greeter_surface.cpp
+--- a/src/greeter/greeter_surface.cpp	2026-10-12 21:23:53.292720308 -0500
++++ b/src/greeter/greeter_surface.cpp	2026-10-12 21:24:23.403732629 -0500
+@@ -688,6 +688,9 @@
+ 
+ bool GreeterSurface::showsUserDropdown() const noexcept { return m_users.size() > 1; }
+ 
++// A single session needs no picker: the row is left out of the panel.
++bool GreeterSurface::showsSessionDropdown() const noexcept { return m_sessions.size() > 1; }
++
+ void GreeterSurface::setKeyboardOwner(const bool owner) noexcept {
+   m_isKeyboardOwner = owner;
+   if (owner) {
+@@ -1107,8 +1110,8 @@
+   const float headerToContentGap = Style::spaceLg();
+   const float headerBlockHeight = headerTopPadding + headerGlyphBlock + subtitleGap + headerToContentGap;
+ 
+-  const float sessionRowH = rowHeight;
+-  const float sessionRowGap = rowGap;
++  const float sessionRowH = showsSessionDropdown() ? rowHeight : 0.0f;
++  const float sessionRowGap = showsSessionDropdown() ? rowGap : 0.0f;
+ 
+   const float userBlockHeight = showsUserDropdown() ? rowHeight : 0.0f;
+   const float userPickerContentHeight = userBlockHeight + sessionRowGap + sessionRowH;
+@@ -1321,7 +1324,17 @@
+ 
+   const float sessionY = m_passwordVisible ? (contentTop + Style::controlHeight() + sessionRowGap)
+                                            : (contentTop + userBlockHeight + sessionRowGap);
+-  layoutPanelSessionSelector(contentLeft, sessionY, contentWidth, sessionRowH);
++  if (showsSessionDropdown()) {
++    layoutPanelSessionSelector(contentLeft, sessionY, contentWidth, sessionRowH);
++  } else {
++    m_sessionSelectBox->setVisible(false);
++    if (m_sessionSelectIcon != nullptr) {
++      m_sessionSelectIcon->setVisible(false);
++    }
++    m_sessionSelectLabel->setVisible(false);
++    m_sessionSelectGlyph->setVisible(false);
++    m_sessionSelectArea->setVisible(false);
++  }
+ 
+   if (hasStatus) {
+     const float statusY = contentTop + contentBlockHeight + statusGap;
+@@ -2115,6 +2128,9 @@
+ }
+ 
+ void GreeterSurface::toggleSessionMenu() {
++  if (!m_sessionMenuOpen && !showsSessionDropdown()) {
++    return;
++  }
+   m_sessionMenuOpen = !m_sessionMenuOpen;
+   if (m_sessionMenuOpen) {
+     m_userMenuOpen = false;
+@@ -2265,7 +2281,7 @@
+                            }});
+   }
+ 
+-  if (m_sessionSelectArea != nullptr) {
++  if (m_sessionSelectArea != nullptr && showsSessionDropdown()) {
+     m_focusRing.push_back({m_sessionSelectArea, [this]() { toggleSessionMenu(); }});
+   }
+   if (m_schemeSelectArea != nullptr && m_schemeSelectArea->visible()) {
+@@ -2941,6 +2957,9 @@
+   // F3 / F7 jump straight to the session / color-scheme menus from anywhere
+   // (even from inside the password field or with another menu open).
+   if (KeySymbol::isF3(sym)) {
++    if (!showsSessionDropdown()) {
++      return true;
++    }
+     if (m_sessionMenuOpen) {
+       closeMenusAndRestoreFocus();
+     } else {
+diff -ruN a/src/greeter/greeter_surface.h b/src/greeter/greeter_surface.h
+--- a/src/greeter/greeter_surface.h	2026-10-12 21:23:53.292746829 -0500
++++ b/src/greeter/greeter_surface.h	2026-10-12 21:24:11.624055779 -0500
+@@ -159,6 +159,7 @@
+   void reconcileKeyboardFocus();
+   [[nodiscard]] bool ownsInputArea(const InputArea* area) const;
+   [[nodiscard]] bool showsUserDropdown() const noexcept;
++  [[nodiscard]] bool showsSessionDropdown() const noexcept;
+   void savePreferences() const;
+   void buildSchemeNames();
+   void applyScheme(std::size_t schemeIndex);
