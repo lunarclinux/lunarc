@@ -29,6 +29,8 @@ wireplumber
 ghostty
 noto-fonts
 noto-fonts-emoji
+# Chinese, Japanese and Korean text
+noto-fonts-cjk
 ttf-jetbrains-mono-nerd
 inter-font
 # Geist and Geist Mono, the Frosted Terminal typefaces (from the distro
@@ -40,6 +42,30 @@ otf-geist-mono
 adw-gtk-theme
 papirus-icon-theme
 qt6ct
+
+# Video and audio formats for Showtime, Decibels and other GStreamer apps:
+# H.264/H.265, AAC, MP3 and the rest (FFmpeg's decoders through gst-libav).
+gst-plugins-good
+gst-plugins-bad
+gst-plugins-ugly
+gst-libav
+
+# Archives in the terminal: 7z (also extracts rar) and unzip. Files opens zip,
+# 7z, rar and tar archives itself (libarchive).
+7zip
+unzip
+
+# Spell checking (GTK apps through enchant, Firefox): US English
+hunspell
+hunspell-en_us
+
+# Printing (decision record 0044): CUPS, started when something prints and
+# reachable only from this computer; network printers found through Avahi,
+# which only looks and never announces this computer; .local names through
+# nss-mdns. Print Settings (system-config-printer) is a default app.
+cups
+avahi
+nss-mdns
 
 # Saved passwords for apps (browsers, editors, mail): the Secret Service,
 # unlocked at login by the login screen

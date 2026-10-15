@@ -61,6 +61,7 @@ fish             | dev       | fish (then: @DISTRO_ID@ shell set fish) | repo | 
 loupe            | media     | Image Viewer (Loupe)   | repo     | loupe                       | default
 showtime         | media     | Video Player (Showtime) | repo    | showtime                    | default
 decibels         | media     | Audio Player (Decibels) | repo    | decibels                    | default
+camera           | media     | Camera (Snapshot)      | repo     | snapshot                    | default
 mpv              | media     | mpv                    | repo     | mpv                         |
 spotify          | media     | Spotify                | repo     | spotify-launcher            |
 pinta            | media     | Pinta                  | repo     | pinta                       |
@@ -116,5 +117,6 @@ rclone           | backup    | rclone (cloud storage sync) | repo | rclone      
 # System
 btop             | system    | btop (system monitor)  | repo     | btop                        | default
 mission-center   | system    | Mission Center         | repo     | mission-center              |
-disks            | system    | Disks                  | repo     | gnome-disk-utility          |
+disks            | system    | Disks                  | repo     | gnome-disk-utility          | default
+printers         | system    | Print Settings (add and manage printers) | repo | system-config-printer | default
 disk-usage       | system    | Disk Usage Analyzer    | repo     | baobab                      |

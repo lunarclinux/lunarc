@@ -57,6 +57,26 @@ SUPER is the Windows key. SUPER+K lists every shortcut, searchable.
 
 SUPER+Space opens the launcher with your apps and the system menu: type part of an app's name and press Enter. **Noctalia Settings** there opens the settings for the bar, launcher, notifications and the rest of the desktop shell. Apps that run in a terminal (btop, for example) open in your default terminal (`lunarc terminal set`).
 
+## What's installed
+
+| For | App |
+|---|---|
+| Web | Firefox |
+| Files | Files (Nautilus): also opens zip, 7z, rar and tar archives |
+| Text | Text Editor (with US English spell checking) |
+| PDFs | Papers |
+| Pictures | Image Viewer (Loupe) |
+| Video, music | Showtime, Decibels: common formats (MP4/H.264, MKV, AAC, MP3, FLAC, Opus…) play out of the box |
+| Camera | Camera (Snapshot) |
+| Calculations | Calculator |
+| Drives | Disks: format, partition, check health, write a USB stick from an image |
+| Printers | Print Settings (most network printers need no setup; see Printing) |
+| Backups | Pika Backup |
+| System monitor | btop |
+| Terminal | Ghostty |
+
+All of them can be removed or swapped; `lunarc app list` shows more. In the terminal, `7z` and `unzip` handle archives. Chinese, Japanese and Korean text has fonts (Noto CJK).
+
 ## The bar
 
 Left: the menu (crescent; right-click for apps) and workspaces: numbers, dim when empty and bright with windows; the one you're on shows its moon phase in gold instead of its number (1 a waxing crescent, 2 first quarter, 3 waxing gibbous, 4 full, and on round the cycle); a small gold dot marks a workspace where a window is asking for attention (SUPER+U goes there). Click to switch, scroll to step through, hover for the active workspace's number. `lunarc workspaces style noctalia` switches to Noctalia's own pills. Centre: the toggles, then the clock and weather. At rest only a small sliders icon shows, plus any toggle that is on (gold; red while recording or listening). Hover the icon (or click it) and all of them show: stay awake, night light, Low Gravity (the feather: floats every window on this workspace, spread out, and tiles them again on the next click; SUPER+G), silence notifications, reminders (shown while any are pending), screen recording and dictation. Move away and the ones that are off hide again. Stay awake and night light last until you log out (`lunarc awake`, `lunarc nightlight`). Night light on warms the screen straight away; if you've set a sunset/sunrise schedule in Settings, off hands back to the schedule. Right: media, tray, AI usage, crashes, the keyboard layout (only with more than one; click to switch), and status icons (network, Bluetooth, sound, brightness, battery, power), each opening its own panel.
@@ -112,6 +132,12 @@ Each screen keeps its own resolution, scale and rotation, wherever it's plugged 
 - `lunarc display off internal` / `on internal` turns the built-in screen off or on.
 - `lunarc display auto off` stops automatic rearranging when screens are plugged in.
 - At scales like 1.25 or 1.5, older (X11) apps can look slightly soft; `lunarc display xwayland sharp` makes them sharp but smaller.
+
+## Printing
+
+Printers on your network that support driverless printing (IPP Everywhere or AirPrint, nearly every printer from the last ten years) show up in every app's print dialog by themselves: print, and pick the printer. For anything else (a USB printer that needs a driver, a printer at a fixed address), open **Print Settings** from the launcher.
+
+How it's set up: the print service (CUPS) starts only when something prints and only answers this computer. Printers are found with mDNS (Avahi), which only looks: this computer never announces itself or its printers to the network. The firewall lets mDNS replies in and nothing else (`lunarc firewall deny mdns` turns discovery off). Older printers may need a driver: `sudo pacman -S gutenprint` (many brands) or `hplip` (HP).
 
 ## Backups
 
