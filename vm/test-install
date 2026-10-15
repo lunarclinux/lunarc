@@ -710,7 +710,12 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       # Fail closed: without the screensaver lock, Noctalia's lock takes over.
       "$here/ssh" "$vm" "$user" -- "echo '$password' | sudo -S -p '' mv /usr/bin/swaylock-plugin /usr/bin/swaylock-plugin.off" || true
       check "falls back to Noctalia's lock" "$hypr $id lock; sleep 3; noctalia msg status | jq -e '.. | objects | select(has(\"locked\")) | .locked == true' >/dev/null"
+      # A new Noctalia build arriving now must not restart the shell under its
+      # own lock screen (decision record 0043): the restart waits for the unlock.
+      shell_pid=$("$here/ssh" "$vm" "$user" -- 'systemctl --user show -P MainPID noctalia' 2>/dev/null || true)
+      check "shell restart waits while Noctalia's lock is up" "$hypr echo '$password' | sudo -S -p '' /usr/lib/$id/shell-reload --noctalia; sleep 4; [ \"\$(systemctl --user show -P MainPID noctalia)\" = '$shell_pid' ] && noctalia msg status | jq -e '.locked == true' >/dev/null && systemctl --user is-active --quiet $id-shell-restart"
       vm_type "$password"; virsh send-key "$vm" KEY_ENTER >/dev/null; sleep 4
+      check "shell restarts once unlocked" "$hypr for i in \$(seq 20); do p=\$(systemctl --user show -P MainPID noctalia); [ \"\$p\" != '$shell_pid' ] && [ \"\$p\" != 0 ] && noctalia msg status >/dev/null 2>&1 && ! noctalia msg status | jq -e '.locked == true' >/dev/null && exit 0; sleep 1; done; exit 1"
       "$here/ssh" "$vm" "$user" -- "echo '$password' | sudo -S -p '' mv /usr/bin/swaylock-plugin.off /usr/bin/swaylock-plugin" || true
     fi
     check "agent list knows claude"       "$id agent list | grep -qE '^\\* claude'"
