@@ -1,12 +1,13 @@
 --!nonstrict
--- Workspaces: plain numbers (dim when empty, bright with windows); the one
--- you're on shows its moon phase in gold instead of its number (1 waxing
--- crescent, 2 first quarter, 3 waxing gibbous, 4 full, 5 waning gibbous,
--- 6 last quarter, 7 waning crescent, 8 new, then round again). A small gold
--- dot marks a workspace with a window asking for attention.
+-- Workspaces: two-digit numbers (faint when empty). The one you're on has the
+-- active treatment (amber tint and underline) and shows its moon phase after
+-- its number (1 waxing crescent, 2 first quarter, 3 waxing gibbous, 4 full,
+-- 5 waning gibbous, 6 last quarter, 7 waning crescent, 8 new, then round
+-- again). A small gold dot marks a workspace with a window asking for attention.
 -- State comes from `@DISTRO_ID@ workspaces state`; the workspace-watch service
 -- sends `refresh` whenever Hyprland reports a change.
 local common = require("./common.luau")
+local seg = require("./seg.luau")
 
 -- Moon phases from the Nerd Font's weather icons (drawn lit part only).
 local PHASES = { "\u{e391}", "\u{e394}", "\u{e397}", "\u{e39b}", "\u{e39e}", "\u{e3a2}", "\u{e3a6}", "\u{e38d}" }
@@ -34,30 +35,33 @@ local function tooltip()
 end
 
 local function cell(it)
-  local children
-  if it.id == active then
-    children = { ui.label({ text = phase(it.id), fontFamily = MOON_FONT, fontSize = 15, color = "primary" }) }
-  else
-    local occupied = it.windows > 0
-    children = { ui.label({ text = tostring(it.id), fontSize = 13, fontWeight = occupied and "bold" or nil,
-      color = occupied and "on_surface" or "on_surface_variant" }) }
-    if it.urgent then
-      -- The attention dot, top-right of the number like an app badge.
-      table.insert(children, ui.column({ gap = 0 }, {
-        ui.box({ width = 5, height = 5, radius = 3, fill = "primary" }),
-        ui.box({ width = 5, height = 7, opacity = 0 }),
-      }))
-    end
+  local isActive = it.id == active
+  local occupied = it.windows > 0
+  local children = { ui.label({ text = string.format("%02d", it.id), fontSize = seg.TEXT,
+    fontWeight = isActive and "semibold" or nil,
+    color = isActive and seg.amberLight() or (occupied and seg.MUTED or seg.FAINT) }) }
+  if isActive then
+    table.insert(children, ui.label({ text = phase(it.id), fontFamily = MOON_FONT, fontSize = 13, color = "primary" }))
+  elseif it.urgent then
+    -- The attention dot, top-right of the number like an app badge.
+    table.insert(children, ui.column({ gap = 0 }, {
+      ui.box({ width = 5, height = 5, radius = 3, fill = "primary" }),
+      ui.box({ width = 5, height = 7, opacity = 0 }),
+    }))
   end
-  return ui.row({ key = "ws-" .. tostring(it.id), align = "center", justify = "center", gap = 1, minWidth = 16,
-    paddingH = 3, onClick = function() common.run({ "workspaces", "go", tostring(it.id) }, nil) end }, children)
+  return seg.segment({ key = "ws-" .. tostring(it.id), active = isActive, gap = 5,
+    onClick = function() common.run({ "workspaces", "go", tostring(it.id) }, nil) end }, children)
 end
 
 local function render()
   local cells = {}
   for _, it in ipairs(items) do table.insert(cells, cell(it)) end
-  local container = barWidget.isVertical() and ui.column or ui.row
-  barWidget.render(container({ gap = 4, align = "center" }, cells))
+  if barWidget.isVertical() then
+    barWidget.render(ui.column({ gap = 4, align = "center" }, cells))
+  else
+    table.insert(cells, seg.divider())
+    barWidget.render(ui.row({ gap = 0, align = "center" }, cells))
+  end
   barWidget.setTooltip(tooltip())
 end
 

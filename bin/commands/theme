@@ -21,8 +21,9 @@ Usage: $DISTRO_ID theme <command>
   wallpaper set <n>          use wallpaper number n
   greeter                    use the current theme on the login screen too
                              (done on every change; the last one chosen wins)
-  shape [terminal|rounded]   window corners (later also the bar and menus):
-                             terminal (small, the default) or rounded
+  shape [terminal|rounded]   window corners and the bar (later also menus):
+                             terminal (small corners, the bar edge to edge;
+                             the default) or rounded (a floating pill bar)
   blur [on|off]              blur behind translucent windows and the shell
   token <path>               print one of the current theme's design tokens,
                              e.g. color.accent.amber or geometry.current.paneRadius
@@ -129,10 +130,17 @@ write_look() {
     && mv "$tmp" "$STYLE" || { rm -f "$tmp"; return 1; }
 }
 
-# Hyprland and running Ghostty windows pick the new look up.
+# Hyprland and running Ghostty windows pick the new look up; the bar gets its
+# geometry and hairline again (Noctalia reloads its config when it changes),
+# and the segments that mix their colours here redraw.
 reload_look() {
+  local w
   if [[ -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then hyprctl reload >/dev/null 2>&1 || true; fi
   pkill -USR2 -x -u "$(id -u)" ghostty 2>/dev/null || true
+  bar_apply >/dev/null
+  for w in clock workspaces menu-button; do
+    noctalia msg plugin "$DISTRO_ID/utilities:$w" all refresh >/dev/null 2>&1 || true
+  done
 }
 
 apply_mode() { # apply_mode <dark|light>

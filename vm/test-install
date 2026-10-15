@@ -58,6 +58,7 @@ wait_ssh root 300
 log "live ISO reachable"
 
 id=$(. "$repo/distro.conf"; echo "$DISTRO_ID")
+repo_name=$(. "$repo/distro.conf"; echo "$DISTRO_REPO")
 repo_url=$(. "$repo/distro.conf"; . "$repo/repo.conf"; echo "$REPO_URL")
 if [[ -z $iso ]]; then
   tarball=$(mktemp); trap 'rm -f "$tarball"' EXIT
@@ -430,6 +431,13 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     if "$here/ssh" "$vm" "$user" -- "test -x /usr/lib/$id/commands/menu"; then
       check "bar has the utility group"   "$hypr noctalia config export | grep -qE 'center *=.*toggles.*stay-awake.*night-light.*silence.*reminders.*recorder.*dictate.*clock'"
       check "utilities plugin enabled"    "$hypr noctalia msg plugins list 2>&1 | grep -E '$id/utilities' | grep -qiE 'enabled'"
+      check "shell is the distro's Noctalia build" "pacman -Q noctalia | grep -q ' 1:' && pacman -Qi noctalia | grep -q 'Packager *: $name Project' && test -f /usr/share/libalpm/hooks/$id-noctalia-restart.hook"
+      check "bar: top highlight and sheen on"  "$hypr noctalia config export | grep -qx 'top_highlight = true' && noctalia config export | grep -qx 'surface_sheen = true'"
+      check "bar: terminal shape, 30px edge to edge" "$hypr noctalia config export | sed -n '/^\\[bar.default\\]/,/^\\[/p' > /tmp/bar; grep -qx 'thickness = 30' /tmp/bar && grep -qx 'radius = 0' /tmp/bar && grep -qx 'margin_edge = 0' /tmp/bar && hyprctl monitors -j | jq -e '.[0].reserved[1] == 30' >/dev/null"
+      check "bar: rounded shape, a 34px pill 8px in" "$hypr $id theme shape rounded >/dev/null; sleep 2; noctalia config export | sed -n '/^\\[bar.default\\]/,/^\\[/p' > /tmp/bar; $id theme shape terminal >/dev/null; grep -qx 'thickness = 34' /tmp/bar && grep -qx 'radius = 17' /tmp/bar && grep -qx 'margin_edge = 8' /tmp/bar && grep -qx 'margin_ends = 8' /tmp/bar"
+      check "bar: moon and weather off by default, bell and power on" "$hypr x=\$(noctalia config export | tr -d '\\n'); c=\$(grep -oE 'center = \\[[^]]*\\]' <<<\"\$x\" | head -1); e=\$(grep -oE 'end = \\[[^]]*\\]' <<<\"\$x\" | head -1); echo \"\$c \$e\"; grep -q clock <<<\"\$c\" && ! grep -qE 'moon|weather' <<<\"\$c\" && grep -q notifications <<<\"\$e\" && grep -q session <<<\"\$e\""
+      check "bar: moon setting adds and removes it" "$hypr $id bar moon on >/dev/null && sleep 1 && noctalia config export | tr -d '\\n' | grep -oE 'center = \\[[^]]*\\]' | grep -q moon && $id bar moon off >/dev/null && sleep 1 && ! noctalia config export | tr -d '\\n' | grep -oE 'center = \\[[^]]*\\]' | grep -q moon"
+      check "bar: stats mode setting" "[ \"\$($id bar stats)\" = icons ] && $id bar stats inline >/dev/null && [ \"\$($id bar stats)\" = inline ] && $id bar stats icons >/dev/null"
       # The bar's toggles (decision record 0042): the anchor, plus only the
       # toggles that are on (gold); hovering the anchor shows them all. Read
       # from screenshots of the bar's centre (the moonlit theme's gold).
@@ -441,32 +449,106 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
         "$here/ssh" "$vm" "$user" -- "$hypr grim -" > "$last_shot" 2>/dev/null || true
         log "screenshot: $last_shot"
       }
-      bar_centre() { # bar_centre <png> → "<content width> <left edge x> <gold pixels>" of the bar's centre
-        local box gold
-        box=$(magick "$1" -crop 520x26+380+4 +repage -colorspace gray -threshold 35% -format '%@' info:)
-        gold=$(magick "$1" -crop 520x26+380+4 +repage -fuzz 12% -fill black +opaque '#ebc77a' -fill white -opaque '#ebc77a' -colorspace gray -format '%[fx:round(mean*w*h)]' info:)
-        if [[ $box =~ ^([0-9]+)x[0-9]+\+([0-9]+) ]]; then echo "${BASH_REMATCH[1]} $((380 + BASH_REMATCH[2])) $gold"; fi
+      # The clock's two hairlines (decision record 0043): the columns that
+      # stand out from both neighbours along the bar's rows above and below
+      # any text, nearest the middle of the screen. → "<left x> <right x> <screen width>"
+      clock_lines() { # clock_lines <png> [bar's top y] → "<left x> <right x> <screen width> <toggles' hairline x>"
+        magick "$1" -crop "x30+0+${2:-0}" +repage -colorspace gray -depth 8 txt:- | awk -F'[,:() ]+' -v W="$(magick identify -format %w "$1")" '
+          NR > 1 && (($2 >= 3 && $2 <= 6) || ($2 >= 23 && $2 <= 26)) { g[$1] += $3 }
+          function line(x) { return g[x] - (g[x-1] + g[x+1]) / 2 > 60 }
+          END {
+            mid = int(W / 2); l = -1; r = -1; t = -1
+            for (x = mid - 1; x > mid - 300 && l < 0; x--) if (line(x)) l = x
+            for (x = mid; x < mid + 300 && r < 0; x++) if (line(x)) r = x
+            for (x = l - 2; x > l - 400 && x > 1 && t < 0; x--) if (line(x)) t = x
+            print l, r, W, t }'
+      }
+      # → "<width> <left edge x> <gold pixels>" of the toggles: from their own
+      # hairline to the clock's.
+      bar_centre() { # bar_centre <png>
+        local l t w gold
+        read -r l _ _ t < <(clock_lines "$1")
+        (( t > 0 && l > t )) || return 0
+        w=$((l - t))
+        gold=$(magick "$1" -crop "${w}x26+$t+4" +repage -fuzz 12% -fill black +opaque '#ebc77a' -fill white -opaque '#ebc77a' -colorspace gray -format '%[fx:round(mean*w*h)]' info:)
+        echo "$w $t $gold"
+      }
+      # The clock is at the exact middle: |its centre - screen width / 2| <= 1px.
+      clock_centred() { # clock_centred <png> <label> [bar's top y]
+        local l r w
+        read -r l r w _ < <(clock_lines "$1" "${3:-0}")
+        report "$(( l > 0 && r > l && (l + r + 1 - w) <= 2 && (w - l - r - 1) <= 2 ? 0 : 1 ))" \
+          "clock centred, $2 (hairlines at $l and $r: centre $(( (l + r + 1) / 2 )).$(( (l + r + 1) % 2 * 5 )), screen middle $((w / 2)))"
       }
       point() { "$here/ssh" "$vm" "$user" -- "$hypr hyprctl dispatch 'hl.dsp.cursor.move({ x = $1, y = $2 })' >/dev/null" || true; }
       if command -v magick >/dev/null; then
+        # An open panel takes the pointer from the bar; close what earlier steps opened.
+        "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg panel-close >/dev/null 2>&1" || true
         point 640 500; sleep 1; bar_shot bar-rest; read -r rest_w anchor_x rest_gold < <(bar_centre "$last_shot")
-        report "$(( rest_gold < 20 && rest_w < 140 ? 0 : 1 ))" "toggles: only the anchor and the clock at rest (width $rest_w, gold $rest_gold)"
+        report "$(( rest_gold < 20 && rest_w < 140 ? 0 : 1 ))" "toggles: only the anchor at rest (width $rest_w, gold $rest_gold)"
         # Hover the anchor (the leftmost icon). Hyprland's cursor warps only
         # reach the bar as it enters, so warp straight onto it from below.
-        point "$((anchor_x + 7))" 16; sleep 0.5
+        point "$((anchor_x + 18))" 16; sleep 0.5
         bar_shot bar-hovered; read -r w _ _ < <(bar_centre "$last_shot")
         report "$(( w > rest_w + 120 ? 0 : 1 ))" "toggles: hovering the anchor shows them all (width $rest_w → $w)"
         point 640 500; sleep 1.5; bar_shot bar-left; read -r w _ _ < <(bar_centre "$last_shot")
         report "$(( w <= rest_w + 4 ? 0 : 1 ))" "toggles: moving away hides them again (width $w)"
         "$here/ssh" "$vm" "$user" -- "$hypr $id awake on >/dev/null; sleep 2" || true
         bar_shot bar-stay-awake; read -r w _ gold < <(bar_centre "$last_shot")
-        report "$(( w > rest_w + 10 && gold >= 20 ? 0 : 1 ))" "toggles: stay awake on shows the gold cup (width $w, gold $gold)"
+        report "$(( w > rest_w + 10 && gold >= 20 ? 0 : 1 ))" "toggles: stay awake on shows the amber eye (width $w, gold $gold)"
         "$here/ssh" "$vm" "$user" -- "$hypr $id awake off >/dev/null; noctalia msg notification-dnd-set on >/dev/null; sleep 6" || true
         bar_shot bar-silence; read -r w _ gold < <(bar_centre "$last_shot")
         report "$(( w > rest_w + 10 && gold >= 20 ? 0 : 1 ))" "toggles: silence on shows the gold bell (width $w, gold $gold)"
         "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg notification-dnd-set off >/dev/null; sleep 6" || true
         bar_shot bar-off; read -r w _ gold < <(bar_centre "$last_shot")
         report "$(( w <= rest_w + 4 && gold < 20 ? 0 : 1 ))" "toggles: both off, only the anchor again (width $w, gold $gold)"
+        # The bar (Frosted Terminal, decision record 0043).
+        ocr() { # ocr <png> <crop geometry> [tesseract page mode] → text
+          magick "$1" -crop "$2" +repage -colorspace gray -resize 400% -negate -level 20%,80% png:- | tesseract - - --psm "${3:-6}" 2>/dev/null || true
+        }
+        clock_centred "$last_shot" "indicators off"
+        "$here/ssh" "$vm" "$user" -- "$hypr $id awake on >/dev/null; $id capture record screen >/dev/null; sleep 4" || true
+        bar_shot bar-indicators
+        clock_centred "$last_shot" "recording and stay awake on"
+        coral=$(magick "$last_shot" -crop 640x26+0+4 +repage -fuzz 10% -fill black +opaque '#f0a39a' -fill white -opaque '#f0a39a' -colorspace gray -format '%[fx:round(mean*w*h)]' info:)
+        text=$(ocr "$last_shot" 640x30+0+0)
+        report "$(( coral >= 20 ? 0 : 1 ))" "indicators: REC in coral beside the clock (coral $coral; read: $(grep -o 'REC[^|]*' <<<"$text" | head -1))"
+        "$here/ssh" "$vm" "$user" -- "$hypr $id capture stop >/dev/null; $id awake off >/dev/null; sleep 3" || true
+        # The top highlight: row 1 (inside the hairline) is the amber line, row 4 the plain fill.
+        hl=$(magick "$last_shot" -format '%[fx:round(255*((p{900,1}.r-p{900,1}.b)-(p{900,4}.r-p{900,4}.b)))]' info:)
+        report "$(( hl >= 15 ? 0 : 1 ))" "top highlight: an amber line along the bar's top inner edge (red over blue +$hl)"
+        # Power at the far right.
+        power=$(magick "$last_shot" -crop 40x22+$(( $(magick identify -format %w "$last_shot") - 40 ))+4 +repage -colorspace gray -threshold 35% -format '%[fx:round(mean*w*h)]' info:)
+        report "$(( power >= 10 ? 0 : 1 ))" "power button at the far right (ink $power)"
+        # Rounded: a floating pill, 8px in from the edges.
+        "$here/ssh" "$vm" "$user" -- "$hypr $id theme shape rounded >/dev/null; sleep 3" || true
+        bar_shot bar-rounded
+        clock_centred "$last_shot" "rounded shape" 8
+        "$here/ssh" "$vm" "$user" -- "$hypr $id theme shape terminal >/dev/null; sleep 3" || true
+        # Stats: inline, then the popover (click), then on hover.
+        "$here/ssh" "$vm" "$user" -- "$hypr $id bar stats inline >/dev/null; sleep 4" || true
+        bar_shot bar-stats-inline; text=$(ocr "$last_shot" 640x30+640+0 7)
+        report "$(grep -q CPU <<<"$text" && grep -q MEM <<<"$text" && grep -q NET <<<"$text"; echo $?)" "stats inline: CPU, MEM and NET in the bar (read: $(tr '\n' ' ' <<<"$text" | head -c 80))"
+        "$here/ssh" "$vm" "$user" -- "$hypr $id bar stats icons >/dev/null; sleep 3; noctalia msg panel-toggle $id/utilities:stats-panel >/dev/null; sleep 2" || true
+        bar_shot bar-stats-popover; text=$(ocr "$last_shot" 1280x300+0+30)
+        report "$(grep -q SYSTEM <<<"$text" && grep -qi CPU <<<"$text"; echo $?)" "stats popover: opens with its header and CPU (read: $(tr '\n' ' ' <<<"$text" | head -c 80))"
+        "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg panel-close >/dev/null; $id bar stats hover >/dev/null; sleep 3" || true
+        # The icon, found by its amber underline while the popover was open.
+        box=$(magick "$last_shot" -crop 640x1+640+27 +repage -fuzz 15% -fill black +opaque '#ebc77a' -fill white -opaque '#ebc77a' -format '%@' info:)
+        if [[ $box =~ ^([0-9]+)x[0-9]+\+([0-9]+) ]]; then pulse_x=$((640 + BASH_REMATCH[2] + BASH_REMATCH[1] / 2)); else pulse_x=0; fi
+        point "$pulse_x" 15; sleep 2; bar_shot bar-stats-hover; text=$(ocr "$last_shot" 1280x300+0+30)
+        report "$(grep -q SYSTEM <<<"$text"; echo $?)" "stats on hover: pointing at the icon opens the popover (x $pulse_x)"
+        point 640 500; sleep 2; bar_shot bar-stats-hover-left; text=$(ocr "$last_shot" 1280x300+0+30)
+        report "$(! grep -q SYSTEM <<<"$text"; echo $?)" "stats on hover: moving away closes it"
+        "$here/ssh" "$vm" "$user" -- "$hypr $id bar stats icons >/dev/null" || true
+        # The moon: off by default, right of the clock when on.
+        "$here/ssh" "$vm" "$user" -- "$hypr $id bar moon on >/dev/null; sleep 3" || true
+        bar_shot bar-moon; read -r _ r _ _ < <(clock_lines "$last_shot")
+        text=$(ocr "$last_shot" "160x30+$((r + 1))+0" 7)
+        report "$(grep -qE '[0-9]+ ?%' <<<"$text"; echo $?)" "moon: its segment shows right of the clock (read: $(tr '\n' ' ' <<<"$text"))"
+        "$here/ssh" "$vm" "$user" -- "$hypr $id bar moon off >/dev/null; $id theme blur off >/dev/null; sleep 3" || true
+        bar_shot bar-blur-off
+        "$here/ssh" "$vm" "$user" -- "$hypr $id theme blur on >/dev/null" || true
       else
         log "no magick here: skipping the bar's screenshot checks"
       fi
@@ -479,7 +561,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg panel-close >/dev/null" || true
       # Workspaces (decision record 0037): numbers, the active one as its moon
       # phase, a gold dot for a window asking for attention.
-      check "workspaces widget in the bar"  "$hypr noctalia config export | grep -qE '^start *= *\\[ *\"menu\", *\"workspaces\" *\\]' && noctalia config export | grep -qE 'type *= *\"$id/utilities:workspaces\"'"
+      check "workspaces widget in the bar"  "$hypr noctalia config export | grep -qE '^start *= *\\[ *\"menu\", *\"workspaces\",' && noctalia config export | grep -qE 'type *= *\"$id/utilities:workspaces\"'"
       check "workspace watcher running"     "systemctl --user is-active --quiet $id-workspace-watch"
       check "workspaces follow Hyprland"    "$hypr $id workspaces go 3 && sleep 1 && $id workspaces state | jq -e '.active == 3 and (.items | length) >= 5' >/dev/null"
       check "attention: dot, then SUPER+U"  "$(sed "s/@ID@/$id/g" "$here/checks/attention.sh")"
@@ -632,7 +714,12 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       # Fail closed: without the screensaver lock, Noctalia's lock takes over.
       "$here/ssh" "$vm" "$user" -- "echo '$password' | sudo -S -p '' mv /usr/bin/swaylock-plugin /usr/bin/swaylock-plugin.off" || true
       check "falls back to Noctalia's lock" "$hypr $id lock; sleep 3; noctalia msg status | jq -e '.. | objects | select(has(\"locked\")) | .locked == true' >/dev/null"
+      # A new Noctalia build arriving now must not restart the shell under its
+      # own lock screen (decision record 0043): the restart waits for the unlock.
+      shell_pid=$("$here/ssh" "$vm" "$user" -- 'systemctl --user show -P MainPID noctalia' 2>/dev/null || true)
+      check "shell restart waits while Noctalia's lock is up" "$hypr echo '$password' | sudo -S -p '' /usr/lib/$id/shell-reload --noctalia; sleep 4; [ \"\$(systemctl --user show -P MainPID noctalia)\" = '$shell_pid' ] && noctalia msg status | jq -e '.locked == true' >/dev/null && systemctl --user is-active --quiet $id-shell-restart"
       vm_type "$password"; virsh send-key "$vm" KEY_ENTER >/dev/null; sleep 4
+      check "shell restarts once unlocked" "$hypr for i in \$(seq 20); do p=\$(systemctl --user show -P MainPID noctalia); [ \"\$p\" != '$shell_pid' ] && [ \"\$p\" != 0 ] && noctalia msg status >/dev/null 2>&1 && ! noctalia msg status | jq -e '.locked == true' >/dev/null && exit 0; sleep 1; done; exit 1"
       "$here/ssh" "$vm" "$user" -- "echo '$password' | sudo -S -p '' mv /usr/bin/swaylock-plugin.off /usr/bin/swaylock-plugin" || true
     fi
     check "agent list knows claude"       "$id agent list | grep -qE '^\\* claude'"

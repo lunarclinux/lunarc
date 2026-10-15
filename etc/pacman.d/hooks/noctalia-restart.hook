@@ -1,0 +1,12 @@
+# The distro's build of Noctalia changed: restart the shell for everyone logged
+# in, so the new build runs without logging out. Apps opened from the shell run
+# as their own units and stay open.
+[Trigger]
+Operation = Upgrade
+Type = Package
+Target = noctalia
+
+[Action]
+Description = Restarting the desktop shell...
+When = PostTransaction
+Exec = /usr/lib/@DISTRO_ID@/shell-reload --noctalia

@@ -13,7 +13,7 @@
 # The build machine may lack the libraries it builds against (pkg/build skips
 # makedepends). Then the exact Arch packages below are unpacked into a private
 # folder for the build only, checksum-pinned; installed systems get the same
-# libraries through depends. meson and ninja: from Arch, else PyPI via uv.
+# libraries through depends.
 pkgname=noctalia-greeter
 pkgver=1.6.0
 pkgrel=2
@@ -50,10 +50,15 @@ if ! pkg-config --exists wlroots-0.20 nlohmann_json 2>/dev/null || [[ ! -f /usr/
   noextract=("${_buildlibs[@]/%/.pkg.tar.zst}")
 fi
 
+# meson and ninja come from Arch (makedepends). pkg/build skips the makedepends
+# check, so say clearly when they're missing; never fetch build tools from
+# elsewhere (decision record 0043).
 _meson() {
-  if command -v meson >/dev/null && command -v ninja >/dev/null; then meson "$@"
-  else uvx --quiet --from meson --with ninja meson "$@"
+  if ! command -v meson >/dev/null || ! command -v ninja >/dev/null; then
+    echo "building $pkgname needs meson and ninja: sudo pacman -S --needed meson ninja" >&2
+    return 1
   fi
+  meson "$@"
 }
 
 prepare() {

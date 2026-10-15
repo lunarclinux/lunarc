@@ -1,5 +1,5 @@
 --!nonstrict
--- Stay awake: keeps the screen on and the computer awake. A gold cup while
+-- Stay awake: keeps the screen on and the computer awake. An amber eye while
 -- on. `@DISTRO_ID@ awake` holds the state (for this login session) and tells
 -- the shell; this widget shows it and calls it.
 local common = require("./common.luau")
@@ -7,7 +7,7 @@ local toggle = require("./toggle.luau").new(barWidget, "stay-awake")
 local on = false
 
 local function render()
-  toggle.show({ ui.glyph({ name = on and "mug-filled" or "mug", color = on and "primary" or nil }) }, on)
+  toggle.show({ ui.glyph({ name = on and "eye" or "eye-off", size = 15, color = on and "primary" or nil }) }, on)
   barWidget.setTooltip(on and "Staying awake" or "Stay awake")
 end
 

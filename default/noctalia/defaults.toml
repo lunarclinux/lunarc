@@ -6,6 +6,12 @@ font_family = "Inter"
 polkit_agent = true          # Noctalia's own password prompt, themed like the rest
 telemetry_enabled = false     # no usage ping to noctalia.dev
 setup_wizard_enabled = false  # the distro applies its own theme and settings at first login
+# Frosted Terminal (decision record 0043): a 1px amber line along the top
+# inner edge of the bar, panels, launcher, OSD and toasts, and a faint sheen
+# over them. Options of the distro's Noctalia build (pkg/noctalia); colours
+# default to the theme's primary (32%) and text colour (7% to 2%).
+top_highlight = true
+surface_sheen = true
 # Each app opened from the launcher runs as its own systemd unit, not inside
 # the shell's, so restarting or updating the shell doesn't close the apps it
 # opened.
@@ -60,24 +66,55 @@ kind = "path"
 location = "/usr/share/@DISTRO_ID@/noctalia-plugins"
 enabled = true
 
-# The bar: workspaces on the left; in the centre the clock and weather with the
-# toggles just before them; status icons on the right, each opening its own
-# panel. The crescent on the far left opens the system menu (right-click: apps).
+# The bar (Frosted Terminal, decision record 0043): flat segments between
+# hairlines, Geist Mono. Left: the menu button, workspaces, the window title and
+# what's playing. Centre: the clock, pinned to the exact middle (anchor), with
+# the toggles that are on flush against its left (decision record 0042) and
+# the opt-in moon and weather to its right. Right: stats, notifications,
+# network, volume, battery, power. Its height, corners and inset follow
+# `@DISTRO_ID@ theme shape`, and the lists follow the bar settings; both are
+# written by `@DISTRO_ID@` into your config.toml (bar_apply). Values here are
+# the terminal shape's.
+[bar.default]
+thickness = 30
+margin_edge = 0
+margin_ends = 0
+radius = 0
+concave_edge_corners = false
+border = "#e6e2d621"          # border.hairline (Moonlit); bar_apply writes the theme's
+border_width = 1
+background_opacity = 0.52
+padding = 0
+widget_spacing = 0
+font_family = "Geist Mono"
+font_weight = 500
+font_scale = 0.857            # 12px labels
+color = "on_surface_variant"
+# Built-in widgets sit in invisible capsules, which give them their padding;
+# the distro's own segments draw their own.
+capsule = true
+capsule_fill = "#00000000"
+capsule_padding = 8
+capsule_thickness = 1.0
+capsule_radius = 0
+start  = ["menu", "workspaces", "window", "media"]
+center = ["toggles", "stay-awake", "night-light", "gravity", "silence", "reminders", "recorder", "dictate", "clock"]  # + "moon", "weather" when turned on (bar_apply)
+end    = ["tray", "ai-usage", "crashes", "stats", "notifications", "keyboard_layout", "network", "volume", "battery", "power-divider", "session"]
+
 [widget.menu]
-type = "custom_button"
-custom_image = "/usr/share/icons/hicolor/symbolic/apps/@DISTRO_ID@-logo-symbolic.svg"
-custom_image_colorize = true
-tooltip = "Menu (SUPER+Space)"
+type = "@DISTRO_ID@/utilities:menu-button"
+capsule = false
 
 [widget.menu.actions]
 left = "exec @DISTRO_ID@ menu"
 right = "panel-toggle launcher"
 
-# Workspaces: numbers, the one you're on drawn as its moon phase, a gold dot
-# where a window asks for attention (decision record 0037). Noctalia's own
-# pills stay available: `@DISTRO_ID@ workspaces style noctalia`.
+# Workspaces: two-digit numbers, the one you're on tinted, with its moon phase
+# (decision record 0037). Noctalia's own pills stay available:
+# `@DISTRO_ID@ workspaces style noctalia`.
 [widget.workspaces]
 type = "@DISTRO_ID@/utilities:workspaces"
+capsule = false
 
 [widget.workspaces-noctalia]
 type = "workspaces"
@@ -85,49 +122,90 @@ style = "regular"
 show_labels = true
 labels_only_when_occupied = false
 
+[widget.window]
+type = "active_window"
+display = "text_only"
+max_length = 420
+min_length = 0
+color = "on_surface"
+capsule_padding = 12
+
+[widget.media]
+type = "@DISTRO_ID@/utilities:media"
+capsule = false
+
+[widget.media.actions]
+left = "panel-toggle control-center media"
+right = "media toggle"
+
 # The toggles (decision record 0042): an anchor icon, then only the toggles
-# that are on, in gold. Hovering the anchor shows them all. Stay awake and night
-# light are the plugin's own widgets, so they can hide when off.
+# that are on, in amber (recording in coral). Hovering the anchor shows them
+# all. Stay awake and night light are the plugin's own widgets, so they can
+# hide when off.
 [widget.toggles]
 type = "@DISTRO_ID@/utilities:toggles"
+capsule = false
 
 [widget.stay-awake]
 type = "@DISTRO_ID@/utilities:stay-awake"
+capsule = false
 
 [widget.night-light]
 type = "@DISTRO_ID@/utilities:nightlight"
+capsule = false
 
 [widget.gravity]
 type = "@DISTRO_ID@/utilities:gravity"
+capsule = false
 
 [widget.silence]
 type = "@DISTRO_ID@/utilities:silence"
+capsule = false
 
 [widget.reminders]
 type = "@DISTRO_ID@/utilities:reminders"
+capsule = false
 
 [widget.recorder]
 type = "@DISTRO_ID@/utilities:recorder"
+capsule = false
 
 [widget.dictate]
 type = "@DISTRO_ID@/utilities:dictate"
+capsule = false
 
 [widget.clock]
-format = "{:%a %H:%M}"
-tooltip_format = "{:%A, %B %d, %Y}"
+type = "@DISTRO_ID@/utilities:clock"
+anchor = true
+capsule = false
+
+[widget.clock.actions]
+left = "panel-toggle control-center calendar"
+
+[widget.moon]
+type = "@DISTRO_ID@/utilities:moon"
+capsule = false
 
 [widget.weather]
 show_condition = false
+capsule_padding = 12
 
-[widget.media]
-hide_when_no_media = true
-max_length = 180
+# After the weather when the moon is off (the moon draws its own).
+[widget.weather-divider]
+type = "@DISTRO_ID@/utilities:divider"
+capsule = false
+interactive = false
+
+[widget.stats]
+type = "@DISTRO_ID@/utilities:stats"
+capsule = false
 
 [widget.tray]
 drawer = true
 
+# The bell: an amber dot when something is unread.
 [widget.notifications]
-hide_when_no_unread = true
+hide_when_no_unread = false
 
 [widget.network]
 show_label = false
@@ -146,6 +224,14 @@ hide_when_single_layout = true
 show_label = false
 hide_when_full = false
 
+[widget.power-divider]
+type = "@DISTRO_ID@/utilities:divider"
+capsule = false
+interactive = false
+
+[widget.session]
+capsule_padding = 12
+
 # Low-battery warning at 20%; `@DISTRO_ID@ power` adds persistent alerts at 10%
 # and 5% (settings power.battery_critical and power.battery_final).
 [battery]
@@ -157,11 +243,6 @@ type = "@DISTRO_ID@/crashes:indicator"
 
 [widget.ai-usage]
 type = "@DISTRO_ID@/agents:usage"
-
-[bar.default]
-start  = ["menu", "workspaces"]
-center = ["toggles", "stay-awake", "night-light", "gravity", "silence", "reminders", "recorder", "dictate", "clock"]  # + "weather" when turned on (bar_apply)
-end    = ["media", "tray", "ai-usage", "crashes", "notifications", "keyboard_layout", "network", "bluetooth", "volume", "brightness", "battery", "session"]
 
 # Quick settings (SUPER+S): Noctalia's default tiles, with the plugin's stay
 # awake and night light in place of the built-in ones so they match the bar.

@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# summary: Choose what the bar shows: system stats, the moon, the weather
+set -euo pipefail
+source "$DISTRO_LIB/lib.sh"
+
+usage() {
+  cat <<USAGE
+Usage: $DISTRO_ID bar <command>
+
+  stats [icons|hover|inline]   system stats: a pulse icon that opens them when
+                               clicked (icons, the default) or hovered (hover),
+                               or CPU, memory, network and battery shown in the
+                               bar (inline)
+  moon [on|off|toggle]         tonight's moon phase, right of the clock (off by
+                               default; worked out locally, nothing is fetched)
+  weather [on|off]             the weather, right of the clock: the same as
+                               '$DISTRO_ID privacy weather' (it looks up your city online)
+
+The bar's shape follows '$DISTRO_ID theme shape'.
+USAGE
+}
+
+refresh() { noctalia msg plugin "$DISTRO_ID/utilities:$1" all refresh >/dev/null 2>&1 || true; }
+
+case ${1:-} in
+  stats)
+    if [[ -z ${2:-} ]]; then
+      v=$(setting bar.stats icons); [[ $v == hover || $v == inline ]] || v=icons; echo "$v"; exit 0
+    fi
+    [[ $2 == icons || $2 == hover || $2 == inline ]] || die "stats is icons, hover or inline"
+    set_setting bar.stats "$2"
+    refresh stats
+    info "stats: $2" ;;
+  moon)
+    if [[ -z ${2:-} ]]; then setting bar.moon off; exit 0; fi
+    want=$2
+    if [[ $want == toggle ]]; then want=on; [[ $(setting bar.moon off) == on ]] && want=off; fi
+    [[ $want == on || $want == off ]] || die "moon is on, off or toggle"
+    set_setting bar.moon "$want"
+    bar_apply
+    info "moon: $want" ;;
+  weather)
+    if [[ -z ${2:-} ]]; then setting privacy.weather off; exit 0; fi
+    exec "/usr/bin/$DISTRO_ID" privacy weather "$2" ;;
+  -h|--help|"") usage ;;
+  *) die "unknown bar command: $1" ;;
+esac

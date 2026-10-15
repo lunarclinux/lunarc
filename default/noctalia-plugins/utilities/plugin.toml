@@ -1,18 +1,48 @@
 id = "@DISTRO_ID@/utilities"
 name = "Utilities"
 version = "0.1.0"
-plugin_api = 28
+plugin_api = 32
 author = "@DISTRO_ID@"
 license = "GPL-3.0-or-later"
 icon = "tool"
-description = "The bar's workspaces and toggles (stay awake, night light, Low Gravity, silence, reminders, recording, dictation), and the system menu in the launcher."
+description = "The bar's segments (menu button, workspaces, media, clock, moon, stats) and toggles (stay awake, night light, Low Gravity, silence, reminders, recording, dictation), and the system menu in the launcher."
 tags = ["system"]
 
-# Workspaces: numbers, the active one as its moon phase, a gold dot for
-# attention (`@DISTRO_ID@ workspaces --help`).
+# The bar's own segments (Frosted Terminal, decision record 0043), drawn
+# flat, full height, between hairlines (seg.luau).
+[[widget]]
+id = "menu-button"
+entry = "menu-button.luau"
+
+# Workspaces: two-digit numbers, the active one tinted with its moon phase, a
+# gold dot for attention (`@DISTRO_ID@ workspaces --help`).
 [[widget]]
 id = "workspaces"
 entry = "workspaces.luau"
+
+[[widget]]
+id = "media"
+entry = "media.luau"
+
+# The centre lane's anchor: always at the exact middle of the bar.
+[[widget]]
+id = "clock"
+entry = "clock.luau"
+
+# Opt-in (`@DISTRO_ID@ bar moon on`).
+[[widget]]
+id = "moon"
+entry = "moon.luau"
+
+# CPU, memory, network, battery: an icon with a popover, or inline
+# (`@DISTRO_ID@ bar stats`).
+[[widget]]
+id = "stats"
+entry = "stats.luau"
+
+[[widget]]
+id = "divider"
+entry = "divider.luau"
 
 # The toggles (decision record 0042). "toggles" is their anchor: the others
 # show only while on, or while the anchor is hovered (toggle.luau).
@@ -59,6 +89,27 @@ entry = "stay-awake-shortcut.luau"
 [[shortcut]]
 id = "nightlight-shortcut"
 entry = "nightlight-shortcut.luau"
+
+# The stats popover: one that closes on an outside click (icons mode), one
+# that never takes the pointer or keyboard away, opened and closed by hovering
+# (hover mode).
+[[panel]]
+id = "stats-panel"
+entry = "stats-panel.luau"
+width = 300
+height = 172
+placement = "floating"
+open_near_click = true
+
+[[panel]]
+id = "stats-hover"
+entry = "stats-panel.luau"
+width = 300
+height = 172
+placement = "floating"
+open_near_click = true
+keyboard_focus = "none"
+dismiss_on_outside_click = false
 
 [[panel]]
 id = "reminders-panel"

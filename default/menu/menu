@@ -33,7 +33,7 @@ Capture | Copy text from the screen | Select an area; its text is copied | @DIST
 Capture | Read a QR code | Select the code; its contents are copied | @DISTRO_ID@ capture qr | qrcode
 
 Toggle | | Quick switches |
-Toggle | Stay awake | Keep the screen on and the computer awake | @DISTRO_ID@ awake toggle | mug
+Toggle | Stay awake | Keep the screen on and the computer awake | @DISTRO_ID@ awake toggle | eye
 Toggle | Night light | Warmer screen colours | @DISTRO_ID@ nightlight toggle | moon
 Toggle | Low Gravity | Float the windows on this workspace, or tile them again (SUPER+G) | @DISTRO_ID@ gravity toggle | feather
 Toggle | Silence notifications | Notifications still go to the history | noctalia msg notification-dnd-toggle | bell-off
@@ -42,13 +42,19 @@ Toggle | Dark mode | Use the theme's dark colours | @DISTRO_ID@ theme mode dark 
 Toggle | Light mode | Use the theme's light colours | @DISTRO_ID@ theme mode light | sun
 Toggle | Bar | Show or hide the bar | noctalia msg bar-toggle | layout-navbar
 
-Style | | Theme, wallpaper and screensaver |
+Style | | Theme, wallpaper, shape, bar and screensaver |
 Style | Theme | Colours for everything | menu: theme | palette
 Style | Wallpaper | Choose a wallpaper | noctalia msg panel-open wallpaper | photo
 Style | Next wallpaper | Switch to the next one | noctalia msg wallpaper-next | arrow-right
 Style | Screensaver | Preview the screensaver | @DISTRO_ID@ screensaver preview | device-tv
 Style | Workspaces: moon phases | Numbers, the active one as its moon | @DISTRO_ID@ workspaces style moon | moon
 Style | Workspaces: pills | Noctalia's own workspace pills | @DISTRO_ID@ workspaces style noctalia | circles
+Style | Shape: terminal | Small corners, the bar edge to edge | @DISTRO_ID@ theme shape terminal | square
+Style | Shape: rounded | Round corners, a floating bar | @DISTRO_ID@ theme shape rounded | square-rounded
+Style | Bar stats: icon | Click the pulse icon for CPU, memory, network | @DISTRO_ID@ bar stats icons | activity
+Style | Bar stats: on hover | The same, shown while pointing at it | @DISTRO_ID@ bar stats hover | activity
+Style | Bar stats: inline | CPU, memory, network and battery in the bar | @DISTRO_ID@ bar stats inline | activity
+Style | Moon in the bar | Tonight's moon phase, right of the clock | @DISTRO_ID@ bar moon toggle | moon
 
 Setup | | Network, devices and defaults |
 Setup | Backups | Where your files are backed up, and how often | @DISTRO_ID@ setup backups | device-floppy
