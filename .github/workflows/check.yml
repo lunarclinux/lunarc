@@ -23,7 +23,7 @@ jobs:
     container: archlinux:latest
     steps:
       - name: Install build tools
-        run: pacman -Syu --noconfirm --needed base-devel git meson ninja scdoc wayland-protocols wayland cairo pam libxkbcommon glib2 gdk-pixbuf2 rust wlroots0.20 nlohmann-json stb tomlplusplus libinput librsvg libwebp pango libglvnd glslang pixman libdrm libxcb xcb-util-errors hyprland
+        run: pacman -Syu --noconfirm --needed base-devel git meson ninja scdoc wayland-protocols wayland cairo pam libxkbcommon glib2 gdk-pixbuf2 rust wlroots0.20 nlohmann-json stb tomlplusplus libinput librsvg libwebp pango libglvnd glslang pixman libdrm libxcb xcb-util-errors hyprland noctalia
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0   # pkg/build versions packages from the layer tags
