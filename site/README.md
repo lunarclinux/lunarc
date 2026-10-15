@@ -21,4 +21,5 @@ Deploy a new version (needs an API token with Workers Scripts edit):
 Package repository (2026-10-10): `pkgs.lunarclinux.com` is a proxied AAAA
 `100::` record plus a Single Redirect rule (302) to
 `https://github.com/lunarclinux/lunarc-packages/releases/download/packages/<file>`.
-Publish with `pkg/build && tools/publish` on the machine holding the signing key.
+Publish with `pkg/build --chroot && tools/publish` on the machine holding the
+signing key (a clean-chroot build; decision record 0044).

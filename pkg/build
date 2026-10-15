@@ -1,25 +1,61 @@
 #!/usr/bin/env bash
 # Builds the distro packages from a git ref into a local pacman repository:
 #
-#   pkg/build [ref]        default ref: HEAD; output: pkg/out/repo/
+#   pkg/build [ref]                          on this machine (development, tests, CI)
+#   pkg/build --chroot [--fresh] [ref]       in a clean, current Arch chroot (for publishing)
+#   pkg/build --chroot --dry-run [ref]       print the root and signing steps instead
 #
-# The version comes from the last layer tag: l5-complete plus 3 commits -> 0.5.3.
+# default ref: HEAD; output: pkg/out/repo/. The version comes from the last
+# layer tag: l5-complete plus 3 commits -> 0.5.3.
 #
 # Packages and the repository database are signed when the signing key is on
 # this machine (SIGNING_GNUPGHOME, default ~/.local/share/<id>-signing/gnupg).
 # Without it (CI, other machines) everything is built unsigned.
+#
+# --chroot (decision record 0044): every package is built with makechrootpkg
+# in a fresh copy of a clean chroot kept in ~/.cache/<id>-chroot (CHROOT_DIR),
+# which is created with mkarchroot or brought up to date (pacman -Syu) first,
+# from Arch's mirror (CHROOT_MIRROR) rather than this machine's mirrorlist.
+# Build and make dependencies are installed into the copy, so nothing is built
+# against this machine's libraries. The results are signed here, like host
+# builds. Needs devtools and root (sudo asks once). --fresh deletes and
+# recreates the chroot first. tools/publish only accepts a chroot build.
+#
+# Host builds use makepkg --nodeps: this machine needn't have the desktop or
+# every build dependency installed (some PKGBUILDs then use pinned Arch
+# packages for their build libraries; see pkg/noctalia).
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
-ref=${1:-HEAD}
+chroot=0 dry=0 fresh=0 ref=HEAD
+while (( $# )); do
+  case $1 in
+    --chroot) chroot=1 ;;
+    --dry-run) dry=1 ;;
+    --fresh) fresh=1 ;;
+    -h|--help) sed -n '2,/^set -euo/{/^set -euo/d;s/^# \{0,1\}//;p}' "$0"; exit 0 ;;
+    -*) echo "pkg/build: unknown option $1" >&2; exit 2 ;;
+    *) ref=$1 ;;
+  esac
+  shift
+done
+if (( (dry || fresh) && ! chroot )); then
+  echo "pkg/build: --dry-run and --fresh go with --chroot" >&2; exit 2
+fi
+fail() { echo "pkg/build: $*" >&2; exit 1; }
 out=$root/pkg/out
-rm -rf "$out"; mkdir -p "$out/repo"
 # Packages record the folder they were built in (.BUILDINFO), and the repository
 # is published, so build in a fixed, neutral place rather than under $HOME.
 # mktemp: a private folder, never a predictable shared path.
 work=$(mktemp -d "${TMPDIR:-/tmp}/distro-pkgbuild.XXXXXX")
 mkdir -p "$work/src"
-trap 'rm -rf "$work"' EXIT
+keepalive=
+cleanup() {
+  if [[ -n $keepalive ]]; then kill "$keepalive" 2>/dev/null || true; fi
+  rm -rf "$work"
+}
+trap cleanup EXIT
 git -C "$root" archive "$ref" | tar -x -C "$work/src"
+commit=$(git -C "$root" rev-parse --verify "$ref^{commit}")
 source "$work/src/distro.conf"
 # Shown as the packager in `pacman -Qi`; no personal name or address.
 export PACKAGER="$DISTRO_NAME Project"
@@ -28,14 +64,33 @@ ver=$(git -C "$root" describe --tags --long --match 'l*-complete' "$ref" 2>/dev/
   | sed -E 's/^l([0-9]+)-complete-([0-9]+)-g[0-9a-f]+$/0.\1.\2/')
 [[ $ver =~ ^0\.[0-9]+\.[0-9]+$ ]] || ver=0.0.0
 
-# windowtolayer needs cargo. On a machine whose cargo is a mise shim without a
-# version chosen, pick the newest installed Rust.
-if ! cargo --version >/dev/null 2>&1 && command -v mise >/dev/null; then
+# A dry run prints the steps that need root or the signing key, and runs the rest.
+run() {
+  if (( dry )); then printf '+'; printf ' %q' "$@"; printf '\n'; else "$@"; fi
+}
+
+if (( chroot )); then
+  for tool in mkarchroot makechrootpkg arch-nspawn; do
+    command -v "$tool" >/dev/null || fail "--chroot needs devtools ($tool): sudo pacman -S --needed devtools"
+  done
+  devtools=/usr/share/devtools
+  chroot_dir=${CHROOT_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/$DISTRO_ID-chroot}
+  # shellcheck disable=SC2016  # $repo and $arch are pacman's own placeholders
+  mirror=${CHROOT_MIRROR:-'https://geo.mirror.pkgbuild.com/$repo/os/$arch'}
+  # Arch's own build settings (the flags Arch's packages are built with).
+  chroot_makepkg_conf=$devtools/makepkg.conf.d/x86_64.conf
+  [[ -f $devtools/pacman.conf.d/extra.conf && -f $chroot_makepkg_conf ]] \
+    || fail "devtools' pacman.conf.d/extra.conf or makepkg.conf.d/x86_64.conf is missing; update devtools"
+  # Parallel make where a PKGBUILD uses make (meson and cargo already are).
+  export MAKEFLAGS=${MAKEFLAGS:--j$(nproc)}
+elif ! cargo --version >/dev/null 2>&1 && command -v mise >/dev/null; then
+  # windowtolayer needs cargo. On a machine whose cargo is a mise shim without
+  # a version chosen, pick the newest installed Rust.
   MISE_RUST_VERSION=$(mise ls --installed rust 2>/dev/null | awk '{print $2}' | sort -V | tail -1)
   export MISE_RUST_VERSION
 fi
 
-# Signing: makepkg and repo-add call gpg, which reads GNUPGHOME.
+# Signing: makepkg (host builds), gpg (chroot builds) and repo-add read GNUPGHOME.
 fpr=$(<"$work/src/pkg/keyring/fingerprint")
 signing_home=${SIGNING_GNUPGHOME:-$HOME/.local/share/$DISTRO_ID-signing/gnupg}
 sign=()
@@ -49,38 +104,198 @@ fi
 
 sources=${XDG_CACHE_HOME:-$HOME/.cache}/$DISTRO_ID-pkg-sources
 mkdir -p "$sources"
+# A dry run leaves the last build alone.
+if (( ! dry )); then rm -rf "$out"; mkdir -p "$out/repo"; fi
+if (( chroot && ! dry )); then mkdir -p "$out/logs"; fi
 
-# Third-party packages the distro's repository carries (not in Arch's): every
-# folder under pkg/ with a PKGBUILD, other than the distro's own.
-for vendored in "$root"/pkg/*/; do
-  vendored=${vendored%/}
-  case ${vendored##*/} in main|settings|keyring|out) continue ;; esac
-  [[ -f $vendored/PKGBUILD ]] || continue
-  build=$work/${vendored##*/}; mkdir -p "$build"
-  # The whole folder (PKGBUILD plus any patches), from the git ref being built.
-  if [[ ! -f $work/src/pkg/${vendored##*/}/PKGBUILD ]]; then continue; fi
-  cp -r "$work/src/pkg/${vendored##*/}/." "$build/"
+# Build folders. Third-party packages the distro's repository carries (not in
+# Arch's): every folder under pkg/ with a PKGBUILD, other than the distro's
+# own; the whole folder (PKGBUILD plus any patches), from the git ref.
+vendored=()
+for dir in "$work"/src/pkg/*/; do
+  name=$(basename "$dir")
+  case $name in main|settings|keyring|out) continue ;; esac
+  [[ -f $dir/PKGBUILD ]] || continue
+  mkdir -p "$work/$name"
+  cp -r "$dir." "$work/$name/"
+  vendored+=("$name")
+done
+# The distro's own packages. Each folder is self-contained, so the same folder
+# builds here and in the chroot (which sees only this folder, as /startdir):
+# the repository at the ref in distro-src (hard links; not src, which is
+# makepkg's own folder in host builds), and the version set at the top of the
+# PKGBUILD.
+for part in keyring settings main; do
+  build=$work/$part; mkdir -p "$build"
+  cp -al "$work/src" "$build/distro-src"
+  {
+    echo '# Set by pkg/build: the repository at the ref being built (next to this file), and the version.'
+    # shellcheck disable=SC2016  # written into the PKGBUILD as it is
+    echo 'DISTRO_SRC=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/distro-src'
+    echo "PKGVER=$ver"
+    cat "$work/src/pkg/$part/PKGBUILD"
+  } > "$build/PKGBUILD"
+  # An install script is named after its package; fill in the name.
+  for script in "$work/src/pkg/$part"/*.install; do
+    if [[ -f $script ]]; then sed "s/@DISTRO_ID@/$DISTRO_ID/g" "$script" > "$build/$DISTRO_ID-$part.install"; fi
+  done
+done
+
+# Build order: a vendored package that needs another of ours (to build or to
+# run) is built after it, and in the chroot that one is installed first (-I).
+declare -A provider=() needs=() pkgfiles=() ordered=()
+for name in "${vendored[@]}"; do
+  while read -r key _ value; do
+    case $key in
+      pkgname) provider[$value]=$name ;;
+      depends|makedepends|checkdepends) needs[$name]+=" ${value%%[<>=]*}" ;;
+    esac
+  done < <(cd "$work/$name" && makepkg --printsrcinfo 2>/dev/null)
+  pkgfiles[$name]=$(cd "$work/$name" && PKGDEST=$out/repo makepkg --packagelist 2>/dev/null)
+done
+# ours_needed <folder>: the packages of ours it needs, as "folder package" lines.
+ours_needed() {
+  local n
+  for n in ${needs[$1]:-}; do
+    if [[ -n ${provider[$n]:-} && ${provider[$n]} != "$1" ]]; then echo "${provider[$n]} $n"; fi
+  done
+}
+order=() left=("${vendored[@]}")
+while (( ${#left[@]} )); do
+  next=()
+  for name in "${left[@]}"; do
+    ready=1
+    while read -r dep _; do
+      if [[ -n $dep && -z ${ordered[$dep]:-} ]]; then ready=0; fi
+    done < <(ours_needed "$name")
+    if (( ready )); then order+=("$name"); ordered[$name]=1; else next+=("$name"); fi
+  done
+  (( ${#next[@]} < ${#left[@]} )) || fail "these packages need each other: ${next[*]}"
+  left=("${next[@]}")
+done
+# package_file <folder> <package>: the file makepkg makes for that package.
+package_file() {
+  local f rest
+  while read -r f; do
+    rest=${f##*/}; rest=${rest#"$2"-}
+    # what's left is version-release-arch.pkg.tar.*: exactly two dashes
+    if [[ ${f##*/} == "$2"-* && $rest =~ ^[^-]+-[^-]+-[^-]+\.pkg\.tar\. ]]; then echo "$f"; return; fi
+  done <<<"${pkgfiles[$1]}"
+  fail "no package file for $2 in ${1}'s package list"
+}
+
+if (( chroot )); then
+  if (( dry )); then
+    run sudo -v
+  else
+    echo "pkg/build: building in a clean chroot needs root (mkarchroot, makechrootpkg); sudo asks once for the whole build."
+    sudo -v || fail "--chroot needs sudo"
+    # Keep sudo's timestamp fresh while the build runs; stops with this script.
+    ( while sleep 50; do kill -0 $$ 2>/dev/null || exit 0; sudo -n -v 2>/dev/null || exit 0; done ) &
+    keepalive=$!
+  fi
+  root_dir=$chroot_dir/root
+  conf_dir=$chroot_dir
+  if (( dry )); then conf_dir=$work; fi
+  want=$(sed -n "s/^CHROOT_VERSION='\(.*\)'$/\1/p" "$devtools/lib/archroot.sh")
+  have=
+  if [[ -f $root_dir/.arch-chroot ]]; then have=$(<"$root_dir/.arch-chroot"); fi
+  # Recreated when asked, or when devtools wants a newer chroot layout.
+  if { (( fresh )) && [[ -d $chroot_dir ]]; } || { [[ -d $root_dir ]] && [[ $have != "$want" ]]; }; then
+    echo "pkg/build: recreating $chroot_dir"
+    # The chroot and its working copies may be btrfs subvolumes (removed the way devtools' archbuild does).
+    # shellcheck disable=SC2016  # expanded by the root shell
+    run sudo bash -c 'source "$1/lib/common.sh"; source "$1/lib/archroot.sh"
+      for d in "$2"/*/; do subvolume_delete_recursive "${d%/}"; done
+      rm -rf --one-file-system "$2"' _ "$devtools" "$chroot_dir"
+    if (( dry )); then root_dir=$work/recreated; fi
+  fi
+  if (( ! dry )); then mkdir -p "$chroot_dir"; fi
+  # Devtools' pacman.conf for Arch's repositories, with Arch's mirror rather
+  # than this machine's mirrorlist (which may lag behind or point elsewhere).
+  sed "s|^Include = /etc/pacman.d/mirrorlist\$|Server = $mirror|" \
+    "$devtools/pacman.conf.d/extra.conf" > "$conf_dir/pacman.conf"
+  if [[ ! -d $root_dir ]]; then
+    echo "pkg/build: creating the build chroot in $chroot_dir/root"
+    run mkarchroot -C "$conf_dir/pacman.conf" -M "$chroot_makepkg_conf" "$chroot_dir/root" base-devel
+  else
+    echo "pkg/build: updating the build chroot in $root_dir"
+    # The keyring first, so packages signed by new Arch packagers verify.
+    run arch-nspawn -C "$conf_dir/pacman.conf" -M "$chroot_makepkg_conf" "$root_dir" \
+      bash -c 'pacman -Sy --needed --noconfirm archlinux-keyring && pacman -Suu --noconfirm'
+  fi
+fi
+
+# chroot_build <folder> [makechrootpkg options] [-- makepkg options]: builds in
+# a fresh copy of the chroot (-c); its output goes to pkg/out/logs/<folder>.log.
+chroot_build() {
+  local dir=$1 log=$out/logs/${1##*/}.log; shift
+  echo "pkg/build: ${dir##*/}"
+  if (( dry )); then
+    run cd "$dir"
+    run env SRCDEST="$sources" PKGDEST="$out/repo" LOGDEST="$out/logs" PACKAGER="$PACKAGER" \
+      MAKEFLAGS="$MAKEFLAGS" makechrootpkg -c -r "$chroot_dir" "$@"
+    return 0
+  fi
+  if ! (cd "$dir" && SRCDEST=$sources PKGDEST=$out/repo LOGDEST=$out/logs \
+        makechrootpkg -c -r "$chroot_dir" "$@") >"$log" 2>&1; then
+    tail -n 40 "$log" >&2
+    fail "${dir##*/} failed to build in the chroot; full output in $log"
+  fi
+}
+
+for name in "${order[@]}"; do
+  build=$work/$name
   # Downloads are kept between builds (checksum-verified each time) and tried
   # three times, so one dropped connection doesn't fail the whole build.
   for try in 1 2 3; do
     (cd "$build" && SRCDEST=$sources makepkg --verifysource --noconfirm >/dev/null 2>&1) && break
     if (( try < 3 )); then sleep 10; fi
   done
-  (cd "$build" && SRCDEST=$sources PKGDEST=$out/repo makepkg -f --nodeps --noconfirm "${sign[@]}" >/dev/null)
+  if (( chroot )); then
+    installs=()
+    while read -r dep n; do
+      if [[ -n $dep ]]; then installs+=(-I "$(package_file "$dep" "$n")"); fi
+    done < <(ours_needed "$name")
+    chroot_build "$build" "${installs[@]}"
+  else
+    (cd "$build" && SRCDEST=$sources PKGDEST=$out/repo makepkg -f --nodeps --noconfirm "${sign[@]}" >/dev/null)
+  fi
 done
 
-# The distro's own packages.
 for part in keyring settings main; do
-  build=$work/$part; mkdir -p "$build"
-  cp "$work/src/pkg/$part/PKGBUILD" "$build/"
-  # An install script is named after its package; fill in the name.
-  for script in "$work/src/pkg/$part"/*.install; do
-    if [[ -f $script ]]; then sed "s/@DISTRO_ID@/$DISTRO_ID/g" "$script" > "$build/$DISTRO_ID-$part.install"; fi
-  done
-  # --nodeps: the desktop doesn't need to be installed on the build machine.
-  (cd "$build" && DISTRO_SRC=$work/src PKGVER=$ver PKGDEST=$out/repo makepkg -f --nodeps --noconfirm "${sign[@]}" >/dev/null)
+  build=$work/$part
+  # --nodeps: data and scripts only; the desktop they depend on needn't be
+  # installed to build them.
+  if (( chroot )); then
+    chroot_build "$build" -- --nodeps
+  else
+    (cd "$build" && PKGDEST=$out/repo makepkg -f --nodeps --noconfirm "${sign[@]}" >/dev/null)
+  fi
 done
+
+# Chroot builds are signed here, the way makepkg --sign does it.
+if (( chroot && ${#sign[@]} )); then
+  if (( dry )); then
+    run gpg --detach-sign --use-agent -u "$fpr" --no-armor "$out/repo/<each package>"
+  else
+    for pkg in "$out"/repo/*.pkg.tar.zst; do
+      gpg --detach-sign --use-agent -u "$fpr" --no-armor "$pkg"
+    done
+  fi
+fi
 
 db=$out/repo/$DISTRO_REPO.db.tar.gz
+if (( dry )); then
+  run repo-add -q "${sign[@]}" "$db" "$out/repo/<each package>"
+  echo "pkg/build: dry run, nothing built. Vendored package files, in build order (a debug package only if there are symbols):"
+  for name in "${order[@]}"; do sed 's|^.*/|  |' <<<"${pkgfiles[$name]}"; done
+  echo "pkg/build: then keyring, settings, main ($ver)"
+  exit 0
+fi
 repo-add -q "${sign[@]}" "$db" "$out"/repo/*.pkg.tar.zst
+# How this build was made; tools/publish only publishes chroot builds.
+mode=host
+if (( chroot )); then mode=chroot; fi
+printf 'BUILD_MODE=%s\nBUILD_COMMIT=%s\nBUILD_VERSION=%s\n' "$mode" "$commit" "$ver" > "$out/build-info"
 ls -1 "$out/repo"
