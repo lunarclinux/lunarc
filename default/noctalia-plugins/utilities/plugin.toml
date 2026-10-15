@@ -5,7 +5,7 @@ plugin_api = 32
 author = "@DISTRO_ID@"
 license = "GPL-3.0-or-later"
 icon = "tool"
-description = "The bar's segments (menu button, workspaces, media, clock, moon, stats) and toggles (stay awake, night light, Low Gravity, silence, reminders, recording, dictation), and the menu (SUPER+Space)."
+description = "The bar's segments (menu button, workspaces, media, clock, moon, stats) and toggles (stay awake, night light, Low Gravity, silence, reminders, recording, dictation), the menu (SUPER+Space), now playing and the volume display."
 tags = ["system"]
 
 # The bar's own segments (Frosted Terminal, decision record 0043), drawn
@@ -132,3 +132,32 @@ position = "top_center"
 decoration = false
 keyboard_focus = "exclusive"
 capture_keys = ["Up", "Down", "Return", "BackSpace", "ctrl+r"]
+
+# Now playing, under the media segment (Frosted Terminal popovers, decision
+# record 0043): drawn by the plugin like the menu, so it grows with up next.
+# Space plays or pauses, Left and Right seek.
+[[panel]]
+id = "now-playing"
+entry = "media-panel.luau"
+width = 480
+height = 460
+placement = "floating"
+open_near_click = true
+decoration = false
+keyboard_focus = "exclusive"
+capture_keys = ["space", "Left", "Right"]
+
+# The volume and brightness display: a pill at the bottom centre that stays
+# up beside any open panel, never takes the keyboard, and closes itself
+# (`@DISTRO_ID@ osd`).
+[[panel]]
+id = "osd"
+entry = "osd.luau"
+width = 256
+height = 52
+placement = "floating"
+position = "bottom_center"
+decoration = false
+persistent = true
+keyboard_focus = "none"
+dismiss_on_outside_click = false

@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# summary: Change the volume or brightness and show it (the volume and brightness keys)
+set -euo pipefail
+source "$DISTRO_LIB/lib.sh"
+
+usage() {
+  cat <<USAGE
+Usage: $DISTRO_ID osd <what> <change>
+
+  volume up|down|mute      the speakers, 5% a step (up also unmutes)
+  mic mute                 the microphone
+  brightness up|down       the screen's backlight, 5% a step
+
+Shows the new level in a pill at the bottom of the screen. The volume and
+brightness keys run these.
+USAGE
+}
+
+panel=$DISTRO_ID/utilities:osd
+
+# show <kind> <percent> <on|off>: open the pill, or update the open one.
+show() {
+  noctalia msg panel-open "$panel" "$1 $2 $3" >/dev/null 2>&1 || true
+  noctalia msg plugin "$panel" all show "$1 $2 $3" >/dev/null 2>&1 || true
+}
+
+# audio <kind> <@DEFAULT_AUDIO_SINK@|@DEFAULT_AUDIO_SOURCE@>: shows its level and mute.
+audio() {
+  local level muted
+  read -r level muted < <(wpctl get-volume "$2" 2>/dev/null | awk '{ printf "%d %s\n", $2 * 100 + 0.5, (/MUTED/ ? "on" : "off") }') || return 0
+  show "$1" "$level" "$muted"
+}
+
+volume() {
+  local dev=@DEFAULT_AUDIO_SINK@
+  case ${1:-} in
+    up) wpctl set-mute "$dev" 0; wpctl set-volume -l 1.0 "$dev" 5%+ ;;
+    down) wpctl set-volume "$dev" 5%- ;;
+    mute) wpctl set-mute "$dev" toggle ;;
+    *) die "volume is up, down or mute" ;;
+  esac
+  audio volume "$dev"
+}
+
+mic() {
+  local dev=@DEFAULT_AUDIO_SOURCE@
+  [[ ${1:-} == mute ]] || die "mic is mute"
+  wpctl set-mute "$dev" toggle
+  audio mic "$dev"
+}
+
+# The backlight through logind (no root needed for the session's own screen).
+# Without one (a desktop monitor), Noctalia changes it over DDC, unshown.
+brightness() {
+  local dir dev max now step new
+  [[ ${1:-} == up || ${1:-} == down ]] || die "brightness is up or down"
+  dir=$(find /sys/class/backlight -mindepth 1 -maxdepth 1 2>/dev/null | sort | head -1)
+  if [[ -z $dir ]]; then noctalia msg "brightness-$1" >/dev/null; return; fi
+  dev=${dir##*/}
+  [[ $dev =~ ^[A-Za-z0-9_.:-]+$ ]] || die "unexpected backlight name: $dev"
+  max=$(<"$dir/max_brightness"); now=$(<"$dir/brightness")
+  (( max > 0 )) || return 0
+  step=$(( (max * 5 + 50) / 100 )); (( step > 0 )) || step=1
+  if [[ $1 == up ]]; then new=$(( now + step )); else new=$(( now - step )); fi
+  if (( new > max )); then new=$max; fi
+  if (( new < (max + 99) / 100 )); then new=$(( (max + 99) / 100 )); fi
+  busctl call org.freedesktop.login1 /org/freedesktop/login1/session/auto org.freedesktop.login1.Session \
+    SetBrightness ssu backlight "$dev" "$new" >/dev/null
+  show brightness $(( (new * 100 + max / 2) / max )) off
+}
+
+case ${1:-} in
+  volume) volume "${2:-}" ;;
+  mic) mic "${2:-}" ;;
+  brightness) brightness "${2:-}" ;;
+  -h|--help|"") usage ;;
+  *) die "unknown osd command: $1" ;;
+esac

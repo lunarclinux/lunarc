@@ -20,14 +20,16 @@ bind(mod .. " + N", "Open the latest notification", shell("notification-invoke-l
 bind(mod .. " + V", "Clipboard history", shell("panel-toggle clipboard"))
 bind("ALT + Tab", "Switch windows", shell("window-switcher hold"))
 
--- Volume and brightness through Noctalia, so its on-screen display shows.
+-- Volume and brightness, shown in the pill at the bottom of the screen
+-- (`@DISTRO_ID@ osd`, decision record 0043).
 local function held() return { locked = true, repeating = true } end
-bind("XF86AudioRaiseVolume", "Volume up", shell("volume-up"), held())
-bind("XF86AudioLowerVolume", "Volume down", shell("volume-down"), held())
-bind("XF86AudioMute", "Mute", shell("volume-mute"), held())
-bind("XF86AudioMicMute", "Mute the microphone", shell("mic-mute"), held())
-bind("XF86MonBrightnessUp", "Brightness up", shell("brightness-up"), held())
-bind("XF86MonBrightnessDown", "Brightness down", shell("brightness-down"), held())
+local function osd(args) return hl.dsp.exec_cmd("@DISTRO_ID@ osd " .. args) end
+bind("XF86AudioRaiseVolume", "Volume up", osd("volume up"), held())
+bind("XF86AudioLowerVolume", "Volume down", osd("volume down"), held())
+bind("XF86AudioMute", "Mute", osd("volume mute"), { locked = true })
+bind("XF86AudioMicMute", "Mute the microphone", osd("mic mute"), { locked = true })
+bind("XF86MonBrightnessUp", "Brightness up", osd("brightness up"), held())
+bind("XF86MonBrightnessDown", "Brightness down", osd("brightness down"), held())
 
 -- Screenshots are bound in binds.lua (`@DISTRO_ID@ capture`).
 

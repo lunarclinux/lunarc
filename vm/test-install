@@ -714,6 +714,139 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       screenshot menu-rounded
       key KEY_ESC
       "$here/ssh" "$vm" "$user" -- "$hypr $id theme shape terminal >/dev/null" || true
+      # Popovers (Frosted Terminal, decision record 0043): opened with real
+      # clicks from the VM's USB tablet and real keys; where each one landed
+      # is read from screenshots taken with and without it.
+      check "popovers: Noctalia's panels styled, corners follow the shape" "$hypr x=\$(noctalia config export); grep -qi 'border_color = \"#ebc77a61' <<<\"\$x\" && grep -q 'transparency_mode = \"soft\"' <<<\"\$x\" && grep -q 'sidebar_section = \"none\"' <<<\"\$x\" && grep -qx 'corner_radius_scale = 1.000' ~/.config/noctalia/00-$id-look.toml && $id theme shape rounded >/dev/null && grep -qx 'corner_radius_scale = 1.333' ~/.config/noctalia/00-$id-look.toml && sleep 1 && noctalia config export | grep -q 'corner_radius_scale = 1.33'; rc=\$?; $id theme shape terminal >/dev/null; exit \$rc"
+      check "popovers: the migration writes the look file on older installs" "$hypr rm -f ~/.config/noctalia/00-$id-look.toml && sed -i '/frosted-popovers/d' ~/.local/state/$id/migrations-applied && $id migrate --user >/dev/null && grep -q '^corner_radius_scale' ~/.config/noctalia/00-$id-look.toml"
+      if command -v magick >/dev/null && command -v tesseract >/dev/null; then
+        dbus="export DBUS_SESSION_BUS_ADDRESS=unix:path=\$XDG_RUNTIME_DIR/bus;"
+        read -r sw sh < <("$here/ssh" "$vm" "$user" -- "$hypr hyprctl monitors -j | jq -r '.[0] | \"\\(.width) \\(.height)\"'") || true
+        qmp_input() { virsh qemu-monitor-command "$vm" "{\"execute\":\"input-send-event\",\"arguments\":{\"events\":[$1]}}" >/dev/null; }
+        click() { # click <x> <y>: a real left click
+          qmp_input "{\"type\":\"abs\",\"data\":{\"axis\":\"x\",\"value\":$(( $1 * 32767 / (sw - 1) ))}},{\"type\":\"abs\",\"data\":{\"axis\":\"y\",\"value\":$(( $2 * 32767 / (sh - 1) ))}}"
+          sleep 0.3; qmp_input '{"type":"btn","data":{"down":true,"button":"left"}}'
+          sleep 0.08; qmp_input '{"type":"btn","data":{"down":false,"button":"left"}}'; sleep 1
+        }
+        shot() { # shot <label>: a screenshot to $last_shot
+          last_shot=$shots/$vm-$(date +%Y%m%d-%H%M%S)-$1.png
+          "$here/ssh" "$vm" "$user" -- "$hypr grim -" > "$last_shot" 2>/dev/null || true
+          log "screenshot: $last_shot"
+        }
+        # → "<w> <h> <x> <y>" of what differs from the screenshot without it, below the bar.
+        popover_box() {
+          magick "$1" "$2" -compose difference -composite -crop "${sw}x$((sh - 44))+0+44" +repage -colorspace gray -threshold 8% \
+            -format '%@' info: | sed -E 's/^([0-9]+)x([0-9]+)\+([0-9]+)\+([0-9]+)$/\1 \2 \3 \4/' | awk '{ print $1, $2, $3, $4 + 44 }'
+        }
+        read_text() { # read_text <png> <crop> → the words in it
+          magick "$1" -crop "$2" +repage -colorspace gray -resize 300% -negate -level 15%,85% png:- | tesseract - - --psm 6 2>/dev/null | tr '\n' ' ' || true
+        }
+        amber() { # amber <png> <crop> → amber pixels in it
+          magick "$1" -crop "$2" +repage -fuzz 14% -fill black +opaque '#ebc77a' -fill white -opaque '#ebc77a' -colorspace gray -format '%[fx:round(mean*w*h)]' info:
+        }
+        centred_under() { # centred_under <w> <x> <segment x>: the popover's middle within 12px of it, or against a screen edge
+          local mid=$(( $2 + $1 / 2 ))
+          (( (mid - $3) <= 12 && ($3 - mid) <= 12 || $2 <= 12 || $2 + $1 >= sw - 12 ))
+        }
+        "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg panel-close >/dev/null 2>&1; $id workspaces go 9; sleep 1" || true
+        click 640 600; shot popover-rest; rest=$last_shot
+
+        # The calendar: the clock opens Noctalia's calendar on its own, under it.
+        click "$((sw / 2))" 15
+        check "calendar: a click on the clock opens it" "$hypr noctalia msg status | jq -e '.activePanelId == \"control-center\"' >/dev/null"
+        shot calendar; read -r bw bh bx by < <(popover_box "$last_shot" "$rest") || true
+        report "$(( ${bw:-0} > 300 && bw < 640 && by >= 34 && by <= 48 ? 0 : 1 ))" "calendar: under the bar, without the tab list (${bw:-?}x${bh:-?} at ${bx:-?},${by:-?})"
+        report "$(centred_under "${bw:-0}" "${bx:-0}" "$((sw / 2))"; echo $?)" "calendar: centred under the clock"
+        month=$("$here/ssh" "$vm" "$user" -- "date +%B")
+        text=$(read_text "$last_shot" "${bw:-600}x${bh:-400}+${bx:-340}+${by:-38}")
+        report "$(grep -qi "$month" <<<"$text"; echo $?)" "calendar: shows this month ($month; read: $(head -c 80 <<<"$text"))"
+        key KEY_ESC
+        check "calendar: Escape closes it" "$hypr sleep 0.5; noctalia msg status | jq -e '.panelOpen == false' >/dev/null"
+
+        # Now playing: a test player (a small MPRIS service), the media segment
+        # clicked, play and pause from the keyboard and the amber button.
+        "$here/ssh" "$vm" "$user" -- "cat > ~/mpris-stub.py" < "$here/checks/mpris-stub.py"
+        check "now playing: a test player is running" "$hypr $dbus ffmpeg -nostdin -loglevel error -y -f lavfi -i color=c=0x2c3e66:s=256x256 -frames:v 1 \$XDG_RUNTIME_DIR/$id-test-art.png && systemd-run --user --quiet --unit=$id-test-mpris python3 ~/mpris-stub.py \$XDG_RUNTIME_DIR/$id-test-art.png && for i in \$(seq 20); do [ \"\$(playerctl -p teststub status 2>/dev/null)\" = Playing ] && sleep 2 && exit 0; sleep 0.5; done; exit 1"
+        shot media-segment
+        mx=$(magick "$last_shot" -crop 900x30+0+0 +repage -colorspace gray -resize 400% -negate -level 20%,80% png:- | tesseract - - --psm 7 tsv 2>/dev/null \
+          | awk -F'\t' '$12 == "Low" { print int(($7 + $9 / 2) / 4); exit }')
+        report "$(( ${mx:-0} > 0 ? 0 : 1 ))" "now playing: the media segment shows the track (Low Tide at x ${mx:-?})"
+        click "${mx:-200}" 15
+        np_dump() { "$here/ssh" "$vm" "$user" -- "$hypr rm -f \$XDG_RUNTIME_DIR/$id-now-playing.json; noctalia msg plugin $id/utilities:now-playing all dump >/dev/null 2>&1; sleep 0.5; cat \$XDG_RUNTIME_DIR/$id-now-playing.json" 2>/dev/null; }
+        np_is() { # np_is <description> <jq test on the dump>
+          local d; d=$(np_dump)
+          report "$(jq -e "$2" >/dev/null 2>&1 <<<"$d"; echo $?)" "$1"
+          [[ $(jq -e "$2" 2>/dev/null <<<"$d") == true ]] || log "now playing: $d"
+        }
+        np_is "now playing: the click opens it with the title, artist and up next" '.open and .title == "Low Tide" and .artist == "Saltmarsh" and .queue == ["Breakwater", "Sodium Lamps", "Night Ferry"] and .position > 100'
+        shot now-playing; read -r bw bh bx by < <(popover_box "$last_shot" "$rest") || true
+        report "$(( ${bw:-0} >= 470 && by >= 34 && by <= 48 ? 0 : 1 ))" "now playing: under the bar (${bw:-?}x${bh:-?} at ${bx:-?},${by:-?})"
+        report "$(centred_under 480 "${bx:-0}" "${mx:-0}"; echo $?)" "now playing: under the media segment"
+        report "$(( $(amber "$last_shot" "160x1+$(( ${mx:-200} - 80 > 0 ? ${mx:-200} - 80 : 0 ))+27") >= 20 ? 0 : 1 ))" "now playing: the segment has the active underline while open"
+        text=$(read_text "$last_shot" "${bw:-480}x${bh:-400}+${bx:-0}+${by:-38}")
+        report "$(grep -q 'NOW PLAYING' <<<"$text" && grep -q 'Low Tide' <<<"$text"; echo $?)" "now playing: header and title drawn (read: $(head -c 100 <<<"$text"))"
+        key KEY_SPACE
+        check "now playing: space pauses" "$hypr $dbus sleep 0.5; [ \"\$(playerctl -p teststub status)\" = Paused ]"
+        read -r px py < <(magick "$last_shot" -crop "${bw:-480}x${bh:-400}+${bx:-0}+${by:-38}" +repage -fuzz 14% -fill black +opaque '#ebc77a' -fill white -opaque '#ebc77a' -colorspace gray \
+          -define connected-components:verbose=true -define connected-components:area-threshold=1000 -connected-components 8 null: 2>/dev/null \
+          | awk -v ox="${bx:-0}" -v oy="${by:-38}" '/gray\(255\)/ { split($3, c, ","); if ($4 + 0 > best) { best = $4 + 0; x = c[1]; y = c[2] } } END { if (best) printf "%d %d\n", x + ox, y + oy }') || true
+        click "${px:-0}" "${py:-0}"
+        check "now playing: the amber button plays again (at ${px:-?},${py:-?})" "$hypr $dbus [ \"\$(playerctl -p teststub status)\" = Playing ]"
+        key KEY_RIGHT
+        np_is "now playing: Right seeks forward" '.position >= 140'
+        key KEY_ESC
+        np_is "now playing: Escape closes it" '.open == false'
+        "$here/ssh" "$vm" "$user" -- "$hypr $id theme shape rounded >/dev/null; sleep 2" || true
+        click "${mx:-200}" 25; shot now-playing-rounded; key KEY_ESC
+        click "$((sw / 2))" 25; shot calendar-rounded; key KEY_ESC
+        "$here/ssh" "$vm" "$user" -- "$hypr $id theme shape terminal >/dev/null; $id theme blur off >/dev/null; sleep 2" || true
+        click "$((sw / 2))" 15; shot calendar-blur-off; key KEY_ESC
+        click "${mx:-200}" 15; shot now-playing-blur-off; key KEY_ESC
+        "$here/ssh" "$vm" "$user" -- "$hypr $id theme blur on >/dev/null; systemctl --user stop $id-test-mpris" || true
+
+        # The volume pill: the volume key, then gone on its own.
+        v0=$("$here/ssh" "$vm" "$user" -- "$hypr wpctl get-volume @DEFAULT_AUDIO_SINK@ | awk '{ print int(\$2 * 100 + 0.5) }'")
+        "$here/ssh" "$vm" "$user" -- "$hypr wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.5" || true
+        virsh send-key "$vm" KEY_VOLUMEUP >/dev/null; sleep 0.4; shot osd
+        n=$(amber "$last_shot" "300x80+$((sw / 2 - 150))+$((sh - 80))"); text=$(read_text "$last_shot" "300x80+$((sw / 2 - 150))+$((sh - 80))")
+        report "$(( n >= 60 ? 0 : 1 ))" "volume key: the pill at the bottom centre, amber cells (amber $n; read: $text)"
+        report "$(grep -qiE 'v[o0][l.|]' <<<"$text" && grep -q 55 <<<"$text"; echo $?)" "volume key: VOL and the new level, 55"
+        check "volume key: the volume went up 5%" "$hypr wpctl get-volume @DEFAULT_AUDIO_SINK@ | grep -q '0.55'"
+        sleep 3; shot osd-gone
+        n=$(amber "$last_shot" "300x80+$((sw / 2 - 150))+$((sh - 80))")
+        report "$(( n < 10 ? 0 : 1 ))" "volume key: the pill goes away by itself (amber $n)"
+        virsh send-key "$vm" KEY_MUTE >/dev/null; sleep 0.4; shot osd-mute
+        text=$(read_text "$last_shot" "300x80+$((sw / 2 - 150))+$((sh - 80))")
+        report "$(grep -qi mute <<<"$text"; echo $?)" "mute key: the pill says mute (read: $text)"
+        "$here/ssh" "$vm" "$user" -- "$hypr wpctl set-mute @DEFAULT_AUDIO_SINK@ 0; wpctl set-volume @DEFAULT_AUDIO_SINK@ ${v0:-50}%" || true
+
+        # The notification center: a notification with actions, the bell, do not disturb.
+        "$here/ssh" "$vm" "$user" -- "$hypr $dbus noctalia msg notification-dnd-set off >/dev/null; setsid -f notify-send -a Updates -A now='update now' -A later=tonight 'Updates ready' '12 packages are ready.' >/dev/null 2>&1 </dev/null; sleep 1.5" || true
+        shot notification-toast
+        sleep 8; click 640 600; shot bell-unread
+        # The right lane, clear of the clock's light amber; close to the amber
+        # only, as the crash indicator's coral is near it.
+        read -r dw _ dx _ < <(magick "$last_shot" -crop "$((sw * 2 / 5))x28+$((sw * 3 / 5))+1" +repage -fuzz 7% -fill black +opaque '#ebc77a' -fill white -opaque '#ebc77a' -format '%@' info: | sed -E 's/^([0-9]+)x([0-9]+)\+([0-9]+)\+([0-9]+)$/\1 \2 \3 \4/') || true
+        bell=$(( sw * 3 / 5 + ${dx:-0} + ${dw:-0} / 2 - 6 ))
+        report "$(( ${dw:-0} > 0 && ${dw:-0} < 12 ? 0 : 1 ))" "bell: an amber dot for the unread notification (x $bell)"
+        click "$bell" 15
+        check "notifications: a click on the bell opens them" "$hypr noctalia msg status | jq -e '.activePanelId == \"control-center\"' >/dev/null"
+        shot notifications; read -r bw bh bx by < <(popover_box "$last_shot" "$rest") || true
+        text=$(read_text "$last_shot" "${bw:-500}x${bh:-400}+${bx:-700}+${by:-38}")
+        report "$(grep -q 'Updates ready' <<<"$text" && grep -qi 'update now' <<<"$text"; echo $?)" "notifications: the card with its actions (read: $(head -c 100 <<<"$text"))"
+        report "$(( ${by:-0} >= 34 && ${by:-0} <= 48 ? 0 : 1 ))" "notifications: under the bar (${bw:-?}x${bh:-?} at ${bx:-?},${by:-?})"
+        report "$(centred_under "${bw:-0}" "${bx:-0}" "$bell"; echo $?)" "notifications: under the bell"
+        # Do not disturb is the header's middle button (clear all, do not
+        # disturb, close), at its top right.
+        click "$(( ${bx:-0} + ${bw:-0} - 70 ))" "$(( ${by:-0} + 24 ))"
+        check "notifications: do not disturb from its header" "$hypr [ \"\$(noctalia msg notification-dnd-status)\" = on ]"
+        shot notifications-dnd
+        "$here/ssh" "$vm" "$user" -- "$hypr $id theme shape rounded >/dev/null; sleep 2" || true
+        key KEY_ESC; click "$bell" 25; shot notifications-rounded; key KEY_ESC
+        "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg notification-dnd-set off >/dev/null; $id theme shape terminal >/dev/null; noctalia msg panel-close >/dev/null 2>&1" || true
+      else
+        log "no magick or tesseract here: skipping the popover checks"
+      fi
       check "plugins load without errors" "journalctl --user -u noctalia -b --no-pager | grep -E '\\[luau\\]|script-runtime.*(error|failed)' | grep '$id/' ; ! journalctl --user -u noctalia -b --no-pager | grep -E '\\[luau\\]|script-runtime.*(error|failed)' | grep -q '$id/'"
       check "keyboard layouts switch"      "$hypr $id keyboard add de >/dev/null && sleep 1 && hyprctl devices -j | jq -e '[.keyboards[] | select(.main)][0].layout == \"us,de\"' >/dev/null && $id keyboard next && sleep 1 && hyprctl devices -j | jq -r '.keyboards[] | select(.main) | .active_keymap' | grep -q German"
       screenshot keyboard-layout

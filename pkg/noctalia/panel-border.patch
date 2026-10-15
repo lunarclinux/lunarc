@@ -1,0 +1,87 @@
+diff --git i/src/config/config_types.h w/src/config/config_types.h
+index 73b8ffb75..dbb89fe96 100644
+--- i/src/config/config_types.h
++++ w/src/config/config_types.h
+@@ -1007,6 +1007,7 @@ struct ShellConfig {
+   struct PanelConfig {
+     PanelTransparencyMode transparencyMode = PanelTransparencyMode::Solid;
+     bool borders = true;                   // outline on floating panel surfaces
++    std::optional<ColorSpec> borderColor;  // that outline's color; unset = outline role at the panel's opacity
+     bool shadow = true;                    // cast the global [shell.shadow] from panel surfaces
+     bool listItemBackground = false;       // filled rounded background behind launcher/clipboard list items
+     std::string floatingLayer = "overlay"; // top | overlay; attached panels follow their bar
+diff --git i/src/config/schema/config_schema.cpp w/src/config/schema/config_schema.cpp
+index c8fb1ac22..6ad257a72 100644
+--- i/src/config/schema/config_schema.cpp
++++ w/src/config/schema/config_schema.cpp
+@@ -1370,6 +1370,7 @@ namespace noctalia::config::schema {
+       static const Schema<ShellConfig::PanelConfig> s = {
+           enumField(&ShellConfig::PanelConfig::transparencyMode, "transparency_mode", kPanelTransparencyModes),
+           field(&ShellConfig::PanelConfig::borders, "borders"),
++          colorSpecField(&ShellConfig::PanelConfig::borderColor, "border_color", /*alwaysEmit=*/false),
+           field(&ShellConfig::PanelConfig::shadow, "shadow"),
+           field(&ShellConfig::PanelConfig::listItemBackground, "list_item_background"),
+           custom<ShellConfig::PanelConfig>(
+diff --git i/src/shell/panel/panel_manager.cpp w/src/shell/panel/panel_manager.cpp
+index a021b8ade..0a501426b 100644
+--- i/src/shell/panel/panel_manager.cpp
++++ w/src/shell/panel/panel_manager.cpp
+@@ -2469,7 +2469,7 @@ void PanelManager::onConfigReloaded() {
+     bg->setPanelStyle(m_config->config().shell.panel.borders);
+     bg->setFill(colorSpecFromRole(ColorRole::Surface, panelBackgroundOpacity));
+     if (m_config->config().shell.panel.borders) {
+-      bg->setBorder(colorSpecFromRole(ColorRole::Outline, panelBackgroundOpacity), Style::borderWidth);
++      bg->setBorder(shell::panel_surface::borderColor(m_config, panelBackgroundOpacity), Style::borderWidth);
+     }
+   }
+   if (m_panelShadowNode != nullptr) {
+@@ -2585,7 +2585,7 @@ void PanelManager::buildScene(std::uint32_t width, std::uint32_t height) {
+         const float backgroundOpacity = shell::panel_surface::backgroundOpacity(m_config);
+         bg->setFill(colorSpecFromRole(ColorRole::Surface, backgroundOpacity));
+         if (panelBorders) {
+-          bg->setBorder(colorSpecFromRole(ColorRole::Outline, backgroundOpacity), Style::borderWidth);
++          bg->setBorder(shell::panel_surface::borderColor(m_config, backgroundOpacity), Style::borderWidth);
+         }
+       }
+       bg->setSurfaceFinish(true);
+diff --git i/src/shell/panel/panel_surface_style.h w/src/shell/panel/panel_surface_style.h
+index 91f267ea4..4a1a8ef6f 100644
+--- i/src/shell/panel/panel_surface_style.h
++++ w/src/shell/panel/panel_surface_style.h
+@@ -47,6 +47,14 @@ namespace shell::panel_surface {
+     return detachedPanelBackgroundOpacityForTransparencyMode(mode);
+   }
+ 
++  // [shell.panel] border_color as given, else the outline role at the panel's opacity.
++  [[nodiscard]] inline ColorSpec borderColor(const ConfigService* configService, float panelBackgroundOpacity) {
++    if (configService != nullptr && configService->config().shell.panel.borderColor.has_value()) {
++      return *configService->config().shell.panel.borderColor;
++    }
++    return colorSpecFromRole(ColorRole::Outline, panelBackgroundOpacity);
++  }
++
+   [[nodiscard]] inline float cardOpacity(const ConfigService* configService, float panelBackgroundOpacity) noexcept {
+     const auto mode =
+         configService != nullptr ? configService->config().shell.panel.transparencyMode : PanelTransparencyMode::Solid;
+diff --git i/src/shell/panel/persistent_panel_host.cpp w/src/shell/panel/persistent_panel_host.cpp
+index 41dc502b3..569151981 100644
+--- i/src/shell/panel/persistent_panel_host.cpp
++++ w/src/shell/panel/persistent_panel_host.cpp
+@@ -340,7 +340,7 @@ void PersistentPanelHost::buildScene(Instance& instance, std::uint32_t width, st
+     bg->setPanelStyle(m_config->config().shell.panel.borders);
+     bg->setFill(colorSpecFromRole(ColorRole::Surface, backgroundOpacity));
+     if (m_config->config().shell.panel.borders) {
+-      bg->setBorder(colorSpecFromRole(ColorRole::Outline, backgroundOpacity), Style::borderWidth);
++      bg->setBorder(shell::panel_surface::borderColor(m_config, backgroundOpacity), Style::borderWidth);
+     }
+     bg->setSurfaceFinish(true);
+     instance.bgNode = static_cast<Box*>(instance.sceneRoot->addChild(std::move(bg)));
+@@ -622,7 +622,7 @@ void PersistentPanelHost::onConfigReloaded() {
+       instance->bgNode->setPanelStyle(m_config->config().shell.panel.borders);
+       instance->bgNode->setFill(colorSpecFromRole(ColorRole::Surface, backgroundOpacity));
+       if (m_config->config().shell.panel.borders) {
+-        instance->bgNode->setBorder(colorSpecFromRole(ColorRole::Outline, backgroundOpacity), Style::borderWidth);
++        instance->bgNode->setBorder(shell::panel_surface::borderColor(m_config, backgroundOpacity), Style::borderWidth);
+       }
+     }
+     if (instance->surface != nullptr) {
