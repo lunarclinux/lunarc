@@ -37,7 +37,7 @@ arch=(x86_64)
 url="https://github.com/hyprwm/hyprland-plugins"
 license=(BSD-3-Clause)
 depends=(hyprland)
-makedepends=(pkgconf pixman libdrm libinput wayland libxkbcommon cairo libxcb xcb-util-errors)
+makedepends=(pkgconf pixman libdrm libinput wayland libxkbcommon cairo libxcb xcb-util-errors glslang)
 options=(!debug)
 source=("hyprland-plugins-$_tag.tar.gz::$url/archive/refs/tags/v$_tag.tar.gz"
         bar-only.patch)
