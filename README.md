@@ -44,6 +44,7 @@ Folders match where files end up when installed, so packaging later copies folde
 | `migrations/` | Upgrade scripts for existing installs |
 | `vm/` | VM definitions and snapshot script |
 | `docs/decisions/` | Decision records |
+| `docs/design/` | Visual design specs and mockups (Frosted Terminal) |
 | `docs/log/` | Build log |
 | `docs/manual/` | User manual |
 

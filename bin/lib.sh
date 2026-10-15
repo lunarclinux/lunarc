@@ -46,6 +46,15 @@ set_setting() { # set_setting <key> <value>
   fi
 }
 
+# The current theme's design tokens (docs/design/frosted-terminal): its
+# variant of themes/<name>/tokens.json, written by `theme set` and `theme mode`.
+TOKENS=$CONFIG_DIR/theme/tokens.json
+token() { # token <dotted path, e.g. color.accent.amber> → the value (tables as JSON)
+  [[ -f $TOKENS ]] || return 1
+  jq -r --arg p "$1" 'getpath($p | split(".")) | if . == null then ("no token \($p)\n" | halt_error(1))
+    elif type == "string" then . else tojson end' "$TOKENS"
+}
+
 # Wait up to $1 seconds (default 15) for the Noctalia shell to answer.
 shell_ready() {
   local i

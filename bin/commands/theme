@@ -21,6 +21,10 @@ Usage: $DISTRO_ID theme <command>
   wallpaper set <n>          use wallpaper number n
   greeter                    use the current theme on the login screen too
                              (done on every change; the last one chosen wins)
+  token <path>               print one of the current theme's design tokens,
+                             e.g. color.accent.amber or geometry.terminal.gap
+  tokens                     write the current theme's tokens file again
+                             (done on every change)
 USAGE
 }
 
@@ -37,6 +41,17 @@ link_palettes() {
     dir=${dir%/}
     ln -sfn "$dir/palette.json" "$palettes/$DISTRO_ID-${dir##*/}.json"
   done
+}
+
+# The theme's design tokens for one mode, as a file other programs read.
+write_tokens() { # write_tokens <theme> <mode>
+  local src=$themes/$1/tokens.json tmp
+  if [[ ! -f $src ]]; then rm -f "$TOKENS"; return 0; fi
+  mkdir -p "${TOKENS%/*}"
+  tmp=$(mktemp "$TOKENS.XXXXXX"); chmod 644 "$tmp"
+  if jq --arg m "$2" '.[$m] // error("no \($m) tokens")' "$src" > "$tmp"; then mv "$tmp" "$TOKENS"
+  else rm -f "$tmp"; return 1
+  fi
 }
 
 apply_mode() { # apply_mode <dark|light>
@@ -120,6 +135,7 @@ case ${1:-} in
     link_palettes
     noctalia msg color-scheme-set custom "$DISTRO_ID-$name" >/dev/null
     apply_mode "$mode"
+    write_tokens "$name" "$mode" || true
     apply_wallpaper "$name" "$(wallpaper_index "$name")"
     set_setting theme "$name"
     greeter_apply "$name" "$mode" "$(wallpaper_index "$name")" >/dev/null 2>&1 || true
@@ -130,8 +146,16 @@ case ${1:-} in
     has_variant "$name" "$mode" || die "$name has no $mode variant"
     shell_ready || die "the desktop shell isn't running"
     apply_mode "$mode"
+    write_tokens "$name" "$mode" || true
     greeter_apply "$name" "$mode" "$(wallpaper_index "$name")" >/dev/null 2>&1 || true
     info "theme: $name ($mode)" ;;
+  token)
+    [[ -n ${2:-} ]] || die "usage: $DISTRO_ID theme token <path>"
+    [[ -f $TOKENS ]] || die "no tokens file; run '$DISTRO_ID theme tokens'"
+    token "$2" ;;
+  tokens)
+    write_tokens "$(setting theme)" "$(setting theme.mode)" || die "the tokens could not be written"
+    info "$TOKENS" ;;
   greeter)
     name=$(setting theme)
     greeter_apply "$name" "$(setting theme.mode)" "$(wallpaper_index "$name")" \

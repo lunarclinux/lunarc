@@ -28,6 +28,10 @@ noto-fonts
 noto-fonts-emoji
 ttf-jetbrains-mono-nerd
 inter-font
+# Geist and Geist Mono, the Frosted Terminal typefaces (from the distro
+# repository; decision record 0043).
+otf-geist
+otf-geist-mono
 
 # App look: GTK and Qt follow the desktop theme
 adw-gtk-theme

@@ -354,12 +354,19 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     check "Hyprland borders from theme"   "$hypr test -s ~/.config/hypr/noctalia.lua && grep -q 'ebc77a' ~/.config/hypr/noctalia.lua"
     check "GTK follows theme"             'test -s ~/.config/gtk-4.0/noctalia.css && [ "$(gsettings get org.gnome.desktop.interface icon-theme)" = "'"'"'Papirus-Dark'"'"'" ]'
     check "default terminal is ghostty"   "$id terminal list | grep -qE '^\* ghostty +installed'"
+    # Design tokens (decision record 0043): the current theme's, as a file; Moonlit's are the design's own.
+    tok_hash() { git -C "$repo" show "$ref:$1" | jq -cS "${2:-.}" | sed "s/@DISTRO_NAME@/$name/" | sha256sum | cut -d' ' -f1; }
+    tokens_are() { echo "[ \"\$(jq -cS . ~/.config/$id/theme/tokens.json | sha256sum | cut -d' ' -f1)\" = $1 ]"; }
+    check "theme tokens are the design's"  "$(tokens_are "$(tok_hash docs/design/frosted-terminal/tokens.json)") && [ \"\$($id theme token color.accent.amber)\" = '#ebc77a' ] && [ \"\$($id theme token geometry.terminal.paneRadius)\" = 6 ]"
+    check "Geist and Geist Mono installed" "fc-list : family | grep -qx Geist && fc-list : family | grep -q '^Geist Mono' && pacman -Q otf-geist otf-geist-mono >/dev/null && test -f /usr/share/licenses/otf-geist-mono/OFL.txt"
+    check "Geist Mono has weight 200"     "fc-list 'Geist Mono:weight=40' family style | grep -q ExtraLight && [ \"\$(fc-match -f '%{family[0]} %{weight}' 'Geist Mono:weight=40')\" = 'Geist Mono 40' ]"
     check "switch theme to tide"          "$hypr $id theme set tide >/dev/null && sleep 2 && grep -q '6cb6d9' ~/.config/hypr/noctalia.lua && grep -qi '10161d' ~/.config/ghostty/themes/noctalia"
     screenshot tide
     check "switch to paper (light)"       "$hypr $id theme set paper >/dev/null && sleep 2 && noctalia msg theme-mode-get | grep -q light && [ \"\$(gsettings get org.gnome.desktop.interface icon-theme)\" = \"'Papirus-Light'\" ]"
     screenshot paper
     check "all themes listed"             "[ \$($id theme list --plain | wc -l) -ge 17 ] && $id theme list --plain | grep -qP '^catppuccin\t'"
     check "switch to catppuccin"          "$hypr $id theme set catppuccin >/dev/null && sleep 2 && grep -q 'cba6f7' ~/.config/hypr/noctalia.lua && grep -qi '1e1e2e' ~/.config/ghostty/themes/noctalia"
+    check "theme tokens follow the theme"  "$(tokens_are "$(tok_hash themes/catppuccin/tokens.json .dark)") && [ \"\$($id theme token color.accent.amber)\" = '#cba6f7' ]"
     # Over SSH the login screen is left alone (polkit: only the person at the
     # computer); from the desktop it follows the theme without a password.
     check "login screen theme: not from SSH" "! $id theme greeter >/dev/null 2>&1 && ! grep -q catppuccin /var/lib/$id/greeter.toml"
@@ -369,6 +376,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     check "switch to eclipse"             "$hypr $id theme set eclipse >/dev/null && sleep 2 && grep -q 'f5c542' ~/.config/hypr/noctalia.lua"
     screenshot eclipse
     check "earthshine opens light"        "$hypr $id theme set earthshine >/dev/null && sleep 2 && noctalia msg theme-mode-get | grep -q light"
+    check "theme tokens follow the mode"   "$hypr $(tokens_are "$(tok_hash themes/earthshine/tokens.json .light)") && $id theme mode dark >/dev/null && $(tokens_are "$(tok_hash themes/earthshine/tokens.json .dark)")"
     screenshot earthshine
 
     # Layer 5: crash inbox, agents, updates.

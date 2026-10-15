@@ -1,0 +1,33 @@
+# Geist and Geist Mono, the desktop's typefaces (decision record 0043). Not in
+# Arch's official repositories, so the distro's repository carries them. Built
+# from Vercel's tagged release, checksum-pinned.
+#
+# The static OTF files: one file per weight (Thin 100 to Black 900, with
+# italics), so fontconfig lists every weight by name (the lock screen's clock
+# is Geist Mono ExtraLight, 200). v1.7.2 is the release with Geist Mono's
+# ligature fix (1.7.0 turned code ligatures on by default).
+#
+# The package names are the AUR's (Arch's font naming), so a copy installed
+# from the AUR counts as the same package, not a second one owning the same files.
+pkgbase=geist-font
+pkgname=(otf-geist otf-geist-mono)
+pkgver=1.7.2
+pkgrel=1
+pkgdesc="Geist typefaces by Vercel"
+arch=(any)
+url="https://github.com/vercel/geist-font"
+license=(OFL-1.1)
+source=("$pkgbase-v$pkgver.zip::$url/releases/download/v$pkgver/geist-font-v$pkgver.zip")
+sha256sums=('7fc800d2ac6b92844895196e5041aca55d814c15db70c44f79b3b83ab82b04e2')
+
+package_otf-geist() {
+  pkgdesc="Geist, a sans-serif typeface by Vercel (OTF)"
+  install -Dm644 -t "$pkgdir/usr/share/fonts/OTF" geist-font/Geist/otf/*.otf
+  install -Dm644 geist-font/OFL.txt "$pkgdir/usr/share/licenses/$pkgname/OFL.txt"
+}
+
+package_otf-geist-mono() {
+  pkgdesc="Geist Mono, a monospaced typeface by Vercel (OTF)"
+  install -Dm644 -t "$pkgdir/usr/share/fonts/OTF" geist-font/GeistMono/otf/*.otf
+  install -Dm644 geist-font/OFL.txt "$pkgdir/usr/share/licenses/$pkgname/OFL.txt"
+}

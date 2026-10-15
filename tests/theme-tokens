@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# Checks the themes' design tokens (tools/make-tokens) and the `theme token`
+# lookup: committed files up to date, Moonlit's dark tokens equal to the
+# design's, every theme with the design's structure and alphas, and the rules
+# that derive the other themes close to the design when applied to Moonlit.
+#
+#   tests/theme-tokens
+set -euo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd)
+source "$root/distro.conf"
+spec=$root/docs/design/frosted-terminal/tokens.json
+fails=0
+
+expect() { # expect <description> <command...>
+  local out
+  if out=$("${@:2}" 2>&1); then
+    printf 'ok    %s\n' "$1"
+  else
+    printf 'FAIL  %s\n%s\n' "$1" "$(sed 's/^/      /' <<<"$out")"
+    fails=$((fails + 1))
+  fi
+}
+
+# Leaves of the token tree, colours blanked, so only the structure and the
+# alphas are compared: "color.border.focus=rgba(_,0.80)".
+shape() { # shape <file> [variant]
+  jq -r --arg v "${2:-}" '(if $v == "" then . else .[$v] end) | paths(scalars) as $p
+    | "\($p | join("."))=\(getpath($p) | tostring)"' "$1" \
+    | sed -E 's/rgba\([0-9]+,[0-9]+,[0-9]+,/rgba(_,/g; s/#[0-9a-f]{6}/#_/g; s/@DISTRO_NAME@/'"$DISTRO_NAME"'/'
+}
+
+expect "generated tokens are up to date" "$root/tools/make-tokens" --check
+expect "moonlit dark is the design's tokens.json" \
+  cmp <(jq -S .dark "$root/themes/moonlit/tokens.json" | sed "s/@DISTRO_NAME@/$DISTRO_NAME/") <(jq -S . "$spec")
+
+for dir in "$root"/themes/*/; do
+  name=$(basename "$dir")
+  expect "$name: tokens for each palette variant" \
+    cmp <(jq -c 'keys' "$dir/palette.json") <(jq -c 'keys' "$dir/tokens.json")
+  for variant in $(jq -r 'keys[]' "$dir/tokens.json"); do
+    expect "$name $variant: the design's structure and alphas" cmp <(shape "$spec") <(shape "$dir/tokens.json" "$variant")
+  done
+done
+
+# The derivation rules, applied to Moonlit's own palette, land within a few
+# steps of the hand-picked values (same alphas, colours within 12 of 255).
+close_to_design() {
+  python3 - "$root" <<'PY'
+import importlib.machinery, importlib.util, json, re, sys
+root = sys.argv[1]
+loader = importlib.machinery.SourceFileLoader("make_tokens", f"{root}/tools/make-tokens")
+mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("make_tokens", loader))
+sys.dont_write_bytecode = True
+loader.exec_module(mod)
+spec = mod.load_spec()
+palette = json.load(open(f"{root}/themes/moonlit/palette.json"))["dark"]
+derived = mod.derive(palette, "dark", spec)
+def numbers(s):
+    s = re.sub(r"#([0-9a-f]{6})", lambda m: ",".join(str(int(m.group(1)[i:i + 2], 16)) for i in (0, 2, 4)), s)
+    return [float(n) for n in re.findall(r"\d+(?:\.\d+)?", s)]
+bad = 0
+def walk(a, b, path):
+    global bad
+    if isinstance(a, dict):
+        for k in a: walk(a[k], b[k], f"{path}.{k}")
+    elif a != b:
+        na, nb = numbers(a), numbers(b)
+        if len(na) != len(nb) or any(abs(x - y) > 12 for x, y in zip(na, nb)):
+            print(f"{path}: design {a}, rules give {b}"); bad = 1
+walk(spec["color"], derived["color"], "color")
+sys.exit(bad)
+PY
+}
+expect "derivation rules reproduce moonlit dark" close_to_design
+
+# `theme token` and `theme tokens` against a pretend install.
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+share=$work/share/$DISTRO_ID
+mkdir -p "$share/themes" "$share/default"
+cp "$root/default/settings" "$share/default/"
+cp -r "$root/themes/moonlit" "$root/themes/nord" "$share/themes/"
+sed -i "s/@DISTRO_NAME@/$DISTRO_NAME/" "$share"/themes/*/tokens.json
+sed "s|^SHARE=.*|SHARE=$share|" "$root/bin/lib.sh" > "$work/lib.sh"
+run_theme() { DISTRO_ID=$DISTRO_ID DISTRO_LIB=$work XDG_CONFIG_HOME=$work/config bash "$root/bin/commands/theme" "$@"; }
+tokens=$work/config/$DISTRO_ID/theme/tokens.json
+
+expect "theme tokens writes the current theme's file" run_theme tokens
+expect "the file is moonlit dark, exactly" cmp <(jq -S . "$tokens") <(jq -S . "$spec")
+expect "theme token prints a colour" test "$(run_theme token color.accent.amber)" = "#ebc77a"
+expect "theme token prints a number" test "$(run_theme token geometry.rounded.paneRadius)" = 16
+expect "theme token prints a table as JSON" test "$(run_theme token geometry.terminal | jq -r .barHeight)" = 30
+refuses() { ! run_theme "$@"; }
+expect "theme token refuses a missing path" refuses token color.nothing
+printf 'theme = nord\ntheme.mode = dark\n' > "$work/config/$DISTRO_ID/settings"
+expect "another theme's tokens follow the setting" run_theme tokens
+expect "nord's accent is its primary" test "$(run_theme token color.accent.amber)" = "$(jq -r .dark.mPrimary "$root/themes/nord/palette.json")"
+
+if (( fails )); then printf '%d check(s) failed\n' "$fails"; exit 1; fi
+echo "all theme token checks passed"

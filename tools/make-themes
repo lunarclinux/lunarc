@@ -8,11 +8,15 @@ Ember, Tide and Paper are hand-written and not touched.
   tools/make-themes            # rewrite every generated theme
   tools/make-themes nord       # just one
 
+Every theme's design tokens (tokens.json) are rewritten afterwards by
+tools/make-tokens, since they follow the palettes.
+
 Colours of the upstream-based themes come from each project's published
 palette (licences in docs/decisions/0025-theme-collection.md).
 """
 import json
 import pathlib
+import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent / "themes"
@@ -253,6 +257,7 @@ def main():
             sys.exit(f"make-themes: no generated theme called {name}")
         write(name, THEMES[name])
         print(f"themes/{name}")
+    subprocess.run([str(ROOT.parent / "tools/make-tokens"), *wanted], check=True)
 
 
 if __name__ == "__main__":
