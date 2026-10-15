@@ -82,7 +82,9 @@ cp "$root/default/settings" "$share/default/"
 cp -r "$root/themes/moonlit" "$root/themes/nord" "$share/themes/"
 sed -i "s/@DISTRO_NAME@/$DISTRO_NAME/" "$share"/themes/*/tokens.json
 sed "s|^SHARE=.*|SHARE=$share|" "$root/bin/lib.sh" > "$work/lib.sh"
-run_theme() { DISTRO_ID=$DISTRO_ID DISTRO_LIB=$work XDG_CONFIG_HOME=$work/config bash "$root/bin/commands/theme" "$@"; }
+# Never reload this machine's own Hyprland or terminals.
+mkdir -p "$work/bin"; printf '#!/bin/sh\nexit 0\n' > "$work/bin/pkill"; chmod +x "$work/bin/pkill"
+run_theme() { env -u HYPRLAND_INSTANCE_SIGNATURE PATH="$work/bin:$PATH" DISTRO_ID=$DISTRO_ID DISTRO_LIB=$work XDG_CONFIG_HOME=$work/config bash "$root/bin/commands/theme" "$@"; }
 tokens=$work/config/$DISTRO_ID/theme/tokens.json
 
 expect "theme tokens writes the current theme's file" run_theme tokens
@@ -91,6 +93,38 @@ expect "theme token prints a colour" test "$(run_theme token color.accent.amber)
 expect "theme token prints a number" test "$(run_theme token geometry.rounded.paneRadius)" = 16
 expect "theme token prints a table as JSON" test "$(run_theme token geometry.terminal | jq -r .barHeight)" = 30
 refuses() { ! run_theme "$@"; }
+
+# The window look made from the tokens: Hyprland's data file, Ghostty's
+# colours, the shape and blur settings.
+look=$work/config/$DISTRO_ID/hypr/look.lua
+ghostty=$work/config/ghostty/$DISTRO_ID-theme
+look_is() { # look_is <lua expression that must be true of the table t>
+  lua -e "local t = dofile('$look'); assert($1, 'not true: $1')"
+}
+expect "look: gaps, border and corners from the terminal geometry" look_is 't.gaps_in == 4 and t.gaps_out == 8 and t.border == 1 and t.rounding == 6 and t.blur == true'
+expect "look: focused border amber, lit at the top" look_is 't.active_border[1] == "rgba(f3e3b5eb)" and t.active_border[2] == "rgba(ebc77acc)"'
+expect "look: other borders hairline, warm at the top" look_is 't.inactive_border[1] == "rgba(ebc77a68)" and t.inactive_border[2] == "rgba(e6e2d621)"'
+expect "look: glow and header strip from the tokens" look_is 't.glow == "rgba(ebc77a1f)" and t.glow_range == 24 and t.header.size == 11 and t.header.font == "Geist Mono" and t.header.fill == "rgba(25262b8d)" and t.header.text_focus == "rgba(ebc77aff)"'
+expect "look: the distro defaults match moonlit's generated look" lua -e "
+  local generated = dofile('$look')
+  local src = io.open('$root/default/hypr/look.lua'):read('a')
+  local defaults = load(src:match('^.-(local look = %b{})') .. ' return look')()
+  for k, v in pairs(generated) do
+    if type(v) == 'table' then for k2, v2 in pairs(v) do assert(defaults[k][k2] == v2, k .. '.' .. k2) end
+    elseif k ~= 'shape' then assert(defaults[k] == v, k) end
+  end"
+expect "ghostty: background" grep -qx 'background = #070b17' "$ghostty"
+expect "ghostty: cursor and text" bash -c "grep -qx 'cursor-color = #e6e2d6' '$ghostty' && grep -qx 'foreground = #d6d2c6' '$ghostty'"
+expect "shape defaults to terminal" test "$(run_theme shape)" = terminal
+expect "geometry.current follows the shape" test "$(run_theme token geometry.current.paneRadius)" = 6
+expect "shape rounded" run_theme shape rounded
+expect "rounded: corners 16, geometry.current too" bash -c "lua -e \"assert(dofile('$look').rounding == 16)\" && [ \"\$(DISTRO_ID=$DISTRO_ID DISTRO_LIB=$work XDG_CONFIG_HOME=$work/config bash $root/bin/commands/theme token geometry.current.paneRadius)\" = 16 ]"
+expect "style.json carries the shape" test "$(jq -r '.shape + " " + (.geometry.paneRadius | tostring)' "$work/config/$DISTRO_ID/theme/style.json")" = "rounded 16"
+expect "shape refuses other values" refuses shape round
+expect "blur off" run_theme blur off
+expect "blur off in the look" look_is 't.blur == false'
+expect "blur refuses other values" refuses blur maybe
+run_theme shape terminal >/dev/null; run_theme blur on >/dev/null
 expect "theme token refuses a missing path" refuses token color.nothing
 printf 'theme = nord\ntheme.mode = dark\n' > "$work/config/$DISTRO_ID/settings"
 expect "another theme's tokens follow the setting" run_theme tokens

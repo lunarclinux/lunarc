@@ -1,0 +1,83 @@
+# Title bars for Hyprland windows, from Hyprland's official plugins: the header
+# strips on terminal windows (decision record 0043). Not in Arch's repositories,
+# so the distro's repository carries it. Built from the plugins release that
+# Hyprland's own plugin manager pins for this Hyprland (hyprpm.toml: 0.56.2 ->
+# 7644cec, tagged v0.56.0), checksum-pinned.
+#
+# A plugin works only with the exact Hyprland it was built against, so:
+# - it is compiled against the headers of one exact Arch Hyprland package and
+#   the Hyprland libraries it was built with, taken from Arch's package archive
+#   (checksum-pinned), never from the build machine; pkgver follows that
+#   Hyprland (0.56.2-4 -> 0.56.2.4);
+# - it records that package in hyprbars.hyprland; the distro's Hyprland config
+#   loads it only while that Hyprland is the one installed and running;
+# - `update` holds back any other Hyprland until a hyprbars built for it is in
+#   the repository (both then update together).
+# bar-only.patch (ours): the bar's fill reaches below the strip (to square off
+# its bottom corners) and was meant to be cut off there, but the renderer
+# draws it wherever the screen changed, so it showed as a lighter band at the
+# top of the window. Limit it to the strip.
+#
+# A new Hyprland, even a rebuild (pkgrel), means updating _hyprland, the
+# library versions below (`pacman -Si` once it's out) and their checksums, and
+# the plugins pin for a new release.
+pkgname=hyprland-plugin-hyprbars
+_hyprland=0.56.2-4
+_hyprland_commit=efb50993780079460b0cbed1363e2166a2de1d9f
+_headers=(hyprland-$_hyprland aquamarine-0.15.1-1 hyprutils-0.14.2-1 hyprlang-0.6.8-5
+          hyprgraphics-0.5.1-4 hyprcursor-0.1.13-7 hyprwire-0.3.1-3)
+_tag=0.56.0
+pkgver=${_hyprland/-/.}
+pkgrel=2
+pkgdesc="Title bars for Hyprland windows (hyprbars), built for Hyprland $_hyprland"
+arch=(x86_64)
+url="https://github.com/hyprwm/hyprland-plugins"
+license=(BSD-3-Clause)
+depends=(hyprland)
+makedepends=(pkgconf pixman libdrm libinput wayland libxkbcommon cairo libxcb xcb-util-errors)
+options=(!debug)
+source=("hyprland-plugins-$_tag.tar.gz::$url/archive/refs/tags/v$_tag.tar.gz"
+        bar-only.patch)
+noextract=()
+for _p in "${_headers[@]}"; do
+  source+=("https://archive.archlinux.org/packages/${_p:0:1}/${_p%-*-*}/$_p-x86_64.pkg.tar.zst")
+  noextract+=("$_p-x86_64.pkg.tar.zst")
+done
+sha256sums=('9520567c1ba01add35b008db4160c6b9bba09fa65a16c09aa4fd71bca692e525'
+            '4ecd9d6fdf4f2aee47da1086de630a35a5718937623f69f4ee279ca055af90a9'
+            '163bc740241880192d90027fad39ddb809b1705b04800a1f0185a58f3ce0884a'
+            'ac96995cceea132e32cafd9bf63fd6cbe3d0599ab175e82bcee85b0c7da9706c'
+            '177dfe5d64dba65ef2f1274d84d647b12cc1bc0b808394fd556f135ac8d7e65e'
+            '212eb288e5a695650cdc4b91b59039ad80423ae5fb938de997e915d979948553'
+            'c916b1fb9d7ad0e78fab2d94b0066dcdc8be0a2810be7e72df57ddf5b639fea3'
+            '1a145509039b1914c179364c4a61fad0dadceea9cc039296ac69ffb48e983fce'
+            '21c889597fc33cf1c2a4c45d13c709f73606a48dfa63c676d4bd4db120de3914')
+
+# The pinned packages' headers and pkg-config files, unpacked under root/ and
+# found before the build machine's own.
+prepare() {
+  local p commit
+  patch -d "hyprland-plugins-$_tag" -p1 < bar-only.patch
+  rm -rf root; mkdir root
+  for p in "${_headers[@]}"; do
+    bsdtar -xf "$p-x86_64.pkg.tar.zst" -C root usr/include usr/lib/pkgconfig usr/share/pkgconfig 2>/dev/null || true
+  done
+  sed -i "s|=/usr|=$srcdir/root/usr|" root/usr/lib/pkgconfig/*.pc root/usr/share/pkgconfig/*.pc
+  commit=$(sed -n 's/^#define GIT_COMMIT_HASH *"\(.*\)"/\1/p' root/usr/include/hyprland/src/version.h)
+  if [[ $commit != "$_hyprland_commit" ]]; then
+    echo "the Hyprland headers are from $commit, not $_hyprland_commit" >&2
+    return 1
+  fi
+}
+
+build() {
+  PKG_CONFIG_PATH="$srcdir/root/usr/share/pkgconfig:$srcdir/root/usr/lib/pkgconfig" \
+    make -C "hyprland-plugins-$_tag/hyprbars" all
+}
+
+package() {
+  install -Dm755 "hyprland-plugins-$_tag/hyprbars/hyprbars.so" "$pkgdir/usr/lib/hyprland-plugins/hyprbars.so"
+  printf '%s\n' "$_hyprland" > hyprbars.hyprland
+  install -Dm644 hyprbars.hyprland "$pkgdir/usr/lib/hyprland-plugins/hyprbars.hyprland"
+  install -Dm644 "hyprland-plugins-$_tag/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

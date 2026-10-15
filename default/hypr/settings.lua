@@ -6,20 +6,9 @@ hl.env("XCURSOR_SIZE", "24")
 hl.env("HYPRCURSOR_SIZE", "24")
 
 hl.config({
+    -- Gaps, borders, corners, blur and shadows are in look.lua.
     general = {
-        gaps_in = 4,
-        gaps_out = 8,
-        border_size = 2,
-        col = {
-            active_border = "rgba(d8a657ff)",
-            inactive_border = "rgba(3c3836ff)",
-        },
         layout = "dwindle",
-    },
-    decoration = {
-        rounding = 6,
-        shadow = { enabled = true, range = 6, render_power = 3, color = 0x99000000 },
-        blur = { enabled = true, size = 4, passes = 2 },
     },
     animations = { enabled = true },
     dwindle = { preserve_split = true },

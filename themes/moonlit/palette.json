@@ -25,22 +25,22 @@
       "selectionFg": "#e6e2d6",
       "normal": {
         "black": "#131b31",
-        "red": "#f28b82",
+        "red": "#f0a39a",
         "green": "#9fd49a",
         "yellow": "#ebc77a",
         "blue": "#8fb4f5",
-        "magenta": "#9c9bef",
-        "cyan": "#7fc8d9",
+        "magenta": "#a9a8f2",
+        "cyan": "#8fd4e3",
         "white": "#e6e2d6"
       },
       "bright": {
         "black": "#2e3a5c",
-        "red": "#f6a9a2",
+        "red": "#f4bfb8",
         "green": "#b7e2b2",
         "yellow": "#f3e3b5",
         "blue": "#acc8f8",
-        "magenta": "#b9b8f4",
-        "cyan": "#a2d9e6",
+        "magenta": "#c3c2f6",
+        "cyan": "#b1e1eb",
         "white": "#ffffff"
       }
     }

@@ -41,9 +41,11 @@ enabled = true
 
 # Carry the theme's colours to other apps. Each template only touches apps
 # whose config file exists (starter configs ship for every terminal listed).
+# Hyprland's colours come from the theme's design tokens instead (`@DISTRO_ID@
+# theme`, default/hypr/look.lua).
 [theme.templates]
 enable_builtin_templates = true
-builtin_ids = ["ghostty", "alacritty", "kitty", "foot", "wezterm", "gtk3", "gtk4", "qt", "hyprland", "btop", "starship"]
+builtin_ids = ["ghostty", "alacritty", "kitty", "foot", "wezterm", "gtk3", "gtk4", "qt", "btop", "starship"]
 
 # Distro plugins ship read-only in /usr/share; Noctalia loads them from there.
 [plugins]

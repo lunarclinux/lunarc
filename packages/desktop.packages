@@ -1,5 +1,8 @@
 # Layer 2: graphical session.
 hyprland
+# Header strips on terminal windows: Hyprland's hyprbars plugin, built for
+# exactly this Hyprland (from the distro repository; decision record 0043).
+hyprland-plugin-hyprbars
 uwsm
 greetd
 # The login screen (from the distro repository; decision record 0041) and the

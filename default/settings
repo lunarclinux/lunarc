@@ -1,6 +1,9 @@
 # Distro defaults for the CLI. Override any line in ~/.config/<distro id>/settings.
 theme = moonlit
 theme.mode = dark
+# Window corners (and later the bar and menus): terminal or rounded. Blur: on or off.
+theme.shape = terminal
+theme.blur = on
 terminal = ghostty
 agent = claude
 crash.notify = first

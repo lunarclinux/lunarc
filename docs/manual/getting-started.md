@@ -71,6 +71,7 @@ SUPER+Space (or SUPER+ALT+Space, or `/m` in the launcher). Empty, it lists Apps 
 |---|---|
 | `lunarc theme list` / `set <name> [dark\|light]` | Switch the desktop theme (colours, wallpaper, terminal, apps, login screen) |
 | `lunarc theme preview` | Colour swatches of every theme, in the terminal |
+| `lunarc theme shape terminal\|rounded` / `blur on\|off` | Window corners (small or rounded) and the blur behind translucent windows and the shell |
 | `lunarc theme wallpaper next` / `prev` / `set <n>` | Cycle the current theme's wallpapers (each theme remembers its pick) |
 | `lunarc terminal set ghostty\|alacritty\|kitty\|wezterm\|foot` | Change the terminal (installs it if needed) |
 | `lunarc agent set claude\|codex\|gemini\|opencode` | Choose the AI coding agent |

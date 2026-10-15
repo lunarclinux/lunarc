@@ -1,0 +1,24 @@
+--- a/hyprbars/barDeco.cpp
++++ b/hyprbars/barDeco.cpp
+@@ -533,11 +533,21 @@
+         glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+     }
+ 
++    // The rect reaches below the bar so its bottom corners aren't rounded;
++    // draw only the bar itself. (The renderer scissors to the damage region,
++    // so the scissor and stencil above don't keep it off the window.)
++    CBox barOnlyBox = {DECOBOX.x - pMonitor->m_position.x, DECOBOX.y - pMonitor->m_position.y, DECOBOX.w, DECOBOX.h};
++    barOnlyBox.translate(PWINDOW->m_floatingOffset).scale(pMonitor->m_scale).round();
++    const CRegion savedDamage = g_pHyprRenderer->m_renderData.damage;
++    g_pHyprRenderer->m_renderData.damage.intersect(barOnlyBox);
++
+     if (SHOULDBLUR)
+         g_pHyprOpenGL->renderRect(titleBarBox, color, {.round = scaledRounding, .roundingPower = m_pWindow->roundingPower(), .blur = true, .blurA = a});
+     else
+         g_pHyprOpenGL->renderRect(titleBarBox, color, {.round = scaledRounding, .roundingPower = m_pWindow->roundingPower()});
+ 
++    g_pHyprRenderer->m_renderData.damage = savedDamage;
++
+     // render title
+     if (ENABLETITLE && (m_szLastTitle != PWINDOW->m_title || m_bWindowSizeChanged || !m_pTextTex || m_pTextTex->m_texID == 0 || m_bTitleColorChanged)) {
+         m_szLastTitle = PWINDOW->m_title;

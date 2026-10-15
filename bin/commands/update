@@ -43,15 +43,42 @@ tested_hyprland() {
 # databases, so the system's own are never half-synced.
 pending() { checkupdates 2>/dev/null || true; }
 
-# Packages to hold back: Hyprland and its own libraries, when the waiting
-# Hyprland is newer than the tested release.
+# The Hyprland package the header-strip plugin (hyprbars) is built for, e.g.
+# 0.56.2-2: the update waiting for it if there is one (its version is that
+# Hyprland's, 0.56.2.2-1), else the installed one. Empty when not installed.
+plugin_file=/usr/lib/hyprland-plugins/hyprbars.hyprland
+plugin_hyprland() { # plugin_hyprland <pending lines>
+  local new
+  new=$(awk '$1 == "hyprland-plugin-hyprbars" { print $4 }' <<<"$1")
+  if [[ -n $new ]]; then
+    new=${new%-*}; printf '%s-%s\n' "${new%.*}" "${new##*.}"
+  elif [[ -f $plugin_file ]]; then
+    head -1 "$plugin_file"
+  fi
+}
+
+# Packages to hold back: Hyprland and its own libraries (the plugin among
+# them), when the waiting Hyprland is newer than the tested release, or isn't
+# the one the plugin is built for: a plugin built for another Hyprland doesn't
+# load, so both wait until the distro repository has the matching pair.
 held_back() { # held_back <pending lines>
-  local tested new
-  tested=$(tested_hyprland)
-  [[ -n $tested ]] || return 0
+  local tested new plugin hold=0
   new=$(awk '$1 == "hyprland" { print $4 }' <<<"$1")
-  [[ -n $new ]] || return 0
-  case $new in "$tested"|"$tested".*|"$tested"-*) return 0 ;; esac
+  if [[ -z $new ]]; then
+    # A plugin for a Hyprland that isn't here yet waits for it.
+    plugin=$(awk '$1 == "hyprland-plugin-hyprbars" { print $4 }' <<<"$1")
+    if [[ -n $plugin && $(plugin_hyprland "$1") != "$(pacman -Q hyprland 2>/dev/null | awk '{ print $2 }')" ]]; then
+      echo hyprland-plugin-hyprbars
+    fi
+    return 0
+  fi
+  tested=$(tested_hyprland)
+  if [[ -n $tested ]]; then
+    case $new in "$tested"|"$tested".*|"$tested"-*) ;; *) hold=1 ;; esac
+  fi
+  plugin=$(plugin_hyprland "$1")
+  if [[ -n $plugin && $plugin != "$new" ]]; then hold=1; fi
+  (( hold )) || return 0
   awk '{ print $1 }' <<<"$1" | grep -E "$hypr_family" || true
 }
 
@@ -227,12 +254,15 @@ update_all() { # update_all [1 = take held-back Hyprland too]
   step "Arch and $DISTRO_NAME packages"
   pend=$(pending)
   if [[ -z $all ]]; then mapfile -t held < <(held_back "$pend"); fi
-  if (( ${#held[@]} )); then
+  if [[ ${held[*]} == hyprland-plugin-hyprbars ]]; then
+    info "Holding back the window header plugin until the Hyprland it's built for arrives."
+  elif (( ${#held[@]} )); then
     info "Holding back Hyprland $(awk '$1 == "hyprland" { print $4 }' <<<"$pend") and its libraries."
-    info "$DISTRO_NAME's settings were tested with Hyprland $(tested_hyprland); a $DISTRO_NAME update"
-    info "takes the new release once it's tested. '$DISTRO_ID update --all' takes it now."
-    for p in "${held[@]}"; do ignore+=(--ignore "$p"); done
+    info "$DISTRO_NAME's settings and window header plugin are made for Hyprland $(pacman -Q hyprland | awk '{ print $2 }');"
+    info "a $DISTRO_NAME update takes the new release once it's tested. '$DISTRO_ID update --all'"
+    info "takes it now (terminal windows lose their header strip until then)."
   fi
+  for p in "${held[@]}"; do ignore+=(--ignore "$p"); done
   before=$(pacman -Q)
   snap_before=$(latest_snapshot)
   # pacman asks its questions on stderr. sudo relays stdout through its own

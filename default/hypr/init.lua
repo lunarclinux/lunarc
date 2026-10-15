@@ -2,6 +2,7 @@
 -- Don't edit these files: updates replace them. Override in your own config.
 local base = "/usr/share/@DISTRO_ID@/default/hypr/"
 dofile(base .. "settings.lua")
+dofile(base .. "look.lua")
 dofile(base .. "binds.lua")
 dofile(base .. "shell.lua")
 dofile(base .. "displays.lua")
