@@ -1,9 +1,10 @@
 --!nonstrict
--- The anchor of the bar's toggles: one small icon. Beside it only the toggles
--- that are on show; hover it (or click it) and they all show, so any can be
--- turned on. Moving away hides the ones that are off again, after a short
--- pause so the pointer can cross the gaps between them.
+-- The anchor of the bar's toggles: one small icon (⊞), after a hairline.
+-- Beside it only the toggles that are on show; hover it (or click it) and they
+-- all show, so any can be turned on. Moving away hides the ones that are off
+-- again, after a short pause so the pointer can cross the gaps between them.
 local toggle = require("./toggle.luau")
+local seg = require("./seg.luau")
 
 local GRACE_MS = 400
 local hovered = {}
@@ -12,9 +13,13 @@ local revealed = false
 local leftAt = nil
 
 local function render()
-  barWidget.render(ui.row({ align = "center", onHover = function(state) hover("anchor", state == "true") end }, {
-    ui.glyph({ name = "adjustments-horizontal" }),
+  barWidget.render(ui.row({ gap = 0, align = "center" }, {
+    seg.divider(),
+    seg.segment({ onHover = function(state) hover("anchor", state == "true") end }, {
+      ui.glyph({ name = "square-plus", size = seg.GLYPH, color = seg.MUTED }),
+    }),
   }))
+  barWidget.setTooltip("Toggles")
 end
 
 local function setRevealed(v)

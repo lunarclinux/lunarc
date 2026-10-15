@@ -8,17 +8,35 @@
 #                          restart our stateless watchers so they run the new
 #                          code, apply user migrations, and reload Noctalia once
 #   shell-reload --hypr    after the Hyprland defaults change: reload Hyprland
+#   shell-reload --noctalia
+#                          after the Noctalia package changes: restart the
+#                          shell, so its new build runs (once the screen is
+#                          unlocked, if Noctalia's own lock screen is up)
+#   shell-reload --noctalia-unlocked
+#                          (as the user) wait until Noctalia's lock screen is
+#                          gone, then restart it
 #
 # Acts as each user only through fixed argument lists (runuser / systemctl
 # --machine=<user>@); usernames, uids and Hyprland instance names are checked
 # first. Quiet, and never fails the transaction.
 set -u
 mode=${1:-shell}
-case $mode in shell|--hypr) ;; *) exit 0 ;; esac
+case $mode in shell|--hypr|--noctalia|--noctalia-unlocked) ;; *) exit 0 ;; esac
 lib=$(dirname "$(readlink -f "$0")")
 # shellcheck source=/dev/null
 source "$lib/distro.conf"
 wants=/usr/lib/systemd/user/graphical-session.target.wants
+
+# Restarting the shell while its own lock screen is up would leave the session
+# locked with nothing to unlock it. Runs as the user, from a transient unit.
+if [[ $mode == --noctalia-unlocked ]]; then
+  for _ in $(seq 17280); do   # up to a day
+    noctalia msg status 2>/dev/null | grep -q '"locked": *true' || break
+    sleep 5
+  done
+  systemctl --user try-restart noctalia.service
+  exit 0
+fi
 
 # Watchers restarted on every update so they run the new code; they keep no
 # state. The crash watcher is left alone when running: it follows the journal
@@ -83,6 +101,13 @@ while read -r _session uid user _rest; do
   [[ -d $runtime ]] || continue
   if [[ $mode == --hypr ]]; then
     hypr_reload "$user" "$runtime"
+  elif [[ $mode == --noctalia ]]; then
+    if timeout 5 runuser -u "$user" -- env XDG_RUNTIME_DIR="$runtime" noctalia msg status 2>/dev/null | grep -q '"locked": *true'; then
+      timeout 20 systemd-run --user --machine="$user@" --quiet --collect --no-block \
+        --unit="$DISTRO_ID-shell-restart" "$lib/shell-reload" --noctalia-unlocked >/dev/null 2>&1
+    else
+      user_systemctl "$user" try-restart --no-block noctalia.service >/dev/null 2>&1
+    fi
   else
     session_services "$user"
     timeout 5 runuser -u "$user" -- env XDG_RUNTIME_DIR="$runtime" noctalia msg config-reload >/dev/null 2>&1

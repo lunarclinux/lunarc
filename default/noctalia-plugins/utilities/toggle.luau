@@ -4,12 +4,14 @@
 -- anchor (toggles.luau) is revealing them all. Hovering a toggle keeps them
 -- revealed: it reports "hover:<entry>" and the anchor decides. Without the
 -- anchor in the bar (a hand-made bar layout), toggles always show.
+local seg = require("./seg.luau")
 local M = {}
 
 M.ids = { "stay-awake", "nightlight", "gravity", "silence", "reminders", "recorder", "dictate" }
 
 -- A toggle widget: new(barWidget, entry id) → { show(children, active) }, where
--- children is a list of ui.* nodes (a glyph, maybe a label).
+-- children is a list of ui.* nodes (a glyph, maybe a label), drawn as one of
+-- the bar's segments; the ones that are on sit flush against the clock.
 function M.new(bw, id)
   local self = {}
   local children, active = {}, false
@@ -18,9 +20,7 @@ function M.new(bw, id)
 
   local function draw()
     bw.setVisible(active or revealed or not anchored)
-    bw.render(ui.row({
-      gap = 4,
-      align = "center",
+    bw.render(seg.segment({
       onHover = function(state) noctalia.state.set("hover:" .. id, state == "true") end,
     }, children))
   end

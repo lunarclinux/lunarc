@@ -1,0 +1,288 @@
+diff --git i/src/app/application_services.cpp w/src/app/application_services.cpp
+index bdc20758a..9747332e6 100644
+--- i/src/app/application_services.cpp
++++ w/src/app/application_services.cpp
+@@ -92,6 +92,7 @@
+ #include "ui/dialogs/color_picker_dialog.h"
+ #include "ui/dialogs/file_dialog.h"
+ #include "ui/dialogs/glyph_picker_dialog.h"
++#include "ui/controls/box.h"
+ #include "ui/style.h"
+ #include "util/file_utils.h"
+ #include "util/string_utils.h"
+@@ -564,6 +565,22 @@ void Application::initStyleThemeAndWayland() {
+     Style::setPopupBordersEnabled(m_configService.config().shell.popupBorders);
+     Style::setPopupShadowsEnabled(m_configService.config().shell.popupShadows);
+     Style::setCardBordersEnabled(m_configService.config().shell.cardBorders);
++    {
++      const auto& shell = m_configService.config().shell;
++      SurfaceFinish finish;
++      finish.highlight = shell.topHighlight;
++      finish.sheen = shell.surfaceSheen;
++      if (shell.topHighlightColor) {
++        finish.highlightColor = *shell.topHighlightColor;
++      }
++      if (shell.sheenTopColor) {
++        finish.sheenTop = *shell.sheenTopColor;
++      }
++      if (shell.sheenBottomColor) {
++        finish.sheenBottom = *shell.sheenBottomColor;
++      }
++      Box::setGlobalSurfaceFinish(finish);
++    }
+     lastCornerRadiusScale = corner;
+     if (cornerChanged) {
+       m_notificationToast.requestLayout();
+diff --git i/src/config/config_types.h w/src/config/config_types.h
+index bad0c2415..73b8ffb75 100644
+--- i/src/config/config_types.h
++++ w/src/config/config_types.h
+@@ -1146,6 +1146,15 @@ struct ShellConfig {
+   bool popupBorders = true;
+   bool popupShadows = true;
+   bool cardBorders = true;
++  // Frosted surfaces: a 1px highlight along the top inner edge of the bar,
++  // panels, launcher, OSD and notification toasts, and a faint top-to-bottom
++  // sheen over them. Colors default to primary at 32% (highlight) and
++  // on_surface at 7% and 2% (sheen).
++  bool topHighlight = false;
++  std::optional<ColorSpec> topHighlightColor;
++  bool surfaceSheen = false;
++  std::optional<ColorSpec> sheenTopColor;
++  std::optional<ColorSpec> sheenBottomColor;
+   std::string fontFamily = "sans-serif";
+   std::string lang; // empty = auto-detect from $LC_ALL/$LC_MESSAGES/$LANG
+   std::string timeFormat = "{:%H:%M}";
+diff --git i/src/config/schema/config_schema.cpp w/src/config/schema/config_schema.cpp
+index ef45b41bf..c8fb1ac22 100644
+--- i/src/config/schema/config_schema.cpp
++++ w/src/config/schema/config_schema.cpp
+@@ -1616,6 +1616,11 @@ namespace noctalia::config::schema {
+         field(&ShellConfig::popupBorders, "popup_borders"),
+         field(&ShellConfig::popupShadows, "popup_shadows"),
+         field(&ShellConfig::cardBorders, "card_borders"),
++        field(&ShellConfig::topHighlight, "top_highlight"),
++        colorSpecField(&ShellConfig::topHighlightColor, "top_highlight_color", /*alwaysEmit=*/false),
++        field(&ShellConfig::surfaceSheen, "surface_sheen"),
++        colorSpecField(&ShellConfig::sheenTopColor, "sheen_top_color", /*alwaysEmit=*/false),
++        colorSpecField(&ShellConfig::sheenBottomColor, "sheen_bottom_color", /*alwaysEmit=*/false),
+         // font_family is trimmed; empty falls back to sans-serif.
+         custom<ShellConfig>(
+             "font_family",
+diff --git i/src/shell/bar/bar.cpp w/src/shell/bar/bar.cpp
+index ff71f3d99..e509dde76 100644
+--- i/src/shell/bar/bar.cpp
++++ w/src/shell/bar/bar.cpp
+@@ -3270,6 +3270,7 @@ void Bar::buildScene(BarInstance& instance, std::uint32_t width, std::uint32_t h
+ 
+     // Bar background
+     instance.bg = static_cast<Box*>(instance.slideRoot->addChild(ui::box()));
++    instance.bg->setSurfaceFinish(true);
+ 
+     // Shadow — bar shape copy rendered with large SDF softness to simulate a blurred drop shadow.
+     if (shadowSize > 0.0F) {
+diff --git i/src/shell/notification/notification_toast.cpp w/src/shell/notification/notification_toast.cpp
+index 368962963..3c0548c5a 100644
+--- i/src/shell/notification/notification_toast.cpp
++++ w/src/shell/notification/notification_toast.cpp
+@@ -2796,6 +2796,7 @@ InputArea* NotificationToast::buildCard(
+             box.setRadius(Style::scaledRadiusXl(scale));
+             box.setFill(colorSpecFromRole(ColorRole::Surface, bgAlpha));
+             box.setBorder(borderColor, borderWidth);
++            box.setSurfaceFinish(true);
+           },
+       })
+   );
+diff --git i/src/shell/osd/osd_overlay.cpp w/src/shell/osd/osd_overlay.cpp
+index 48363fd6f..f22ec4b74 100644
+--- i/src/shell/osd/osd_overlay.cpp
++++ w/src/shell/osd/osd_overlay.cpp
+@@ -671,6 +671,7 @@ void OsdOverlay::buildScene(Instance& inst, std::uint32_t width, std::uint32_t h
+             box.setRadius(osdCardRadius(cw, ch, s));
+             box.setPosition(cardX, cardY);
+             box.setZIndex(0);
++            box.setSurfaceFinish(true);
+           },
+       })
+   );
+diff --git i/src/shell/panel/panel_manager.cpp w/src/shell/panel/panel_manager.cpp
+index ff7a2c162..a021b8ade 100644
+--- i/src/shell/panel/panel_manager.cpp
++++ w/src/shell/panel/panel_manager.cpp
+@@ -2588,6 +2588,7 @@ void PanelManager::buildScene(std::uint32_t width, std::uint32_t height) {
+           bg->setBorder(colorSpecFromRole(ColorRole::Outline, backgroundOpacity), Style::borderWidth);
+         }
+       }
++      bg->setSurfaceFinish(true);
+       m_bgNode = sceneParent->addChild(std::move(bg));
+     }
+ 
+diff --git i/src/shell/panel/persistent_panel_host.cpp w/src/shell/panel/persistent_panel_host.cpp
+index 56106fe68..41dc502b3 100644
+--- i/src/shell/panel/persistent_panel_host.cpp
++++ w/src/shell/panel/persistent_panel_host.cpp
+@@ -342,6 +342,7 @@ void PersistentPanelHost::buildScene(Instance& instance, std::uint32_t width, st
+     if (m_config->config().shell.panel.borders) {
+       bg->setBorder(colorSpecFromRole(ColorRole::Outline, backgroundOpacity), Style::borderWidth);
+     }
++    bg->setSurfaceFinish(true);
+     instance.bgNode = static_cast<Box*>(instance.sceneRoot->addChild(std::move(bg)));
+   }
+ 
+diff --git i/src/ui/controls/box.cpp w/src/ui/controls/box.cpp
+index e72d16034..94e53f967 100644
+--- i/src/ui/controls/box.cpp
++++ w/src/ui/controls/box.cpp
+@@ -5,8 +5,18 @@
+ #include "ui/palette.h"
+ #include "ui/style.h"
+ 
++#include <algorithm>
+ #include <memory>
+ 
++namespace {
++  SurfaceFinish g_surfaceFinish;
++
++  Signal<>& surfaceFinishChanged() {
++    static Signal<> signal;
++    return signal;
++  }
++} // namespace
++
+ Box::Box() {
+   auto rect = std::make_unique<RectNode>();
+   m_rect = static_cast<RectNode*>(addChild(std::move(rect)));
+@@ -81,11 +91,80 @@ void Box::setNoAa(bool noAa) {
+ void Box::setSize(float w, float h) {
+   Node::setSize(w, h);
+   m_rect->setFrameSize(w, h);
++  syncFinish();
+ }
+ 
+ void Box::setFrameSize(float w, float h) {
+   Node::setFrameSize(w, h);
+   m_rect->setFrameSize(w, h);
++  syncFinish();
++}
++
++void Box::setGlobalSurfaceFinish(const SurfaceFinish& finish) {
++  g_surfaceFinish = finish;
++  surfaceFinishChanged().emit();
++}
++
++const SurfaceFinish& Box::globalSurfaceFinish() noexcept { return g_surfaceFinish; }
++
++void Box::setSurfaceFinish(bool enabled) {
++  if (enabled == m_finish) {
++    return;
++  }
++  m_finish = enabled;
++  if (enabled) {
++    m_sheen = static_cast<RectNode*>(addChild(std::make_unique<RectNode>()));
++    m_highlight = static_cast<RectNode*>(addChild(std::make_unique<RectNode>()));
++    m_finishConn = surfaceFinishChanged().connect([this] { syncFinish(); });
++  }
++  syncFinish();
++}
++
++// Both layers copy the box's shape. The sheen is a vertical gradient over the
++// whole box; the highlight is a gradient that is opaque only for the 1px row
++// just inside the border (the shape clips it to the corners).
++void Box::syncFinish() {
++  if (m_sheen == nullptr || m_highlight == nullptr) {
++    return;
++  }
++  const auto& finish = g_surfaceFinish;
++  const float w = width();
++  const float h = height();
++  const bool showSheen = m_finish && finish.sheen && w > 0.0F && h > 0.0F;
++  const bool showHighlight = m_finish && finish.highlight && w > 0.0F && h > 2.0F;
++  m_sheen->setVisible(showSheen);
++  m_highlight->setVisible(showHighlight);
++
++  RoundedRectStyle layer = m_style;
++  layer.border = clearColor();
++  layer.borderWidth = 0.0F;
++  layer.fillMode = FillMode::LinearGradient;
++  layer.gradientDirection = GradientDirection::Vertical;
++  layer.invertFill = false;
++  layer.outerShadow = false;
++  layer.shadowExclusion = false;
++
++  if (showSheen) {
++    const Color top = resolveColorSpec(finish.sheenTop);
++    const Color bottom = resolveColorSpec(finish.sheenBottom);
++    layer.fill = top;
++    layer.gradientStops = {GradientStop{0.0F, top}, GradientStop{0.0F, top}, GradientStop{1.0F, bottom},
++                           GradientStop{1.0F, bottom}};
++    m_sheen->setFrameSize(w, h);
++    m_sheen->setStyle(layer);
++  }
++  if (showHighlight) {
++    const Color line = resolveColorSpec(finish.highlightColor);
++    const Color clear = rgba(line.r, line.g, line.b, 0.0F);
++    const float inset = m_style.border.a > 0.0F ? std::max(0.0F, m_style.borderWidth) : 0.0F;
++    const float from = std::clamp(inset / h, 0.0F, 1.0F);
++    const float to = std::clamp((inset + 1.0F) / h, 0.0F, 1.0F);
++    layer.fill = line;
++    layer.gradientStops = {GradientStop{from, clear}, GradientStop{from, line}, GradientStop{to, line},
++                           GradientStop{to, clear}};
++    m_highlight->setFrameSize(w, h);
++    m_highlight->setStyle(layer);
++  }
+ }
+ 
+ void Box::applyPalette() {
+@@ -151,4 +230,7 @@ void Box::setCardStyle(float scale, float fillOpacity, bool showBorder) {
+   setRadius(Style::scaledRadiusXl(scale));
+ }
+ 
+-void Box::syncStyle() { m_rect->setStyle(m_style); }
++void Box::syncStyle() {
++  m_rect->setStyle(m_style);
++  syncFinish();
++}
+diff --git i/src/ui/controls/box.h w/src/ui/controls/box.h
+index 3856a5d6d..8c9193f10 100644
+--- i/src/ui/controls/box.h
++++ w/src/ui/controls/box.h
+@@ -9,6 +9,17 @@
+ 
+ class RectNode;
+ 
++// The finish of frosted surfaces ([shell] top_highlight, surface_sheen): a 1px
++// line along the top inner edge and a faint top-to-bottom sheen, drawn over a
++// Box that opts in with setSurfaceFinish(true).
++struct SurfaceFinish {
++  bool highlight = false;
++  ColorSpec highlightColor = colorSpecFromRole(ColorRole::Primary, 0.32F);
++  bool sheen = false;
++  ColorSpec sheenTop = colorSpecFromRole(ColorRole::OnSurface, 0.07F);
++  ColorSpec sheenBottom = colorSpecFromRole(ColorRole::OnSurface, 0.02F);
++};
++
+ // A styled rectangle that keeps its internal RectNode sized to match itself.
+ // Use this anywhere you need a background or decorative shape in shell/widget
+ // code — not RectNode directly.
+@@ -45,11 +56,21 @@ public:
+   void setSize(float width, float height) override;
+   void setFrameSize(float width, float height);
+ 
++  // Draw the global surface finish over this box (bar, panel, OSD and toast backgrounds).
++  void setSurfaceFinish(bool enabled);
++  static void setGlobalSurfaceFinish(const SurfaceFinish& finish);
++  [[nodiscard]] static const SurfaceFinish& globalSurfaceFinish() noexcept;
++
+ private:
+   void applyPalette();
+   void syncStyle();
++  void syncFinish();
+ 
+   RectNode* m_rect = nullptr;
++  RectNode* m_sheen = nullptr;
++  RectNode* m_highlight = nullptr;
++  bool m_finish = false;
++  Signal<>::ScopedConnection m_finishConn;
+   RoundedRectStyle m_style;
+   ColorSpec m_fill = clearColorSpec();
+   ColorSpec m_border = clearColorSpec();

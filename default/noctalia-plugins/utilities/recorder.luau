@@ -1,6 +1,6 @@
 --!nonstrict
 -- Screen recording: click to start recording the screen, click again to stop.
--- Right-click records a region. Red while recording.
+-- Right-click records a region. `● REC 02:14` in coral while recording.
 local common = require("./common.luau")
 local toggle = require("./toggle.luau").new(barWidget, "recorder")
 local recording = false
@@ -10,8 +10,8 @@ local function render()
   if recording then
     local s = math.floor((noctalia.nowMs() - startedMs) / 1000)
     toggle.show({
-      ui.glyph({ name = "player-record-filled", color = "error" }),
-      ui.label({ text = string.format("%d:%02d", math.floor(s / 60), s % 60), color = "error" }),
+      ui.box({ width = 7, height = 7, radius = 4, fill = "error" }),
+      ui.label({ text = string.format("REC %02d:%02d", math.floor(s / 60), s % 60), fontSize = 12, color = "error" }),
     }, true)
     barWidget.setTooltip("Recording. Click to stop.")
   else

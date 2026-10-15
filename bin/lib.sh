@@ -105,26 +105,40 @@ launch_app() {
   exec "$@"
 }
 
-# The bar sections that depend on settings, kept as one managed block in
-# Noctalia's user config: the workspaces style and whether weather shows (it is
-# left out entirely when off, rather than saying "Weather off"). The lists match
-# [bar.default] in default/noctalia/defaults.toml.
+# The bar settings, kept as one managed block in Noctalia's user config
+# (decision record 0043): its geometry for the shape (theme.shape: terminal,
+# edge to edge; rounded, a floating pill), its hairline in the theme's colour,
+# the workspaces style, and the opt-in moon and weather segments (left out
+# entirely when off). The lists match [bar.default] in
+# default/noctalia/defaults.toml.
 bar_apply() {
   local config=${XDG_CONFIG_HOME:-$HOME/.config}/noctalia/config.toml start center
   local begin="# >>> $DISTRO_ID bar" end="# <<< $DISTRO_ID bar"
+  local thickness=30 inset=0 radius=0 hairline='#e6e2d621' v
   mkdir -p "${config%/*}"; touch "$config"
   sed -i "\|^$begin\$|,\|^$end\$|d" "$config"
   # The older workspaces-style block this replaces.
   sed -i '/^# workspaces style (set by `.* workspaces style`)$/,/^start = .*$/d' "$config"
   if grep -q '^\[bar\.default\]' "$config"; then
-    info "your $config has its own [bar.default]; edit start/center there"
+    info "your $config has its own [bar.default]; edit it there"
     return 0
   fi
-  start='["menu", "workspaces"]'
-  if [[ $(setting bar.workspaces moon) == noctalia ]]; then start='["menu", "workspaces-noctalia"]'; fi
+  start='["menu", "workspaces", "window", "media"]'
+  if [[ $(setting bar.workspaces moon) == noctalia ]]; then start='["menu", "workspaces-noctalia", "window", "media"]'; fi
   center='["toggles", "stay-awake", "night-light", "gravity", "silence", "reminders", "recorder", "dictate", "clock"'
   if [[ $(setting privacy.weather off) == on ]]; then center+=', "weather"'; fi
+  if [[ $(setting bar.moon off) == on ]]; then center+=', "moon"'
+  elif [[ $(setting privacy.weather off) == on ]]; then center+=', "weather-divider"'
+  fi
   center+=']'
-  printf '%s\n# Written by `%s` from its settings (workspaces style, weather).\n[bar.default]\nstart = %s\ncenter = %s\n%s\n' \
-    "$begin" "$DISTRO_ID" "$start" "$center" "$end" >> "$config"
+  if [[ $(setting theme.shape terminal) == rounded ]]; then thickness=34 inset=8 radius=17; fi
+  v=$(token "geometry.current.barHeight" 2>/dev/null) && [[ $v =~ ^[0-9]+$ ]] && thickness=$v
+  v=$(token "geometry.current.barInset" 2>/dev/null) && [[ $v =~ ^[0-9]+$ ]] && inset=$v
+  v=$(token "geometry.current.barRadius" 2>/dev/null) && [[ $v =~ ^[0-9]+$ ]] && radius=$v
+  v=$(token color.border.hairline 2>/dev/null | sed -nE 's/^rgba\(([0-9]+), *([0-9]+), *([0-9]+), *([0-9.]+)\)$/\1 \2 \3 \4/p')
+  if [[ -n $v ]]; then
+    hairline=$(awk '{ printf "#%02x%02x%02x%02x", $1, $2, $3, int($4 * 255 + 0.5) }' <<<"$v")
+  fi
+  printf '%s\n# Written by `%s` from its settings (shape, workspaces style, moon, weather)\n# and the theme; rewritten when they change.\n[bar.default]\nstart = %s\ncenter = %s\nthickness = %s\nmargin_edge = %s\nmargin_ends = %s\nradius = %s\nborder = "%s"\n%s\n' \
+    "$begin" "$DISTRO_ID" "$start" "$center" "$thickness" "$inset" "$inset" "$radius" "$hairline" "$end" >> "$config"
 }

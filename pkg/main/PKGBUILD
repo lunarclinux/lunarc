@@ -11,6 +11,13 @@ pkgdesc="$DISTRO_NAME desktop: Hyprland, Noctalia, themes and tools"
 arch=(any)
 license=(GPL-3.0-or-later)
 mapfile -t depends < <(sed -e 's/#.*//' -e '/^[[:space:]]*$/d' "$DISTRO_SRC"/packages/{desktop,shell}.packages)
+# The shell is the distro repository's own build of Noctalia (pkg/noctalia,
+# epoch 1): depending on its version or newer makes pacman take it, not Arch's
+# package of the same name, on installs and updates (decision record 0043).
+_noctalia=$(source "$DISTRO_SRC/pkg/noctalia/PKGBUILD" >/dev/null 2>&1; printf '%s:%s-%s' "$epoch" "$pkgver" "$pkgrel")
+for _i in "${!depends[@]}"; do
+  if [[ ${depends[_i]} == noctalia ]]; then depends[_i]="noctalia>=$_noctalia"; fi
+done
 depends+=("$DISTRO_ID-settings")
 
 package() {
