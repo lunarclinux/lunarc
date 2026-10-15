@@ -1,5 +1,5 @@
 # Run in the VM by vm/test-install as the desktop user (@ID@ = distro id,
-# @PW@ = the user's password, for sudo). Decision record 0044: printing is on,
+# @PW@ = the user's password, for sudo). Decision record 0045: printing is on,
 # CUPS starts on demand and listens only on this computer, Avahi browses but
 # announces nothing, the firewall lets mDNS replies in, .local names resolve
 # through nss-mdns.

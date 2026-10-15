@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # New default apps for computers installed before they were defaults (decision
-# record 0044): Disks, Camera and Print Settings. Apps aren't dependencies of
+# record 0045): Disks, Camera and Print Settings. Apps aren't dependencies of
 # the distro package, so they can be removed freely; this runs inside pacman's
 # transaction, where pacman can't be called, so it only lists them and the next
 # `update` installs them (once: removing one later is final).

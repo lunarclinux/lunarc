@@ -1,4 +1,4 @@
-# Run in the VM by vm/test-install as the desktop user. Decision record 0044:
+# Run in the VM by vm/test-install as the desktop user. Decision record 0045:
 # common formats play and archives open. Generates short samples with ffmpeg
 # (installed with gst-libav), plays each through GStreamer's playbin (what
 # Showtime and Decibels use) into fake sinks, then makes 7z and zip archives

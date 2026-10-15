@@ -21,7 +21,7 @@ in_target env DISTRO_ID="$DISTRO_ID" bash "/usr/share/$DISTRO_ID/migrations/syst
 # enables sshd for a given key; that step opens it).
 in_target bash "/usr/share/$DISTRO_ID/migrations/system/20261010-1300-firewall.sh"
 # Printing: CUPS on demand, Avahi browsing only, mDNS replies through the
-# firewall, .local names (decision record 0044).
+# firewall, .local names (decision record 0045).
 in_target bash "/usr/share/$DISTRO_ID/migrations/system/20261015-1000-printing.sh"
 # The login screen in the default theme, until someone picks another.
 in_target "/usr/lib/$DISTRO_ID/greeter-theme"

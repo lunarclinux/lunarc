@@ -59,7 +59,7 @@ unzip
 hunspell
 hunspell-en_us
 
-# Printing (decision record 0044): CUPS, started when something prints and
+# Printing (decision record 0045): CUPS, started when something prints and
 # reachable only from this computer; network printers found through Avahi,
 # which only looks and never announces this computer; .local names through
 # nss-mdns. Print Settings (system-config-printer) is a default app.

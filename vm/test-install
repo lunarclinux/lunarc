@@ -214,7 +214,7 @@ if "$here/ssh" "$vm" "$user" -- "pacman -Q $id >/dev/null 2>&1"; then
   check "firewall refuses incoming"     "$sudo_vm firewall-cmd --state | grep -qx running && $sudo_vm firewall-cmd --get-default-zone | grep -qx public && $sudo_vm firewall-cmd --permanent --zone=public --get-target | grep -qx default && [ -z \"\$($sudo_vm firewall-cmd --zone=public --list-ports)\" ]"
   check "network share: checks, mount on use, write, remove" "$(sed -e "s/@ID@/$id/g" -e "s/@PW@/$password/g" "$here/checks/share.sh")"
   check "firewall: ssh open only because a key was set up" "$sudo_vm firewall-cmd --zone=public --list-services | tr ' ' '\\n' | grep -qx ssh && systemctl is-enabled --quiet sshd"
-  # Everyday formats, spelling, CJK text and printing (decision record 0044).
+  # Everyday formats, spelling, CJK text and printing (decision record 0045).
   check "codecs, archives, spelling, fonts, printing installed" "pacman -Q gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav 7zip unzip hunspell hunspell-en_us noto-fonts-cjk cups avahi nss-mdns >/dev/null"
   check "video and audio play, archives extract" "$(cat "$here/checks/media-files.sh")"
   check "spell checking: en_US dictionary" "test -f /usr/share/hunspell/en_US.dic && printf 'hello wrold\\n' | enchant-2 -l -d en_US | grep -qx wrold"

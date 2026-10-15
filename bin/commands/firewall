@@ -5,7 +5,7 @@ source "$DISTRO_LIB/lib.sh"
 
 # firewalld, default zone "public": every incoming connection is refused
 # except replies to your own traffic, DHCPv6 and mDNS replies (finding
-# printers, decision record 0044). NetworkManager can give a network its own
+# printers, decision record 0045). NetworkManager can give a network its own
 # zone, so something allowed at home stays closed elsewhere.
 usage() {
   cat <<USAGE
