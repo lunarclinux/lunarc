@@ -19,14 +19,21 @@ CTRL+ALT+L restarts it.
 USAGE
 }
 
-# One colour from the active theme, as rrggbb.
-colour() {
-  local palette c=""
-  palette=$SHARE/themes/$(setting theme)/palette.json
-  if [[ -f $palette ]]; then
-    c=$(jq -r --arg m "$(setting theme.mode dark)" --arg k "$1" '.[$m][$k] // empty' "$palette" | tr -d '#')
+# One colour from the theme's design tokens (`$DISTRO_ID theme token`), as
+# swaylock's rrggbbaa; the fallback (Moonlit's) when there are no tokens.
+colour() { # colour <token path> <fallback rrggbbaa>
+  local v r g b a=ff
+  v=$(token "$1" 2>/dev/null) || v=""
+  if [[ $v =~ ^#([0-9a-fA-F]{6})$ ]]; then
+    v=${BASH_REMATCH[1]}
+  elif [[ $v =~ ^rgba\(\ *([0-9]+)\ *,\ *([0-9]+)\ *,\ *([0-9]+)\ *,\ *([0-9.]+)\ *\)$ ]]; then
+    r=${BASH_REMATCH[1]} g=${BASH_REMATCH[2]} b=${BASH_REMATCH[3]}
+    a=$(awk -v a="${BASH_REMATCH[4]}" 'BEGIN { printf "%02x", a * 255 + 0.5 }')
+    v=$(printf '%02x%02x%02x' "$r" "$g" "$b")
+  else
+    printf '%s\n' "$2"; return
   fi
-  printf '%s\n' "${c:-$2}"
+  printf '%s%s\n' "${v,,}" "$a"
 }
 
 # The screensaver lock. --daemonize makes swaylock-plugin return only once the
@@ -36,9 +43,11 @@ colour() {
 # passwords, so every lock asks for the password.
 screensaver_lock() {
   if ! command -v swaylock-plugin >/dev/null || ! command -v windowtolayer >/dev/null; then return 1; fi
-  local gold text night violet wrong
-  gold=$(colour mPrimary ebc77a) text=$(colour mOnSurface e6e2d6) night=$(colour mSurface 0b1020)
-  violet=$(colour mSecondary a9a8f2) wrong=$(colour mError f0a39a)
+  local amber text body muted night coral violet hairline
+  amber=$(colour color.accent.amber ebc77aff) text=$(colour color.text.primary e6e2d6ff)
+  body=$(colour color.text.secondary c9c5b9ff) muted=$(colour color.text.muted b4bbd0ff)
+  night=$(colour color.bg.deep 070b17ff) coral=$(colour color.signal.coral f0a39aff)
+  violet=$(colour color.signal.violet a9a8f2ff) hairline=$(colour color.border.hairline e6e2d621)
 
   # The screensaver's own terminal, one per screen, drawn as the lock background,
   # with the screensaver window's flags so it looks the same.
@@ -52,35 +61,52 @@ screensaver_lock() {
     --command-each "$background"
     --ignore-empty-password
     --show-failed-attempts
-    # The password box (or ring) appears with the first key and fades back to
-    # the screensaver, with one line under it saying what the lock expects (our
-    # swaylock-plugin patches); nothing static is drawn on the screensaver.
-    --hint-text "Type your password · Enter to unlock · Esc clears"
-    --hint-color "$text"
-    --font "Inter" --font-size 22
-    --indicator-radius 110 --indicator-thickness 9
+    --font "Geist Mono"
     --indicator-caps-lock
-    # Solid, so the box stays readable over busy screensaver effects.
-    --inside-color "${night}ff" --inside-clear-color "${night}ff" --inside-ver-color "${night}ff"
-    --inside-wrong-color "${night}ff" --inside-caps-lock-color "${night}ff"
-    --ring-color "$gold" --ring-clear-color "$violet" --ring-ver-color "$text"
-    --ring-wrong-color "$wrong" --ring-caps-lock-color "$gold"
-    --key-hl-color "$text" --bs-hl-color "$wrong" --caps-lock-key-hl-color "$text"
-    --caps-lock-bs-hl-color "$wrong"
-    --line-color 00000000 --line-clear-color 00000000 --line-ver-color 00000000
-    --line-wrong-color 00000000 --line-caps-lock-color 00000000 --separator-color 00000000
-    --text-color "$text" --text-clear-color "$text" --text-ver-color "$text"
-    --text-wrong-color "$wrong" --text-caps-lock-color "$gold"
-    --layout-bg-color "${night}ff" --layout-border-color 00000000 --layout-text-color "$text"
+    --key-hl-color "$text" --bs-hl-color "$coral" --caps-lock-key-hl-color "$amber"
+    --caps-lock-bs-hl-color "$coral"
+    --text-clear-color "$text" --text-ver-color "$text"
+    --text-wrong-color "$coral" --text-caps-lock-color "$amber"
+    --layout-bg-color "${night:0:6}ff" --layout-border-color 00000000 --layout-text-color "$text"
   )
-  # A password box instead of the ring (our swaylock-plugin patch); setting
-  # lock.indicator = ring keeps the ring. Only passed when the installed
-  # swaylock-plugin knows the option, so a half-finished update still locks.
-  # (--help exits 1, so read its text rather than piping it under pipefail.)
+  # The password prompt in a pill (our swaylock-plugin patch): always there
+  # over the screensaver, `user@host password:` and a row of dots, one lit at
+  # random per key (never the count). Setting lock.indicator = ring keeps the
+  # ring, which appears with the first key. Each is only used when the
+  # installed swaylock-plugin knows its options, so a half-finished update
+  # still locks. (--help exits 1, so read its text rather than piping it
+  # under pipefail.)
   local help
   help=$(swaylock-plugin --help 2>&1 || true)
-  if [[ $(setting lock.indicator box) == box && $help == *--indicator-style* ]]; then
-    args+=(--indicator-style box)
+  if [[ $(setting lock.indicator box) == box && $help == *--prompt-text* ]]; then
+    args+=(
+      --indicator-style box --indicator-idle-visible
+      --prompt-text "${USER:-$(id -un)}@$(uname -n)" --prompt-color "$amber"
+      --hint-text "Enter to unlock · Esc clears" --hint-color "$body"
+      --font-size 15
+      # Translucent like the design's pill (the screensaver shows through);
+      # border, top highlight and text by state.
+      --inside-color "${night:0:6}b8" --inside-clear-color "${night:0:6}b8" --inside-ver-color "${night:0:6}b8"
+      --inside-wrong-color "${night:0:6}b8" --inside-caps-lock-color "${night:0:6}b8"
+      --ring-color "$hairline" --ring-clear-color "${violet:0:6}99" --ring-ver-color "$hairline"
+      --ring-wrong-color "$coral" --ring-caps-lock-color "${amber:0:6}99"
+      --line-color "${amber:0:6}80" --line-clear-color "${violet:0:6}80" --line-ver-color "${amber:0:6}80"
+      --line-wrong-color "${coral:0:6}80" --line-caps-lock-color "${amber:0:6}80"
+      --text-color "$muted"
+    )
+  else
+    args+=(
+      --hint-text "Type your password · Enter to unlock · Esc clears" --hint-color "$text"
+      --font-size 22 --indicator-radius 110 --indicator-thickness 9
+      # Solid, so the ring stays readable over busy screensaver effects.
+      --inside-color "${night:0:6}ff" --inside-clear-color "${night:0:6}ff" --inside-ver-color "${night:0:6}ff"
+      --inside-wrong-color "${night:0:6}ff" --inside-caps-lock-color "${night:0:6}ff"
+      --ring-color "$amber" --ring-clear-color "$violet" --ring-ver-color "$text"
+      --ring-wrong-color "$coral" --ring-caps-lock-color "$amber"
+      --line-color 00000000 --line-clear-color 00000000 --line-ver-color 00000000
+      --line-wrong-color 00000000 --line-caps-lock-color 00000000 --separator-color 00000000
+      --text-color "$text"
+    )
   fi
   timeout 10 swaylock-plugin "${args[@]}" >/dev/null 2>&1
 }

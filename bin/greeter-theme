@@ -5,7 +5,8 @@
 # password, and nobody else. The arguments only pick among installed themes,
 # and everything written comes from the distro's own files.
 #
-#   greeter-theme [<theme> <dark|light> <wallpaper number>]   (none: the default theme)
+#   greeter-theme [<theme> <dark|light> <wallpaper number> [terminal|rounded]]
+#   (none: the default theme; the shape defaults to terminal)
 #
 # Writes /var/lib/<distro id>/greeter.toml; the greeter reads it through a link
 # from its own state folder (owned by the greeter user, so nothing is written there).
@@ -14,11 +15,13 @@ die() { echo "greeter-theme: $*" >&2; exit 2; }
 (( EUID == 0 )) || { echo "greeter-theme: must run as root" >&2; exit 1; }
 share=/usr/share/@DISTRO_ID@
 default() { awk -F' *= *' -v k="$1" '$1 == k { print $2; exit }' "$share/default/settings"; }
+shape=terminal
 case $# in
   0) name=$(default theme) mode=$(default theme.mode) n=1 ;;
-  3) name=$1 mode=$2 n=$3 ;;
-  *) die "usage: greeter-theme [<theme> <dark|light> <wallpaper number>]" ;;
+  3|4) name=$1 mode=$2 n=$3 shape=${4:-terminal} ;;
+  *) die "usage: greeter-theme [<theme> <dark|light> <wallpaper number> [terminal|rounded]]" ;;
 esac
+[[ $shape == terminal || $shape == rounded ]] || die "shape must be terminal or rounded"
 [[ $name =~ ^[a-z0-9][a-z0-9-]*$ && -f $share/themes/$name/palette.json ]] || die "unknown theme '$name'"
 [[ $mode == dark || $mode == light ]] || die "mode must be dark or light"
 palette=$share/themes/$name/palette.json
@@ -39,15 +42,46 @@ colours=$(jq -r --arg m "$mode" '.[$m] | to_entries[]
   | "\(.key[1:] | gsub("(?<c>[A-Z])"; "_" + (.c | ascii_downcase)) | ltrimstr("_")) = \"\(.value)\""' "$palette")
 surface=$(jq -r --arg m "$mode" '.[$m].mSurface' "$palette")
 
+# Frosted Terminal (decision record 0043): the theme's design tokens over those
+# palette roles, so the login card reads like the desktop's popovers: the deep
+# background, the popover fill as the card (opaque: the greeter has no
+# translucency), the amber popover border as its outline, amber and coral, the
+# panel radius of the shape (the greeter's cards are 12 at scale 1).
+tokens=$share/themes/$name/tokens.json radius=1
+if [[ -f $tokens ]] && jq -e --arg m "$mode" 'has($m)' "$tokens" >/dev/null; then
+  tokens_toml=$(jq -r --arg m "$mode" '
+    def rgb: if test("^#") then [.[1:3], .[3:5], .[5:7] | ascii_downcase | explode
+        | map(if . >= 97 then . - 87 else . - 48 end) | .[0] * 16 + .[1]] + [1]
+      else capture("rgba\\((?<r>[0-9]+), *(?<g>[0-9]+), *(?<b>[0-9]+), *(?<a>[0-9.]+)\\)")
+        | [(.r, .g, .b | tonumber), (.a | tonumber)] end;
+    def hex2: [(. / 16 | floor), (. % 16)] | map(if . < 10 then . + 48 else . + 87 end) | implode;
+    def over($bg): (rgb) as $c | ($bg | rgb) as $b
+      | "#" + ([range(3)] | map(($c[.] * $c[3] + $b[.] * (1 - $c[3])) | round | hex2) | join(""));
+    .[$m].color as $c
+    | ($c.sheen.top | over($c.bg.popover | over($c.bg.deep))) as $card
+    | {primary: $c.accent.amber, on_primary: $c.accent.onAmber, error: $c.signal.coral,
+       surface: $c.bg.deep, on_surface: $c.text.primary, surface_variant: $card,
+       on_surface_variant: $c.text.muted, outline: ($c.border.popover | over($card))}
+    | to_entries[] | select(.value | test("^#[0-9a-f]{6}$")) | "\(.key) = \"\(.value)\""' "$tokens") || tokens_toml=""
+  if [[ -n $tokens_toml ]]; then
+    # Later keys win in this merge: the palette's line for a role is replaced.
+    colours=$(printf '%s\n%s\n' "$colours" "$tokens_toml" | awk -F' = ' '{ v[$1] = $0; if (!($1 in seen)) { seen[$1] = 1; order[++n] = $1 } }
+      END { for (i = 1; i <= n; i++) print v[order[i]] }')
+    surface=$(jq -r --arg m "$mode" '.[$m].color.bg.deep' "$tokens")
+  fi
+  radius=$(jq -r --arg m "$mode" --arg s "$shape" '.[$m].geometry[$s].panelRadius // 12 | . / 12 * 1000 | round / 1000' "$tokens")
+fi
+
 out=/var/lib/@DISTRO_ID@/greeter.toml
 install -d -m755 "${out%/*}"
 tmp=$(mktemp "$out.XXXXXX")
 trap 'rm -f "$tmp"' EXIT
 {
   printf '# The login screen (Noctalia Greeter), written by greeter-theme from the theme\n'
-  printf '# chosen with `@DISTRO_ID@ theme`: %s (%s). Changes here are replaced.\n\n' "$name" "$mode"
+  printf '# chosen with `@DISTRO_ID@ theme`: %s (%s, %s). Changes here are replaced.\n\n' "$name" "$mode" "$shape"
   printf '[session]\ndefault = "@DISTRO_NAME@"\n\n'
-  printf '[appearance]\nscheme = "Synced"\ntheme_mode = "%s"\nfont_family = "Inter"\n' "$mode"
+  printf '[appearance]\nscheme = "Synced"\ntheme_mode = "%s"\nfont_family = "Geist Mono"\n' "$mode"
+  printf 'corner_radius_scale = %s\n' "$radius"
   printf 'hide_logo = true\nscheme_selector_position = "hidden"\n\n'
   printf '[appearance.palette]\n%s\n\n' "$colours"
   printf '[appearance.wallpaper]\n'
