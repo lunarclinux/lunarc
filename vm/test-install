@@ -482,6 +482,8 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       }
       point() { "$here/ssh" "$vm" "$user" -- "$hypr hyprctl dispatch 'hl.dsp.cursor.move({ x = $1, y = $2 })' >/dev/null" || true; }
       if command -v magick >/dev/null; then
+        # An open panel takes the pointer from the bar; close what earlier steps opened.
+        "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg panel-close >/dev/null 2>&1" || true
         point 640 500; sleep 1; bar_shot bar-rest; read -r rest_w anchor_x rest_gold < <(bar_centre "$last_shot")
         report "$(( rest_gold < 20 && rest_w < 140 ? 0 : 1 ))" "toggles: only the anchor at rest (width $rest_w, gold $rest_gold)"
         # Hover the anchor (the leftmost icon). Hyprland's cursor warps only
