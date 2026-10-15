@@ -12,6 +12,11 @@ showtime
 decibels
 gnome-calculator
 btop
+# Disks (format, partition, check drives, write images), Camera, and Print
+# Settings for adding printers by hand (most network printers need nothing).
+gnome-disk-utility
+snapshot
+system-config-printer
 # Backups (encrypted, on a schedule); the first-login setup helps choose where.
 pika-backup
 gvfs

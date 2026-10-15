@@ -215,6 +215,16 @@ if "$here/ssh" "$vm" "$user" -- "pacman -Q $id >/dev/null 2>&1"; then
   check "firewall refuses incoming"     "$sudo_vm firewall-cmd --state | grep -qx running && $sudo_vm firewall-cmd --get-default-zone | grep -qx public && $sudo_vm firewall-cmd --permanent --zone=public --get-target | grep -qx default && [ -z \"\$($sudo_vm firewall-cmd --zone=public --list-ports)\" ]"
   check "network share: checks, mount on use, write, remove" "$(sed -e "s/@ID@/$id/g" -e "s/@PW@/$password/g" "$here/checks/share.sh")"
   check "firewall: ssh open only because a key was set up" "$sudo_vm firewall-cmd --zone=public --list-services | tr ' ' '\\n' | grep -qx ssh && systemctl is-enabled --quiet sshd"
+  # Everyday formats, spelling, CJK text and printing (decision record 0045).
+  check "codecs, archives, spelling, fonts, printing installed" "pacman -Q gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav 7zip unzip hunspell hunspell-en_us noto-fonts-cjk cups avahi nss-mdns >/dev/null"
+  check "video and audio play, archives extract" "$(cat "$here/checks/media-files.sh")"
+  check "spell checking: en_US dictionary" "test -f /usr/share/hunspell/en_US.dic && printf 'hello wrold\\n' | enchant-2 -l -d en_US | grep -qx wrold"
+  check "CJK text has a font"            "fc-match -f '%{family}' 'sans-serif:lang=ja' | grep -q 'Noto Sans CJK' && fc-match -f '%{family}' 'sans-serif:lang=zh-cn' | grep -q 'Noto Sans CJK'"
+  check "printing: CUPS local, Avahi browse only, mDNS in" "$(sed -e "s/@ID@/$id/g" -e "s/@PW@/$password/g" "$here/checks/printing.sh")"
+  # An install from before printing: undo it, run the migration (twice), and
+  # the result passes the same checks as a fresh install.
+  check "printing migration brings an older install up to date" "$(sed -e "s/@ID@/$id/g" -e "s/@PW@/$password/g" "$here/checks/printing-migration.sh")"
+  check "printing after the migration"   "$(sed -e "s/@ID@/$id/g" -e "s/@PW@/$password/g" "$here/checks/printing.sh")"
   check "network privacy settings"      "NetworkManager --print-config | grep -qx 'wifi.cloned-mac-address=stable' && NetworkManager --print-config | grep -qx 'ipv6.ip6-privacy=2' && NetworkManager --print-config | grep -qx 'ipv4.dhcp-send-hostname=false'"
   check "kernel hardening applied"      "[ \$(sysctl -n kernel.kptr_restrict) = 2 ] && [ \$(sysctl -n kernel.unprivileged_bpf_disabled) = 1 ] && [ \$(sysctl -n kernel.kexec_load_disabled) = 1 ] && [ \$(sysctl -n kernel.yama.ptrace_scope) = 1 ]"
   check "calculator downloads nothing"  "[ \$(gsettings get org.gnome.calculator refresh-interval) = 0 ]"
@@ -253,7 +263,10 @@ if [[ -n $iso ]]; then
   check "installed from the ISO's installer" "pacman -Q $id | grep -q ."
 fi
 if "$here/ssh" "$vm" "$user" -- "pacman -Q firefox >/dev/null 2>&1"; then
-  check "default apps installed"        "pacman -Q firefox nautilus gnome-text-editor papers loupe showtime decibels gnome-calculator btop pika-backup >/dev/null"
+  check "default apps installed"        "pacman -Q firefox nautilus gnome-text-editor papers loupe showtime decibels gnome-calculator btop pika-backup gnome-disk-utility snapshot system-config-printer >/dev/null"
+  # An install from before an app became a default: the migration lists it,
+  # the next update installs it, once; removed again, it stays removed.
+  check "new default apps: installed once by update" "$sudo_vm pacman -Rns --noconfirm snapshot >/dev/null && $sudo_vm sed -i '/new-default-apps/d' /var/lib/$id/migrations-applied && $sudo_vm $id migrate --system >/dev/null && grep -qx snapshot /var/lib/$id/new-default-apps && ! grep -q gnome-disk-utility /var/lib/$id/new-default-apps && printf '%s\\ny\\n' '$password' | sudo -k -S -p '' $id update new-apps >/dev/null && pacman -Q snapshot >/dev/null && ! test -e /var/lib/$id/new-default-apps && $sudo_vm pacman -Rns --noconfirm snapshot >/dev/null && printf '%s\\ny\\n' '$password' | sudo -k -S -p '' $id update new-apps >/dev/null && ! pacman -Q snapshot 2>/dev/null && $sudo_vm pacman -S --noconfirm snapshot >/dev/null"
   check "app catalog lists apps"        "$id app list | grep -q steam && $id app search claude | grep -q claude-desktop"
   check "default editor is micro"       "command -v micro >/dev/null && [ \"\$(bash -lc 'echo \$EDITOR')\" = micro ] && systemctl --user show-environment | grep -qx EDITOR=micro"
   check "shell defaults active"         "grep -q 'shell defaults' ~/.bashrc && bash -ic 'alias ll && type z && type starship_precmd' >/dev/null 2>&1"
@@ -303,7 +316,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     check "distro shell defaults applied" "$hypr"' noctalia config export | grep -qE "^polkit_agent *= *true"'
     check "clutter hidden from launcher"  "grep -q '^NoDisplay=true' /usr/local/share/applications/avahi-discover.desktop 2>/dev/null || grep -q '^NoDisplay=true' /usr/share/$id/xdg/applications/avahi-discover.desktop"
     # Every launcher entry must be one we mean to show; new dependency clutter fails here.
-    check "launcher shows only intended apps" "for f in /usr/share/applications/*.desktop; do n=\${f##*/}; grep -q '^NoDisplay=true' \"\$f\" && continue; [ -f /usr/share/$id/xdg/applications/\$n ] && continue; echo \$n; done | sort | tr '\\n' ' ' | tee /dev/stderr | grep -qxE '(btop.desktop |com.mitchellh.ghostty.desktop |dev.noctalia.Noctalia.desktop |firefox.desktop |org.gnome.Calculator.desktop |org.gnome.Decibels.desktop |org.gnome.Loupe.desktop |org.gnome.Nautilus.desktop |org.gnome.Papers.desktop |org.gnome.Showtime.desktop |org.gnome.World.PikaBackup.desktop |org.gnome.TextEditor.desktop |org.wezfurlong.wezterm.desktop )+'"
+    check "launcher shows only intended apps" "for f in /usr/share/applications/*.desktop; do n=\${f##*/}; grep -q '^NoDisplay=true' \"\$f\" && continue; [ -f /usr/share/$id/xdg/applications/\$n ] && continue; echo \$n; done | sort | tr '\\n' ' ' | tee /dev/stderr | grep -qxE '(btop.desktop |com.mitchellh.ghostty.desktop |dev.noctalia.Noctalia.desktop |firefox.desktop |org.gnome.Calculator.desktop |org.gnome.Decibels.desktop |org.gnome.DiskUtility.desktop |org.gnome.Snapshot.desktop |system-config-printer.desktop |org.gnome.Loupe.desktop |org.gnome.Nautilus.desktop |org.gnome.Papers.desktop |org.gnome.Showtime.desktop |org.gnome.World.PikaBackup.desktop |org.gnome.TextEditor.desktop |org.wezfurlong.wezterm.desktop )+'"
     check "launcher opens"               "$hypr"' noctalia msg panel-open launcher'
   else
     check "polkit agent running"         'systemctl --user is-active --quiet hyprpolkitagent'

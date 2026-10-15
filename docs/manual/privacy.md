@@ -36,16 +36,19 @@ location lookups, no plugin catalogs, no exchange-rate downloads.
 | Command help (`tldr`) | the tldr pages on GitHub | when you run `tldr` and its cache is old |
 | Debug symbols | `debuginfod.archlinux.org` | when you debug a program in a terminal (gdb); crash capture never looks them up |
 | Backups | where you point Pika Backup | once you set it up |
+| Finding printers | mDNS questions on your local network only (never past your router); this computer never announces itself | when a print dialog or Print Settings is open, or something prints |
+| Printer drivers | openprinting.org (the printer's make and model) | adding a printer in Print Settings when no installed driver matches |
 | Noctalia community palettes, templates, plugins, calendars | noctalia.dev, GitHub, your calendar provider | only when you open or add them in Noctalia's settings |
 
 ## Defaults that protect you
 
 - **Disk encryption** is the installer's default (LUKS2). Backups are encrypted (Pika Backup). Saved passwords and clipboard history live in the keyring.
-- **Firewall:** incoming connections are refused (firewalld, zone `public`). `lunarc firewall allow localsend` (or `kdeconnect`, `syncthing`, `ssh`, `steam-streaming`, `8080/tcp`) opens one; `deny` closes it.
+- **Firewall:** incoming connections are refused (firewalld, zone `public`), except mDNS replies from the local network, which finding printers needs. `lunarc firewall allow localsend` (or `kdeconnect`, `syncthing`, `ssh`, `steam-streaming`, `8080/tcp`) opens one; `deny` closes it.
 - **Wi-Fi:** a random hardware (MAC) address per network, temporary IPv6 addresses, and your computer's name isn't sent to the network.
 - **Firefox:** telemetry, studies, sponsored tiles and stories, Firefox Suggest and recommendations off; strict tracking protection; HTTPS-only mode; search suggestions off; DuckDuckGo as the search engine; uBlock Origin installed (removable). Firefox's own DNS-over-HTTPS stays off so it doesn't send your lookups to a provider you didn't choose; use `lunarc privacy dns` for the whole system instead. All of these can be changed in Firefox's settings.
 - **Developer tools:** `DO_NOT_TRACK=1` and the tools' own opt-outs (.NET, Next.js, Astro, Nuxt, Gatsby, Homebrew, Azure, PowerShell, Hugging Face, Turborepo, Angular, Storybook, Google Cloud SDK and others) are set for every session and shell. VS Code, Code - OSS and Zed installed through `lunarc app` start with telemetry off.
 - **Kernel:** kernel addresses and logs hidden from users, no unprivileged BPF, debugging limited to a process's parent, no runtime kernel replacement (kexec), ICMP redirects ignored.
+- **Printing:** the print service answers only this computer and never shares its printers; Avahi looks for printers but never announces this computer's name, address or services.
 - **Lock:** SUPER+L, idle and before sleep; wrong-password lockouts are short (10 tries, 2 minutes).
 
 ## Changing your mind

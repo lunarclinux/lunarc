@@ -5,7 +5,7 @@ source "$DISTRO_LIB/lib.sh"
 
 usage() {
   cat <<USAGE
-Usage: $DISTRO_ID update [--all] | check | firmware | snapshots | rollback <n> [--dry-run] | rollback --clean
+Usage: $DISTRO_ID update [--all] | check | new-apps | firmware | snapshots | rollback <n> [--dry-run] | rollback --clean
 
   (no argument)   update everything: keyrings first, then Arch and $DISTRO_NAME
                   packages (a snapshot is taken before and after), then AUR
@@ -15,6 +15,8 @@ Usage: $DISTRO_ID update [--all] | check | firmware | snapshots | rollback <n> [
   check           list waiting updates, by source, without installing
   doctor          check what updates need (network, clock, package key) and fix
                   what it can
+  new-apps        install default apps added since this computer was installed
+                  (an update does this; each is offered once)
   firmware        check for and install firmware updates (BIOS/UEFI, SSD, dock...)
                   through fwupd; firmware lists are only downloaded when you run this
   snapshots       list the snapshots taken before updates
@@ -251,6 +253,27 @@ explain_failure() { # explain_failure <stderr log>
   info "  3. An update was being published just then: try again in a minute"
 }
 
+# Default apps added after this computer was installed. A system migration
+# lists them (it runs inside pacman's transaction, where pacman can't be
+# called); they're installed here, once: the list is cleared either way, so an
+# app removed later isn't brought back.
+new_apps_list=/var/lib/$DISTRO_ID/new-default-apps
+new_default_apps() {
+  local pkgs=() p
+  [[ -s $new_apps_list ]] || return 0
+  while read -r p; do
+    if [[ $p =~ ^[a-z0-9][a-z0-9._+-]*$ ]] && ! pacman -Qq "$p" >/dev/null 2>&1; then pkgs+=("$p"); fi
+  done < "$new_apps_list"
+  if (( ${#pkgs[@]} )); then
+    step "New default apps"
+    info "$DISTRO_NAME now includes: ${pkgs[*]}"
+    if ! sudo pacman -S --needed "${pkgs[@]}"; then
+      info "Not installed. To add them later: sudo pacman -S ${pkgs[*]}"
+    fi
+  fi
+  sudo rm -f "$new_apps_list"
+}
+
 update_all() { # update_all [1 = take held-back Hyprland too]
   local all=$1 before after pend changed others snap snap_before pre p
   local held=() ignore=() keyrings=(archlinux-keyring) aur_failed=0 kernel=0 errlog
@@ -309,6 +332,8 @@ update_all() { # update_all [1 = take held-back Hyprland too]
     fi
     die "the system update did not finish"
   fi
+
+  new_default_apps
 
   if command -v yay >/dev/null && [[ -n $(pacman -Qqm) ]]; then
     step "AUR apps"
@@ -512,6 +537,7 @@ case ${1:-} in
   "") update_all "" ;;
   --all) update_all 1 ;;
   check) check ;;
+  new-apps) sudo -v; new_default_apps ;;
   firmware)
     command -v fwupdmgr >/dev/null || die "fwupd isn't installed (sudo pacman -S fwupd)"
     # Downloads the firmware list from the Linux Vendor Firmware Service (LVFS)
