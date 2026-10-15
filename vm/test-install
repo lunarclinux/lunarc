@@ -803,6 +803,19 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     fi
     check "agent list knows claude"       "$id agent list | grep -qE '^\\* claude'"
     check "update check runs"             "$id update check >/dev/null"
+    # The daily update check is opt-in: off by default; on enables a user timer
+    # whose run writes the waiting count the menu and the bar read.
+    check "update auto-check: off by default" "[ \"\$($id update auto-check)\" = 'checking for updates daily: off' ] && ! systemctl --user is-enabled --quiet $id-update-check.timer"
+    check "update auto-check: on enables the daily timer" "$hypr $id update auto-check on >/dev/null && systemctl --user is-enabled --quiet $id-update-check.timer && systemctl --user is-active --quiet $id-update-check.timer && grep -qx 'update.auto_check = on' ~/.config/$id/settings"
+    check "update auto-check: a run writes the count" "rm -f ~/.local/state/$id/updates; $hypr systemctl --user start $id-update-check.service && grep -qE '^[0-9]+ [0-9]+\$' ~/.local/state/$id/updates && ! journalctl --user -u $id-update-check.service -b --no-pager | grep -q 'aur:'"
+    "$here/ssh" "$vm" "$user" -- "$hypr echo \"3 \$(date +%s)\" > ~/.local/state/$id/updates; noctalia msg plugin $id/utilities:menu-button all refresh >/dev/null 2>&1; sleep 1" || true
+    bar_shot update-dot
+    check "update auto-check: off disables it" "$hypr $id update auto-check off >/dev/null && ! systemctl --user is-enabled --quiet $id-update-check.timer && ! systemctl --user is-active --quiet $id-update-check.timer"
+    "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg panel-close >/dev/null 2>&1" || true
+    key KEY_LEFTMETA KEY_SPACE; sleep 1; vm_type "daily"; sleep 0.5
+    menu_is "update auto-check: the menu finds its item" '.rows[0] == "System › Check for updates [daily]"'
+    key KEY_ENTER; sleep 2
+    check "update auto-check: the menu's item turns it on" "systemctl --user is-enabled --quiet $id-update-check.timer && $hypr $id update auto-check off >/dev/null"
     # Pre-checks (decision record 0030): offline, a wrong clock and an untrusted
     # key each give one plain message instead of pacman errors. Offline runs
     # detached (it takes the network away from this SSH session too).

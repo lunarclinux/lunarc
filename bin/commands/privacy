@@ -127,6 +127,7 @@ status() {
   printf '%-22s %s\n' "encrypted DNS" "$(dns_state)"
   printf '%-22s %s\n' "connectivity check" "$(connectivity_state)"
   printf '%-22s %s\n' "AUR search in menu" "$(setting privacy.aur_search on)"
+  printf '%-22s %s\n' "daily update check" "$(setting update.auto_check off)  ($DISTRO_ID update auto-check on|off)"
   if command -v firewall-cmd >/dev/null; then
     printf '%-22s %s\n' "firewall" "$(firewall-cmd --state 2>/dev/null || echo off)"
   fi

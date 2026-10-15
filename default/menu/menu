@@ -84,6 +84,7 @@ System | Restart | reboot | noctalia msg session reboot
 System | Power off | shut down | noctalia msg session shutdown
 System | Log out | | noctalia msg session logout
 System | Check for updates | what's waiting | term: @DISTRO_ID@ update check
+System | Check for updates daily | on or off | @DISTRO_ID@ update auto-check toggle
 System | Snapshots | roll back an update | term: @DISTRO_ID@ update snapshots
 System | Keep this snapshot | started from one? | term: @DISTRO_ID@ boot snapshots keep
 System | Battery charge limit | stop at 80% | term: @DISTRO_ID@ power charge-limit on

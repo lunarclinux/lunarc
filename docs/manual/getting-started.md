@@ -78,7 +78,7 @@ SUPER+Space (or SUPER+ALT+Space, or a click on the crescent) opens one small lis
 - **Keybinds** (also SUPER+K): every key binding. Return on one, then press the new keys (Escape cancels); a chord that's already used is refused. Changes are kept in `~/.config/lunarc/hypr/binds.lua`; `lunarc keys reset` puts them all back.
 - **Install**: apps from the catalog first, then packages from the Arch repositories (searched on this computer), Flathub (when you've set it up) and the AUR, each tagged with where it comes from. The AUR is searched online once you've typed three letters, which sends those letters to aur.archlinux.org; `lunarc privacy aur-search off` stops that. **Remove** lists what you added.
 - Install, Remove and Update run in an ordinary terminal window, like SUPER+Return: it takes a snapshot first (`==> snapshot before install … ok (#215)`), runs the real command (`sudo pacman -S …`) and then stays open at a prompt. Close it as any window.
-- **Update** shows how many updates are waiting (`12 ready`) when `lunarc update check` last found some; opening the menu never checks.
+- **Update** shows how many updates are waiting (`12 ready`) when `lunarc update check` last found some; opening the menu never checks. To have it check once a day, turn on System › Check for updates daily (or `lunarc update auto-check on`, or choose it at first login): it downloads the package lists from the Arch and Lunarc package servers and installs nothing; while updates are waiting, a small dot shows beside the moon on the bar's menu button.
 - **System**: lock, suspend, restart, power off, log out, update checks and snapshots, this manual and other help.
 
 Items are in `/usr/share/lunarc/default/menu/menu`; copy it to `~/.config/lunarc/menu` to make your own (an older copy still works: its Learn and Power items show under System, Toggle under Setup).
@@ -153,7 +153,7 @@ Moving to a new computer: `lunarc app export apps.txt` lists what you've install
 
 At the end it says what changed, which snapshot to go back to, and whether to restart for a new kernel.
 
-A newer Hyprland release than the one Lunarc's settings were tested with is held back (with its libraries) until a Lunarc update says it's tested; `lunarc update --all` takes it anyway. `lunarc update check` lists what's waiting without installing.
+A newer Hyprland release than the one Lunarc's settings were tested with is held back (with its libraries) until a Lunarc update says it's tested; `lunarc update --all` takes it anyway. `lunarc update check` lists what's waiting without installing. `lunarc update auto-check on` checks once a day by itself (off by default).
 
 If an update breaks something: `lunarc update snapshots` lists the snapshots, and `lunarc update rollback <number>` puts the system back as it was in that snapshot, then you restart. Your files, `/home` and logs are not touched. The replaced system is kept until `lunarc update rollback --clean`.
 

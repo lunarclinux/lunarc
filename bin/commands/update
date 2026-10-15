@@ -13,6 +13,10 @@ Usage: $DISTRO_ID update [--all] | check | firmware | snapshots | rollback <n> [
   --all           also take a Hyprland release newer than the one $DISTRO_NAME
                   was tested with (normally held back until a distro update)
   check           list waiting updates, by source, without installing
+  auto-check on|off|toggle
+                  check once a day in the background (off by default): downloads
+                  the package lists from the Arch and $DISTRO_NAME package servers;
+                  the menu's Update and a dot on the bar's menu button show the count
   doctor          check what updates need (network, clock, package key) and fix
                   what it can
   firmware        check for and install firmware updates (BIOS/UEFI, SSD, dock...)
@@ -112,6 +116,30 @@ noctalia_current() {
 remember_pending() { # remember_pending <count>
   mkdir -p "$STATE_DIR"
   printf '%s %s\n' "$1" "$(date +%s)" > "$STATE_DIR/updates"
+  noctalia msg plugin "$DISTRO_ID/utilities:menu-button" all refresh >/dev/null 2>&1 || true
+}
+
+# The daily check (opt-in, setting update.auto_check): a user timer runs
+# `update check --background`, which looks at the Arch and distro repositories
+# only (not the AUR, which would be sent the names of your AUR packages).
+auto_check() { # auto_check on|off|toggle|status
+  local timer=$DISTRO_ID-update-check.timer want=$1
+  if [[ $want == toggle ]]; then
+    if [[ $(setting update.auto_check off) == on ]]; then want=off; else want=on; fi
+  fi
+  case $want in
+    on)
+      set_setting update.auto_check on
+      systemctl --user enable --now "$timer" >/dev/null 2>&1 || die "couldn't start $timer"
+      info "checking for updates daily: on (downloads the package lists from the Arch and $DISTRO_NAME package servers)" ;;
+    off)
+      set_setting update.auto_check off
+      systemctl --user disable --now "$timer" >/dev/null 2>&1 || true
+      noctalia msg plugin "$DISTRO_ID/utilities:menu-button" all refresh >/dev/null 2>&1 || true
+      info "checking for updates daily: off" ;;
+    status|"") info "checking for updates daily: $(setting update.auto_check off)" ;;
+    *) die "auto-check on, off or toggle?" ;;
+  esac
 }
 
 latest_snapshot() { snapper -c root --csvout list --columns number 2>/dev/null | tail -1 | tr -cd '0-9'; }
@@ -356,8 +384,9 @@ update_all() { # update_all [1 = take held-back Hyprland too]
   remember_pending 0
 }
 
-check() {
-  local pend held aur="" n
+check() { # check [--background]: --background is the daily timer's (no AUR)
+  local pend held aur="" n background=0
+  if [[ ${1:-} == --background ]]; then background=1; fi
   preflight "$([[ -t 0 ]] && echo 1 || echo 0)"
   pend=$(pending)
   if [[ -n $pend ]]; then
@@ -370,7 +399,7 @@ check() {
   fi
   held=$(noctalia_waiting)
   if [[ -n $held ]]; then info "(Noctalia $held from Arch waits for $DISTRO_NAME's build of it)"; fi
-  if command -v yay >/dev/null && [[ -n $(pacman -Qqm) ]]; then aur=$(yay -Qua 2>/dev/null || true); fi
+  if (( ! background )) && command -v yay >/dev/null && [[ -n $(pacman -Qqm) ]]; then aur=$(yay -Qua 2>/dev/null || true); fi
   if [[ -n $aur ]]; then sed 's/^/aur: /' <<<"$aur"; fi
   n=$(( $(grep -c . <<<"$pend" || true) + $(grep -c . <<<"$aur" || true) ))
   if (( n )); then info "$n update(s) available"; else info "up to date"; fi
@@ -520,7 +549,8 @@ fi
 case ${1:-} in
   "") update_all "" ;;
   --all) update_all 1 ;;
-  check) check ;;
+  check) check "${2:-}" ;;
+  auto-check) auto_check "${2:-status}" ;;
   firmware)
     command -v fwupdmgr >/dev/null || die "fwupd isn't installed (sudo pacman -S fwupd)"
     # Downloads the firmware list from the Linux Vendor Firmware Service (LVFS)

@@ -375,6 +375,29 @@ local function hitsFor(it, f)
   return match.positions(f, it.title)
 end
 
+-- How much a title may take before what's on its right, so a long one ends
+-- in "…" instead of running into it (Geist Mono's advance is 0.6 em: 8.4px at
+-- 14px, 7.2px at 12px).
+local function chars(s) return utf8.len(s or "") or #(s or "") end
+local function rightWidth(it, descMax)
+  if capture and capture == it then return 18 * 7.2 + 10 end
+  local w = 0
+  if it.kind == "bind" then
+    for part in string.gmatch(it.keys or "", "[^+]+") do w += chars(noctalia.string.trim(part)) * 6.6 + 18 end
+  elseif it.desc and it.desc ~= "" then
+    w += math.min(chars(it.desc) * 7.2, descMax) + 10
+  end
+  if it.badge and not lv() then w += chars(it.badge) * 6.9 + 26 end
+  if it.tag then w += chars(it.tag) * 6.3 + 24 end
+  return w
+end
+local function fit(title, room)
+  local max = math.floor(room / 8.4)
+  if chars(title) <= max then return title end
+  if max < 2 then return "…" end
+  return string.sub(title, 1, (utf8.offset(title, max) or (#title + 1)) - 1) .. "…"
+end
+
 -- One row: marker, glyph (top level), title (matched letters lit), then the
 -- description, or the key caps, badge or source tag on the right.
 local function row(entry, idx, selected, f)
@@ -386,18 +409,22 @@ local function row(entry, idx, selected, f)
     local glyph = entry.root and entry.root.glyph or it.glyph or "·"
     table.insert(kids, look.row({ key = "g", width = 18, justify = "center", align = "center" }, { look.label(glyph, 14, p.amber) }))
   end
+  local descMax = it.tag and 200 or 240
+  local pre = entry.root and (entry.root.title .. " › ") or ""
+  local room = WIDTH - 2 - 12 - 24 - 24 - (lv() and 0 or 28) - rightWidth(it, descMax) - 10 - chars(pre) * 8.4
+  local shownTitle = fit(it.title, room)
   local title = {}
-  if entry.root then
-    table.insert(title, look.runs({ { text = entry.root.title .. " › ", hit = false } }, 14, p.dim, "pre"))
+  if pre ~= "" then
+    table.insert(title, look.runs({ { text = pre, hit = false } }, 14, p.dim, "pre"))
   end
-  table.insert(title, look.runs(match.runs(it.title, hitsFor(it, f)), 14, selected and p.amberLight or p.text, "title"))
+  table.insert(title, look.runs(match.runs(shownTitle, hitsFor({ title = shownTitle }, f)), 14, selected and p.amberLight or p.text, "title"))
   table.insert(kids, look.row({ key = "t", flexGrow = 1, gap = 0, align = "center" }, title))
   if capture and capture == it then
     table.insert(kids, look.label("press the new keys", 12, p.amber, { key = "d" }))
   elseif it.kind == "bind" then
     table.insert(kids, look.caps(it.keys, "c"))
   elseif it.desc and it.desc ~= "" then
-    table.insert(kids, look.label(it.desc, 12, p.dim, { key = "d", maxWidth = it.tag and 220 or 260 }))
+    table.insert(kids, look.label(it.desc, 12, p.dim, { key = "d", maxWidth = descMax }))
   end
   if it.title == "Update" and not lv() and it.badge then table.insert(kids, look.badge(it.badge, "b")) end
   if it.tag then table.insert(kids, look.tag(it.tag, "x")) end
