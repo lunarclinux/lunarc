@@ -1,0 +1,86 @@
+diff --git i/src/app/application_plugins.cpp w/src/app/application_plugins.cpp
+index bcac6ba94..49e4c5688 100644
+--- i/src/app/application_plugins.cpp
++++ w/src/app/application_plugins.cpp
+@@ -128,6 +128,7 @@ void Application::reloadPluginPanels() {
+                 .dismissOnOutsideClick = resolved.entry->panelDismissOnOutsideClick,
+                 .keyboardFocus = resolved.entry->panelKeyboardFocus,
+                 .persistent = resolved.entry->panelPersistent,
++                .decoration = resolved.entry->panelDecoration,
+                 .captureKeys = resolved.entry->panelCaptureKeys,
+                 .shellConfig = shellConfig,
+             }
+diff --git i/src/scripting/plugin_manifest.cpp w/src/scripting/plugin_manifest.cpp
+index a587c3626..9f4e888ff 100644
+--- i/src/scripting/plugin_manifest.cpp
++++ w/src/scripting/plugin_manifest.cpp
+@@ -526,6 +526,14 @@ namespace scripting {
+               return false;
+             }
+           }
++          if ((*entryTable)["decoration"]) {
++            const auto* decoration = (*entryTable)["decoration"].as_boolean();
++            if (decoration == nullptr) {
++              error = "panel entry '" + entry.id + "': decoration must be a bool";
++              return false;
++            }
++            entry.panelDecoration = decoration->get();
++          }
+           if ((*entryTable)["persistent"]) {
+             if (manifest.pluginApiVersion < kPersistentPanelPluginApiVersion) {
+               error = "panel entry '"
+diff --git i/src/scripting/plugin_manifest.h w/src/scripting/plugin_manifest.h
+index eb05aa4cd..558de8e1b 100644
+--- i/src/scripting/plugin_manifest.h
++++ w/src/scripting/plugin_manifest.h
+@@ -135,6 +135,9 @@ namespace scripting {
+     // true: live outside PanelManager's single active-panel slot, so opening another
+     // panel leaves this one on screen. Requires panelDismissOnOutsideClick = false.
+     bool panelPersistent = false;
++    // false: the host draws no panel background, border, shadow or padding; the
++    // panel's own tree is the whole surface (transparent where it draws nothing).
++    bool panelDecoration = true;
+     // Key chord specs ("space", "ctrl+r") this panel takes over while it holds keyboard
+     // focus. Each is validated as a chord at parse time. While focused, a matching press
+     // or release is delivered to the script's onKey(chord, pressed) and not handled by
+diff --git i/src/shell/panel/plugin_panel.cpp w/src/shell/panel/plugin_panel.cpp
+index f9b2db69e..75f2d543b 100644
+--- i/src/shell/panel/plugin_panel.cpp
++++ w/src/shell/panel/plugin_panel.cpp
+@@ -68,6 +68,7 @@ PluginPanel::PluginPanel(scripting::PluginRuntimeContext context, PluginPanelOpt
+       m_dismissOnOutsideClick(options.dismissOnOutsideClick),
+       m_keyboardMode(keyboardModeFromManifest(options.keyboardFocus)),
+       m_layer(layerShellLayerFromConfig(options.shellConfig.layer)), m_persistent(options.persistent),
++      m_decoration(options.decoration),
+       m_shellConfig(options.shellConfig) {
+   // The manifest parser already validated every spec, so a parse failure here means the two
+   // drifted apart. Skip the entry rather than capture a chord nobody can describe.
+diff --git i/src/shell/panel/plugin_panel.h w/src/shell/panel/plugin_panel.h
+index 9d090948a..c02b25d00 100644
+--- i/src/shell/panel/plugin_panel.h
++++ w/src/shell/panel/plugin_panel.h
+@@ -41,6 +41,8 @@ struct PluginPanelOptions {
+   // One of scripting::kPanelKeyboardFocusModes.
+   std::string keyboardFocus = "on_demand";
+   bool persistent = false;
++  // false: no host-drawn frame; the script draws its own surface.
++  bool decoration = true;
+   // Key chord specs the panel takes over while focused, verbatim from the manifest.
+   std::vector<std::string> captureKeys;
+   scripting::PluginPanelShellConfig shellConfig;
+@@ -70,6 +72,7 @@ public:
+   [[nodiscard]] LayerShellKeyboard keyboardMode() const override { return m_keyboardMode; }
+   [[nodiscard]] LayerShellLayer layer() const override { return m_layer; }
+   [[nodiscard]] bool isPersistent() const noexcept override { return m_persistent; }
++  [[nodiscard]] bool hasDecoration() const override { return m_decoration; }
+   [[nodiscard]] PanelPlacement panelPlacement() const noexcept override { return m_shellConfig.placement; }
+   [[nodiscard]] std::string panelScreenPosition() const override { return m_shellConfig.position; }
+   [[nodiscard]] bool panelOpenNearClick() const override { return m_shellConfig.openNearClick; }
+@@ -149,6 +152,7 @@ private:
+   LayerShellKeyboard m_keyboardMode = LayerShellKeyboard::OnDemand;
+   LayerShellLayer m_layer = LayerShellLayer::Top;
+   bool m_persistent = false;
++  bool m_decoration = true;
+   scripting::PluginPanelShellConfig m_shellConfig;
+   std::shared_ptr<bool> m_alive = std::make_shared<bool>(true);
+ };

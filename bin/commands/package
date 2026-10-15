@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+# summary: Search, install and remove packages: Arch repos, the AUR, Flathub
+set -euo pipefail
+source "$DISTRO_LIB/lib.sh"
+
+usage() {
+  cat <<USAGE
+Usage: $DISTRO_ID package <command>
+
+  search [--aur] <words>    search the Arch repositories (their lists on this
+                            computer) and Flathub's app list (when Flathub is
+                            set up); --aur searches the AUR instead, online:
+                            aur.archlinux.org sees the words (never with fewer
+                            than three letters; off: $DISTRO_ID privacy aur-search off)
+  install <source> <name>   install, after a snapshot (source: repo, aur, flathub)
+  remove <source> <name>    remove, after a snapshot (source: repo, aur, flathub, web)
+  added                     what you added: packages that aren't part of the
+                            system, Flatpak apps and web apps
+
+The menu's Install and Remove (SUPER+Space) use these; search and added print
+tab-separated lines: source, name, description, installed (1 or 0).
+For apps from the catalog, '$DISTRO_ID app' knows more (web apps, agents, games).
+USAGE
+}
+
+# Package names and words: what pacman, the AUR and Flathub use, nothing a
+# shell or a regular expression would read as more.
+valid_pkg() { [[ $1 =~ ^[a-z0-9@._+][a-z0-9@._+-]*$ && ${#1} -le 128 ]]; }
+valid_app() { [[ $1 =~ ^[A-Za-z0-9_][A-Za-z0-9._-]*$ && ${#1} -le 255 ]]; }
+valid_word() { [[ $1 =~ ^[a-z0-9@._+-]+$ && ${#1} -le 64 ]]; }
+
+flathub() { command -v flatpak >/dev/null && flatpak remotes --columns=name 2>/dev/null | grep -qx flathub; }
+aur_allowed() { command -v yay >/dev/null && [[ $(setting privacy.aur_search on) == on ]]; }
+
+search() {
+  local aur=0 w words=() re=()
+  if [[ ${1:-} == --aur ]]; then aur=1; shift; fi
+  for w in "$@"; do
+    w=${w,,}
+    valid_word "$w" || die "search words are letters, digits and . _ + - @"
+    words+=("$w"); re+=("$(sed 's/[.+]/\\&/g' <<<"$w")")
+  done
+  (( ${#words[@]} )) || die "search for what?"
+  if (( aur )); then search_aur "${words[@]}"; return; fi
+  # pacman -Ss reads the repositories' lists on this computer.
+  LC_ALL=C pacman -Ss -- "${re[@]}" 2>/dev/null | awk '
+    /^[^ ]/ { split($1, a, "/"); name = a[2]; inst = ($0 ~ /\[installed/) ? 1 : 0; next }
+    name != "" { sub(/^ +/, ""); printf "repo\t%s\t%s\t%d\n", name, $0, inst; name = ""; if (++n >= 40) exit }' || true
+  if flathub; then
+    local have; have=$(flatpak list --app --columns=application 2>/dev/null || true)
+    flatpak search --columns=application,name,description -- "${words[@]}" 2>/dev/null \
+      | HAVE=$have awk -F'\t' 'BEGIN { n = split(ENVIRON["HAVE"], h, "\n"); for (i = 1; i <= n; i++) got[h[i]] = 1 }
+          NF >= 2 && $1 ~ /\./ { printf "flathub\t%s\t%s\t%d\n", $1, ($3 != "" ? $3 : $2), ($1 in got); if (++c >= 20) exit }' || true
+  fi
+}
+
+# The AUR is searched online, so only when asked (--aur), allowed (yay
+# installed, privacy.aur_search on) and for at least three letters: the
+# longest word is the query.
+search_aur() {
+  local q="" w have
+  aur_allowed || return 0
+  for w in "$@"; do if (( ${#w} > ${#q} )); then q=$w; fi; done
+  (( ${#q} >= 3 )) || return 0
+  have=$(pacman -Qqm 2>/dev/null || true)
+  curl -sf --max-time 6 "https://aur.archlinux.org/rpc/v5/search/$(jq -rn --arg q "$q" '$q | @uri')?by=name-desc" \
+    | jq -r --arg have "$have" '($have | split("\n") | map({(.): 1}) | add // {}) as $h
+        | .results | sort_by(-(.Popularity // 0)) | .[:40][]
+        | ["aur", .Name, (.Description // "" | gsub("[\t\n]"; " ")), (if $h[.Name] then "1" else "0" end)] | @tsv' 2>/dev/null || true
+}
+
+# What the user added: packages installed on purpose after the system was set
+# up (after the installer made this user's home; outside the distro's lists
+# and its own), AUR packages among them, Flatpak apps and web apps. Read from
+# pacman's local database, which has each package's install time and reason.
+added() {
+  local base_at home_at since defaults foreign f name
+  defaults=$(sed -e 's/#.*//' -e 's/[[:space:]]//g' -e '/^$/d' "$SHARE"/packages/*.packages 2>/dev/null || true)
+  foreign=$(pacman -Qqm 2>/dev/null || true)
+  base_at=$(awk '/^%INSTALLDATE%$/ { getline; print; exit }' /var/lib/pacman/local/base-[0-9]*/desc 2>/dev/null || true)
+  base_at=${base_at:-0}
+  home_at=$(stat -c %W "$HOME" 2>/dev/null || echo 0)
+  # A home older than the system (brought along) says nothing; then half an
+  # hour after the base package.
+  if [[ $home_at =~ ^[0-9]+$ ]] && (( home_at > base_at )); then since=$home_at; else since=$((base_at + 1800)); fi
+  DEFAULTS=$defaults FOREIGN=$foreign SINCE=$since awk -v id="$DISTRO_ID" '
+    BEGIN {
+      n = split(ENVIRON["DEFAULTS"], d, "\n"); for (i = 1; i <= n; i++) def[d[i]] = 1
+      n = split(ENVIRON["FOREIGN"], f, "\n"); for (i = 1; i <= n; i++) aur[f[i]] = 1
+      since = ENVIRON["SINCE"] + 0
+    }
+    function emit() {
+      if (name != "" && reason == 0 && at > since && !(name in def) && index(name, id) != 1)
+        printf "%s\t%s\t%s\t1\n", (name in aur) ? "aur" : "repo", name, desc
+    }
+    FNR == 1 { emit(); name = desc = ""; reason = 0; at = 0 }
+    /^%NAME%$/ { getline; name = $0 } /^%DESC%$/ { getline; desc = $0 }
+    /^%INSTALLDATE%$/ { getline; at = $0 + 0 } /^%REASON%$/ { getline; reason = $0 + 0 }
+    END { emit() }' /var/lib/pacman/local/*/desc
+  if command -v flatpak >/dev/null; then
+    flatpak list --app --columns=application,name 2>/dev/null | awk -F'\t' 'NF >= 1 && $1 != "" { printf "flathub\t%s\t%s\t1\n", $1, $2 }'
+  fi
+  for f in "${XDG_DATA_HOME:-$HOME/.local/share}"/applications/"$DISTRO_ID"-web-*.desktop; do
+    [[ -f $f ]] || continue
+    name=${f##*/"$DISTRO_ID"-web-}; name=${name%.desktop}
+    printf 'web\t%s\t%s\t1\n' "$name" "$(sed -n 's/^Name=//p' "$f" | head -1)"
+  done
+}
+
+change() { # change install|remove <source> <name>
+  local verb=$1 src=${2:-} name=${3:-}
+  [[ -n $src && -n $name ]] || die "usage: $DISTRO_ID package $verb <source> <name>"
+  case $src in
+    repo|aur) valid_pkg "$name" || die "\"$name\" isn't a package name" ;;
+    flathub) valid_app "$name" || die "\"$name\" isn't a Flatpak app id" ;;
+    web)
+      [[ $verb == remove ]] || die "web apps are added with: $DISTRO_ID app install"
+      valid_pkg "$name" || die "\"$name\" isn't a web app" ;;
+    *) die "unknown source: $src (repo, aur or flathub)" ;;
+  esac
+  case $verb-$src in
+    install-repo) pacman_tx "install $name" -S "$name" ;;
+    install-aur)
+      command -v yay >/dev/null || install_packages yay
+      info "building from the AUR (community packages; review what you install)"
+      system_tx "install $name" yay -S "$name" ;;
+    install-flathub) flathub || die "Flathub isn't set up (flatpak remote-add flathub …)"; system_tx "install $name" flatpak install flathub "$name" ;;
+    remove-repo|remove-aur) pacman_tx "remove $name" -Rns "$name" ;;
+    remove-flathub) system_tx "remove $name" flatpak uninstall "$name" ;;
+    remove-web) "/usr/bin/$DISTRO_ID" app remove "$name" ;;
+  esac
+}
+
+case ${1:-} in
+  search) shift; search "$@" ;;
+  added) added ;;
+  install|remove) change "$@" ;;
+  -h|--help|"") usage ;;
+  *) die "unknown package command: $1" ;;
+esac

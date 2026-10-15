@@ -1,98 +1,95 @@
-# The system menu (SUPER+Space, or /m in the launcher). One item per line:
-#   group | title | description | command | glyph (optional, a Tabler icon name)
-# A top-level item has an empty group. A group appears as soon as an item uses
-# it; give it a description with a line whose title is empty.
+# The menu (SUPER+Space). One item per line:
+#   group | title | description | command | glyph (top level only, one character)
+# A line with an empty title describes its group: description, glyph, and a
+# generated list (menu: …) if it has one. A top-level item has an empty group.
+# The top level is always Apps, Keybinds, Style, Setup, Capture, Install,
+# Remove, Update and System, in that order; other groups follow them.
 # Commands run detached. Prefixes:
-#   term:      run in a terminal and wait for a key before closing
-#   menu:      a generated submenu (apps, install, remove, theme, terminal, agent),
-#              or "menu: list <command>" for the lines of `@DISTRO_ID@ <command> menu-items`
-#   launcher:  switch the launcher to this search (e.g. "/keys ")
-# Copy this file to ~/.config/@DISTRO_ID@/menu to change your own.
+#   term:      run in a terminal, which stays open at a prompt afterwards
+#   menu:      a generated list (apps, keys, install, remove, theme, terminal,
+#              agent), or "menu: list <command>" for the lines of
+#              `@DISTRO_ID@ <command> menu-items`
+# Copy this file to ~/.config/@DISTRO_ID@/menu to change your own. Older copies
+# still work: Learn and Power items show under System, Toggle under Setup.
 
-Apps | | Every installed app | menu: apps
+Apps     | | launch anything        | menu: apps    | ◆
+Keybinds | | learn and edit         | menu: keys    | ?
+Style    | | theme, wallpaper, bar  |               | ◐
+Setup    | | wi-fi, displays, audio |               | ~
+Capture  | | screenshot, record     |               | ◎
+Install  | | apps and packages      | menu: install | +
+Remove   | |                        | menu: remove  | −
+| Update | | term: @DISTRO_ID@ update | ↑
+System   | | lock, reboot, power off |              | !
 
-Learn | | Shortcuts, commands and documentation |
-Learn | Keyboard shortcuts | Every key binding, searchable (SUPER+K) | launcher: /keys | keyboard
-Learn | The @DISTRO_ID@ command | What the command-line tool can do | term: @DISTRO_ID@ help
-Learn | Arch Wiki | The Arch Linux documentation | xdg-open https://wiki.archlinux.org
-Learn | Hyprland Wiki | Window manager settings and rules | xdg-open https://wiki.hypr.land
-Learn | Noctalia docs | The bar, launcher and panels | xdg-open https://docs.noctalia.dev
-Learn | Bash basics | A short guide to the terminal | xdg-open https://linuxcommand.org/lc3_learning_the_shell.php
+Style | Theme | colours for everything | menu: theme
+Style | Dark mode | the theme's dark colours | @DISTRO_ID@ theme mode dark
+Style | Light mode | the theme's light colours | @DISTRO_ID@ theme mode light
+Style | Wallpaper | choose one | noctalia msg panel-open wallpaper
+Style | Next wallpaper | | noctalia msg wallpaper-next
+Style | Shape: terminal | small corners, bar edge to edge | @DISTRO_ID@ theme shape terminal
+Style | Shape: rounded | round corners, floating bar | @DISTRO_ID@ theme shape rounded
+Style | Night light | warmer screen colours | @DISTRO_ID@ nightlight toggle
+Style | Bar | show or hide | noctalia msg bar-toggle
+Style | Bar stats: icon | click for the stats | @DISTRO_ID@ bar stats icons
+Style | Bar stats: on hover | shown while pointing | @DISTRO_ID@ bar stats hover
+Style | Bar stats: inline | cpu, memory, network | @DISTRO_ID@ bar stats inline
+Style | Moon in the bar | on or off | @DISTRO_ID@ bar moon toggle
+Style | Workspaces: moon phases | | @DISTRO_ID@ workspaces style moon
+Style | Workspaces: pills | Noctalia's own | @DISTRO_ID@ workspaces style noctalia
+Style | Screensaver | preview | @DISTRO_ID@ screensaver preview
 
-Capture | | Screenshots, recordings, colours and text |
-Capture | Screenshot: region | Select an area (Print) | @DISTRO_ID@ capture screenshot region | screenshot
-Capture | Screenshot: region, then edit | Draw, crop, add arrows and text | @DISTRO_ID@ capture screenshot region --edit | pencil
-Capture | Screenshot: window | The focused window (SUPER+Print) | @DISTRO_ID@ capture screenshot window | app-window
-Capture | Screenshot: screen | The whole screen (SHIFT+Print) | @DISTRO_ID@ capture screenshot screen | device-desktop
-Capture | Record the screen | Click the red button in the bar to stop | @DISTRO_ID@ capture record screen | video
-Capture | Record a region | Select an area to record | @DISTRO_ID@ capture record region | video
-Capture | Record the screen with sound | Includes what you hear | @DISTRO_ID@ capture record screen --audio | video-plus
-Capture | Stop recording | Save the recording | @DISTRO_ID@ capture stop | player-stop
-Capture | Pick a colour | Copies the hex code | @DISTRO_ID@ capture color | color-picker
-Capture | Copy text from the screen | Select an area; its text is copied | @DISTRO_ID@ capture text | text-recognition
-Capture | Read a QR code | Select the code; its contents are copied | @DISTRO_ID@ capture qr | qrcode
+Setup | Wi-Fi | networks | noctalia msg panel-open control-center network
+Setup | Bluetooth | devices | noctalia msg panel-open control-center bluetooth
+Setup | Sound | outputs and inputs | noctalia msg panel-open control-center audio
+Setup | Displays | resolution, scale, profiles | menu: list display
+Setup | Display size | bigger or smaller | term: @DISTRO_ID@ display size
+Setup | Keyboard layout: next | SUPER+CTRL+Space | @DISTRO_ID@ keyboard next
+Setup | Keyboard layout: add | e.g. de, fr, us:intl | term: @DISTRO_ID@ keyboard available; read -rp 'Layout to add: ' l; [ -n "$l" ] && @DISTRO_ID@ keyboard add "$l"
+Setup | Keyboard layout: remove | | term: @DISTRO_ID@ keyboard list; read -rp 'Layout to remove: ' l; [ -n "$l" ] && @DISTRO_ID@ keyboard remove "$l"
+Setup | Stay awake | on or off | @DISTRO_ID@ awake toggle
+Setup | Silence notifications | on or off | noctalia msg notification-dnd-toggle
+Setup | Low Gravity | float this workspace | @DISTRO_ID@ gravity toggle
+Setup | Dictation | speak to type | @DISTRO_ID@ dictate toggle
+Setup | Dictation: install | the speech engine, once | term: @DISTRO_ID@ dictate setup
+Setup | Power profile | next profile | noctalia msg power-cycle
+Setup | Reminders | upcoming | noctalia msg panel-toggle @DISTRO_ID@/utilities:reminders-panel
+Setup | Backups | where and how often | @DISTRO_ID@ setup backups
+Setup | Network share: add | NFS or SMB | term: @DISTRO_ID@ share add
+Setup | Network shares | list and test | term: @DISTRO_ID@ share list; for s in $(@DISTRO_ID@ share list --names); do @DISTRO_ID@ share test "$s"; done
+Setup | Default terminal | | menu: terminal
+Setup | Coding agent | | menu: agent
+Setup | Privacy | what connects where | term: @DISTRO_ID@ privacy; echo; echo "Change: @DISTRO_ID@ privacy weather on|off, dns quad9|mullvad|cloudflare|off, connectivity on|off, aur-search on|off"
+Setup | Firewall | what may connect in | term: @DISTRO_ID@ firewall status; echo; @DISTRO_ID@ firewall apps; echo; echo "Allow one: @DISTRO_ID@ firewall allow <app or port>"
+Setup | Firmware updates | BIOS, SSD, devices | term: @DISTRO_ID@ update firmware
+Setup | Shell settings | bar, launcher, notifications | noctalia msg settings-open
+Setup | Set up @DISTRO_NAME@ | the first-login choices | @DISTRO_ID@ setup
 
-Toggle | | Quick switches |
-Toggle | Stay awake | Keep the screen on and the computer awake | @DISTRO_ID@ awake toggle | eye
-Toggle | Night light | Warmer screen colours | @DISTRO_ID@ nightlight toggle | moon
-Toggle | Low Gravity | Float the windows on this workspace, or tile them again (SUPER+G) | @DISTRO_ID@ gravity toggle | feather
-Toggle | Silence notifications | Notifications still go to the history | noctalia msg notification-dnd-toggle | bell-off
-Toggle | Dictation | Speak to type (SUPER+CTRL+D) | @DISTRO_ID@ dictate toggle | microphone
-Toggle | Dark mode | Use the theme's dark colours | @DISTRO_ID@ theme mode dark | moon-stars
-Toggle | Light mode | Use the theme's light colours | @DISTRO_ID@ theme mode light | sun
-Toggle | Bar | Show or hide the bar | noctalia msg bar-toggle | layout-navbar
+Capture | Screenshot: region | Print | @DISTRO_ID@ capture screenshot region
+Capture | Screenshot: region, then edit | CTRL+Print | @DISTRO_ID@ capture screenshot region --edit
+Capture | Screenshot: window | SUPER+Print | @DISTRO_ID@ capture screenshot window
+Capture | Screenshot: screen | SHIFT+Print | @DISTRO_ID@ capture screenshot screen
+Capture | Record the screen | stop from the bar | @DISTRO_ID@ capture record screen
+Capture | Record a region | | @DISTRO_ID@ capture record region
+Capture | Record with sound | | @DISTRO_ID@ capture record screen --audio
+Capture | Stop recording | | @DISTRO_ID@ capture stop
+Capture | Pick a colour | copies the hex code | @DISTRO_ID@ capture color
+Capture | Copy text from the screen | | @DISTRO_ID@ capture text
+Capture | Read a QR code | | @DISTRO_ID@ capture qr
 
-Style | | Theme, wallpaper, shape, bar and screensaver |
-Style | Theme | Colours for everything | menu: theme | palette
-Style | Wallpaper | Choose a wallpaper | noctalia msg panel-open wallpaper | photo
-Style | Next wallpaper | Switch to the next one | noctalia msg wallpaper-next | arrow-right
-Style | Screensaver | Preview the screensaver | @DISTRO_ID@ screensaver preview | device-tv
-Style | Workspaces: moon phases | Numbers, the active one as its moon | @DISTRO_ID@ workspaces style moon | moon
-Style | Workspaces: pills | Noctalia's own workspace pills | @DISTRO_ID@ workspaces style noctalia | circles
-Style | Shape: terminal | Small corners, the bar edge to edge | @DISTRO_ID@ theme shape terminal | square
-Style | Shape: rounded | Round corners, a floating bar | @DISTRO_ID@ theme shape rounded | square-rounded
-Style | Bar stats: icon | Click the pulse icon for CPU, memory, network | @DISTRO_ID@ bar stats icons | activity
-Style | Bar stats: on hover | The same, shown while pointing at it | @DISTRO_ID@ bar stats hover | activity
-Style | Bar stats: inline | CPU, memory, network and battery in the bar | @DISTRO_ID@ bar stats inline | activity
-Style | Moon in the bar | Tonight's moon phase, right of the clock | @DISTRO_ID@ bar moon toggle | moon
-
-Setup | | Network, devices and defaults |
-Setup | Backups | Where your files are backed up, and how often | @DISTRO_ID@ setup backups | device-floppy
-Setup | Network share: add | Mount a NAS share (NFS or SMB), e.g. for backups | term: @DISTRO_ID@ share add | server
-Setup | Network shares | The shares set up here, and a write test | term: @DISTRO_ID@ share list; for s in $(@DISTRO_ID@ share list --names); do @DISTRO_ID@ share test "$s"; done | server-2
-Setup | Set up @DISTRO_NAME@ | The first-login choices again | @DISTRO_ID@ setup | settings
-Setup | Wi-Fi | Networks and connections | noctalia msg panel-open control-center network | wifi
-Setup | Bluetooth | Pair and connect devices | noctalia msg panel-open control-center bluetooth | bluetooth
-Setup | Sound | Outputs, inputs and volume | noctalia msg panel-open control-center audio | volume
-Setup | Display size | Make text and everything on screen bigger or smaller | term: @DISTRO_ID@ display size | zoom-in
-Setup | Displays | Resolution, scale, arrangement and profiles | menu: list display | device-desktop
-Setup | Power profile | Cycle performance, balanced and power saver | noctalia msg power-cycle | bolt
-Setup | Reminders | Upcoming reminders | noctalia msg panel-toggle @DISTRO_ID@/utilities:reminders-panel | alarm
-Setup | Keyboard: next layout | Switch layout (SUPER+CTRL+Space) | @DISTRO_ID@ keyboard next | keyboard
-Setup | Keyboard: add a layout | e.g. de, fr, us:intl | term: @DISTRO_ID@ keyboard available; read -rp 'Layout to add: ' l; [ -n "$l" ] && @DISTRO_ID@ keyboard add "$l" | keyboard
-Setup | Keyboard: remove a layout | | term: @DISTRO_ID@ keyboard list; read -rp 'Layout to remove: ' l; [ -n "$l" ] && @DISTRO_ID@ keyboard remove "$l" | keyboard-off
-Setup | Default terminal | The terminal SUPER+Return opens | menu: terminal | terminal-2
-Setup | Coding agent | The AI agent used for diagnosis and prompts | menu: agent | sparkles
-Setup | Dictation | Install the speech engine (once) | term: @DISTRO_ID@ dictate setup | microphone
-Setup | Shell settings | Bar, launcher, notifications and more | noctalia msg settings-open | adjustments
-Setup | Privacy | Weather lookup, encrypted DNS, network check | term: @DISTRO_ID@ privacy; echo; echo "Change: @DISTRO_ID@ privacy weather on|off, dns quad9|mullvad|cloudflare|off, connectivity on|off" | shield-lock
-Setup | Firewall | What may connect in (nothing, by default) | term: @DISTRO_ID@ firewall status; echo; @DISTRO_ID@ firewall apps; echo; echo "Allow one: @DISTRO_ID@ firewall allow <app or port>" | shield
-Setup | Firmware updates | Check for BIOS, SSD and device firmware | term: @DISTRO_ID@ update firmware | cpu
-
-Install | | Add apps, by category | menu: install
-Remove | | Remove apps you added | menu: remove
-
-Update | | Keep the system current |
-Update | Update everything | Packages and the distro | term: @DISTRO_ID@ update | refresh
-Update | Check for updates | See what's waiting | term: @DISTRO_ID@ update check | list-search
-Update | Snapshots | Undo an update: snapshots you can roll back to | term: @DISTRO_ID@ update snapshots | history
-Update | Keep this snapshot | Started from a snapshot? Make it the system | term: @DISTRO_ID@ boot snapshots keep | restore
-
-Power | | Lock, sleep, restart |
-Power | Lock | SUPER+L | @DISTRO_ID@ lock | lock
-Power | Suspend | Sleep until you wake it | noctalia msg session suspend | zzz
-Power | Hibernate | Save everything to disk and power off (turn on: @DISTRO_ID@ power hibernate enable) | @DISTRO_ID@ power hibernate now | battery-charging-2
-Power | Battery charge limit | Stop charging early (80%, or the firmware's battery-care level) to extend battery life | term: @DISTRO_ID@ power charge-limit on | battery-2
-Power | Restart | | noctalia msg session reboot | reload
-Power | Shut down | | noctalia msg session shutdown | power
-Power | Log out | | noctalia msg session logout | logout
+System | Lock | SUPER+L | @DISTRO_ID@ lock
+System | Suspend | | noctalia msg session suspend
+System | Hibernate | if turned on | @DISTRO_ID@ power hibernate now
+System | Restart | reboot | noctalia msg session reboot
+System | Power off | shut down | noctalia msg session shutdown
+System | Log out | | noctalia msg session logout
+System | Check for updates | what's waiting | term: @DISTRO_ID@ update check
+System | Snapshots | roll back an update | term: @DISTRO_ID@ update snapshots
+System | Keep this snapshot | started from one? | term: @DISTRO_ID@ boot snapshots keep
+System | Battery charge limit | stop at 80% | term: @DISTRO_ID@ power charge-limit on
+System | Manual | getting started | xdg-open /usr/share/@DISTRO_ID@/doc/getting-started.md
+System | The @DISTRO_ID@ command | what it can do | term: @DISTRO_ID@ help
+System | Arch Wiki | | xdg-open https://wiki.archlinux.org
+System | Hyprland Wiki | | xdg-open https://wiki.hypr.land
+System | Noctalia docs | | xdg-open https://docs.noctalia.dev
+System | Bash basics | | xdg-open https://linuxcommand.org/lc3_learning_the_shell.php

@@ -580,9 +580,9 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       check "update starts missing services" "systemctl --user stop $id-workspace-watch && ! systemctl --user is-active --quiet $id-workspace-watch && $sudo_vm /usr/lib/$id/shell-reload && for i in \$(seq 15); do systemctl --user is-active --quiet $id-workspace-watch && exit 0; sleep 1; done; exit 1"
       check "update reloads Hyprland's binds" "$hypr f=/usr/share/$id/default/hypr/binds.lua; printf '%s\\n' 'bind(\"SUPER + F12\", \"Update test bind\", run(\"true\"))' > /home/$user/testbind.lua && $sudo_vm sh -c 'cp /usr/share/$id/default/hypr/binds.lua /root/binds.lua.orig && cat /home/$user/testbind.lua >> /usr/share/$id/default/hypr/binds.lua' && $sudo_vm /usr/lib/$id/shell-reload --hypr && sleep 1 && hyprctl binds -j | jq -e 'any(.[]; .description == \"Update test bind\")' >/dev/null; rc=\$?; $sudo_vm cp /root/binds.lua.orig \$f; $sudo_vm /usr/lib/$id/shell-reload --hypr; rm -f /home/$user/testbind.lua; exit \$rc"
       check "update hooks installed"         "test -f /usr/share/libalpm/hooks/$id-shell-reload.hook && grep -q 'shell-reload --hypr' /usr/share/libalpm/hooks/$id-hypr-reload.hook"
-      check "system menu opens"           "$hypr $id menu; sleep 1.5; noctalia msg status | jq -e '.activePanelId == \"launcher\"' >/dev/null"
+      check "menu opens"                  "$hypr $id menu; sleep 1.5; noctalia msg status | jq -e '.activePanelId == \"$id/utilities:menu\"' >/dev/null"
       screenshot menu
-      check "keyboard shortcuts listed"   "$hypr noctalia msg panel-close >/dev/null; $id keys --list | grep -q 'System menu'"
+      check "keyboard shortcuts listed"   "$hypr noctalia msg panel-close >/dev/null; $id keys --list | grep -q 'Menu (same as SUPER+Space)'"
       check "screenshot saves a file"     "$hypr f=\$($id capture screenshot screen) && test -s \"\$f\""
       check "screen recording saves a file" "$hypr $id capture record screen >/dev/null && sleep 3 && f=\$($id capture stop | tail -1) && test -s \"\$f\""
       check "dictation: engine installed, no password needed" "pacman -Q whisper-cpp wtype >/dev/null && command -v whisper-cli >/dev/null && grep -q 'speech engine' /usr/share/polkit-1/actions/$id.dictate.policy && test -x /usr/lib/$id/dictate-helper"
@@ -601,33 +601,112 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
         check "no passwordless keyring"    "! test -e ~/.local/share/keyrings/login.keyring || ! grep -q '^\[keyring\]' ~/.local/share/keyrings/login.keyring"
       fi
       check "plugins: per-version dir behind one link" "t=\$(readlink /usr/share/$id/noctalia-plugins) && [[ \$t == noctalia-plugins.d/* ]] && [ -f /usr/share/$id/noctalia-plugins/utilities/plugin.toml ] && [ ! -e /usr/share/$id/default/noctalia-plugins ] && [ -f /usr/share/libalpm/hooks/$id-shell-reload.hook ]"
-      # SUPER+Space is the palette (decision record 0042): groups only, Apps
-      # first, when empty; typing finds apps and menu items. Read by OCR.
-      palette_says() { # palette_says <query> <regex for the first result> [regex nowhere in the list]
-        "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg panel-open launcher '/m $1' >/dev/null; sleep 1.5" || true
-        local label=${1:-empty}; bar_shot "palette-${label//[^A-Za-z0-9]/}"
-        command -v tesseract >/dev/null || return 2
-        local text; text=$(magick "$last_shot" -crop 580x520+350+140 +repage -resize 200% -colorspace gray -negate png:- | tesseract - - --psm 6 2>/dev/null)
-        local first; first=$(grep -v '/m' <<<"$text" | grep -m1 -E '[A-Za-z]{3}')
-        grep -qE "$2" <<<"$first" && { [[ -z ${3:-} ]] || ! grep -qE "$3" <<<"$text"; } || { printf '%s\n' "$text" | head -12 | sed 's/^/         /'; return 1; }
+      # The menu (SUPER+Space; decision record 0043), driven with real keys
+      # from here (virsh send-key); what it shows is read from its state dump
+      # (rows with matched letters in [brackets], " · " and the tag or keys).
+      key() { virsh send-key "$vm" "$@" >/dev/null; sleep 0.6; }
+      menu_dump() {
+        "$here/ssh" "$vm" "$user" -- "$hypr rm -f \$XDG_RUNTIME_DIR/$id-menu.json; noctalia msg plugin $id/utilities:menu all dump >/dev/null 2>&1; sleep 0.5; cat \$XDG_RUNTIME_DIR/$id-menu.json" 2>/dev/null
       }
-      rc=0; palette_says "" 'Apps' 'Firefox|Files' || rc=$?
-      if (( rc == 2 )); then log "no tesseract here: skipping the palette's OCR checks"; else
-        report "$rc" "palette: empty shows the groups, Apps first, no app list"
-        rc=0; palette_says "Apps › " 'Audio|btop|Calculator' || rc=$?; report "$rc" "palette: Apps lists the apps by name"
-        rc=0; palette_says "fire" 'Firefox' || rc=$?; report "$rc" "palette: \"fire\" finds Firefox first"
-        rc=0; palette_says "reboot" 'Restart' || rc=$?; report "$rc" "palette: \"reboot\" finds Restart"
-        rc=0; palette_says "theme" 'Theme' || rc=$?; report "$rc" "palette: \"theme\" finds Style › Theme first"
+      menu_is() { # menu_is <description> <jq test on the dump>
+        local d; d=$(menu_dump)
+        if jq -e "$2" <<<"$d" >/dev/null 2>&1; then printf '  \033[32mok\033[0m   %s\n' "$1"
+        else printf '  \033[31mFAIL\033[0m %s\n%s\n' "$1" "$(jq -c . <<<"$d" 2>/dev/null | sed 's/^/         /' || echo "         (no dump) $d")"; fail=1; fi
+      }
+      menu_close() { "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg panel-close >/dev/null 2>&1" || true; sleep 0.5; }
+      menu_close
+      key KEY_LEFTMETA KEY_SPACE; sleep 1
+      menu_is "menu: SUPER+Space opens it, nine items" '.open and (.path | length) == 0 and .count == "9" and (.rows | length) == 9 and .rows[0] == "Apps" and .rows[8] == "System"'
+      screenshot menu-root
+      check "menu: SUPER+Space is bound to it" "$hypr hyprctl binds -j | jq -e 'any(.[]; .key == \"Space\" and .modmask == 64 and (.submap // \"\") == \"\" and .description == \"Menu: apps and everything else\")' >/dev/null"
+      key KEY_K; key KEY_E; key KEY_Y
+      menu_is "menu: typing filters, deeper items under their group, letters marked" '.filter == "key" and (.count | test("^[0-9]+ of [0-9]+$")) and .rows[0] == "[Key]binds" and any(.rows[]; test("^Setup › \\[Key\\]board layout"))'
+      screenshot menu-filter
+      key KEY_LEFTCTRL KEY_R
+      menu_is "menu: ctrl r clears the filter" '.filter == "" and (.path | length) == 0 and (.rows | length) == 9'
+      key KEY_DOWN; key KEY_ENTER; sleep 1
+      menu_is "menu: down, Return opens Keybinds in place" '.path == ["Keybinds"] and (.rows | length) > 5 and any(.rows[]; test(" · SUPER \\+ "))'
+      screenshot menu-keybinds
+      key KEY_BACKSPACE
+      menu_is "menu: Backspace on an empty filter goes up" '(.path | length) == 0 and .selected == 2 and .open'
+      key KEY_BACKSPACE
+      menu_is "menu: Backspace at the top does nothing" '(.path | length) == 0 and .open and (.rows | length) == 9'
+      key KEY_D; key KEY_I; key KEY_S; key KEY_P; key KEY_L; key KEY_A; key KEY_Y; key KEY_S; key KEY_BACKSPACE
+      menu_is "menu: Backspace with text takes one letter off" '.filter == "display" and (.path | length) == 0'
+      key KEY_S; key KEY_ENTER; sleep 1.5
+      menu_is "menu: a deeper match opens two levels in" '.path == ["Setup", "Displays"]'
+      key KEY_X
+      key KEY_LEFTCTRL KEY_R
+      menu_is "menu: ctrl r from two levels in starts over" '(.path | length) == 0 and .filter == "" and (.rows | length) == 9'
+      key KEY_ESC
+      menu_is "menu: Escape closes it" '.open == false'
+      # Update shows how many are waiting, as `update check` last saw them.
+      "$here/ssh" "$vm" "$user" -- "mkdir -p ~/.local/state/$id && echo \"12 \$(date +%s)\" > ~/.local/state/$id/updates" || true
+      key KEY_LEFTMETA KEY_SPACE; sleep 1
+      menu_is "menu: Update says 12 ready" 'any(.rows[]; . == "Update · 12 ready")'
+      "$here/ssh" "$vm" "$user" -- "rm -f ~/.local/state/$id/updates" || true
+      key KEY_F; key KEY_I; key KEY_R; key KEY_E
+      menu_is "menu: an app's name from the top finds the app first" '.rows[0] == "Apps › [Fire]fox"'
+      key KEY_LEFTCTRL KEY_R
+      # Apps: Return on Apps, type, Return launches.
+      key KEY_ENTER; sleep 1
+      key KEY_F; key KEY_I; key KEY_R; key KEY_E
+      menu_is "menu: Apps lists the apps, filtered" '.path == ["Apps"] and (.rows[0] | test("^\\[Fire\\]fox"))'
+      key KEY_ENTER
+      check "menu: Apps › Firefox launches it" "$hypr for i in \$(seq 30); do hyprctl clients -j | jq -e 'any(.[]; .class == \"firefox\")' >/dev/null && exit 0; sleep 1; done; exit 1"
+      "$here/ssh" "$vm" "$user" -- "pkill -x firefox" || true
+      sleep 2
+      # Keybinds: Return on one, then the new chord; a taken chord is refused.
+      key KEY_LEFTMETA KEY_K; sleep 1
+      menu_is "menu: SUPER+K opens it at Keybinds" '.open and .path == ["Keybinds"]'
+      vm_type "keyboard"; sleep 0.6
+      key KEY_ENTER
+      menu_is "menu: Return on a binding waits for the new keys" '.capture | test("Keyboard shortcuts")'
+      check "menu: keys go to the capture submap" "$hypr [ \"\$(hyprctl submap)\" = $id-rebind ]"
+      key KEY_LEFTMETA KEY_Y; sleep 2
+      check "menu: the binding moved (SUPER+Y), Hyprland reloaded" "$hypr [ \"\$(hyprctl submap)\" != $id-rebind ] && hyprctl binds -j | jq -e 'any(.[]; .modmask == 64 and .key == \"Y\" and (.description | test(\"Keyboard shortcuts\"))) and (any(.[]; .modmask == 64 and .key == \"K\" and (.submap // \"\") == \"\") | not)' >/dev/null && grep -q '\\[\"SUPER + K\"\\] = \"SUPER + Y\"' ~/.config/$id/hypr/binds.lua"
+      menu_is "menu: the list shows the new keys" 'any(.rows[]; test("shortcuts .* · SUPER \\+ Y$")) and (.message | test("SUPER \\+ Y"))'
+      screenshot menu-keybind-edited
+      key KEY_ENTER
+      key KEY_LEFTMETA KEY_ENTER; sleep 2
+      menu_is "menu: a taken chord is refused, plainly" '(.message | test("already used: Open a terminal")) and any(.rows[]; test(" · SUPER \\+ Y$"))'
+      key KEY_ENTER
+      key KEY_LEFTMETA KEY_K; sleep 2
+      check "menu: and back to SUPER+K" "$hypr hyprctl binds -j | jq -e 'any(.[]; .modmask == 64 and .key == \"K\" and (.description | test(\"Keyboard shortcuts\")))' >/dev/null && ! grep -q 'SUPER + Y' ~/.config/$id/hypr/binds.lua"
+      key KEY_ESC
+      # Install: search a repository package, Return installs it in a normal
+      # terminal: snapshot line first, pacman, then a shell prompt that stays.
+      key KEY_LEFTMETA KEY_SPACE; sleep 1
+      vm_type "install"; key KEY_ENTER; sleep 1
+      vm_type "cowsay"; sleep 3
+      menu_is "menu: Install finds a repository package" '.path == ["Install"] and (.rows[0] == "[cowsay] · REPO") and (.count | test("results?$"))'
+      screenshot menu-install
+      key KEY_ENTER; sleep 4
+      vm_type "$password"; key KEY_ENTER; sleep 6
+      key KEY_ENTER
+      check "menu: the install runs in a terminal" "for i in \$(seq 60); do pacman -Q cowsay >/dev/null 2>&1 && exit 0; sleep 1; done; exit 1"
+      sleep 3
+      bar_shot menu-install-terminal
+      check "menu: one snapshot pair for it, no second from snap-pac" "s=\$(echo '$password' | sudo -S -p '' snapper -c root --csvout list --columns type,description); [ \$(grep -c '^pre,pacman -S cowsay\$' <<<\"\$s\") = 1 ] && [ \$(grep -c '^post,pacman -S cowsay\$' <<<\"\$s\") = 1 ] && ! grep -q 'cowsay' <<<\"\$(grep -v 'pacman -S cowsay\$' <<<\"\$s\")\""
+      check "menu: the terminal stays open at a shell prompt" "$hypr hyprctl clients -j | jq -e 'any(.[]; .class == \"com.mitchellh.ghostty\")' >/dev/null && pgrep -u \$USER -fx '(/usr)?/bin/(bash|zsh|fish) -i' >/dev/null"
+      if command -v tesseract >/dev/null && command -v magick >/dev/null; then
+        rc=0; magick "$last_shot" -resize 200% -colorspace gray -negate png:- | tesseract - - --psm 6 2>/dev/null \
+          | grep -qiE 'snapshot before install cowsay.*ok' || rc=1
+        report "$rc" "menu: the terminal printed the snapshot line first"
       fi
-      "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg panel-close >/dev/null" || true
-      sleep 0.5; virsh send-key "$vm" KEY_LEFTMETA KEY_SPACE >/dev/null; sleep 1
-      check "palette: SUPER+Space, type, Return opens the app" "$(sed "s/@ID@/$id/g" "$here/checks/palette.sh")"
+      "$here/ssh" "$vm" "$user" -- "$hypr hyprctl dispatch 'hl.dsp.window.close()' >/dev/null" || true
+      # The rounded shape: the menu's corners follow it.
+      "$here/ssh" "$vm" "$user" -- "$hypr $id theme shape rounded >/dev/null; sleep 1" || true
+      key KEY_LEFTMETA KEY_SPACE; sleep 1
+      screenshot menu-rounded
+      key KEY_ESC
+      "$here/ssh" "$vm" "$user" -- "$hypr $id theme shape terminal >/dev/null" || true
       check "plugins load without errors" "journalctl --user -u noctalia -b --no-pager | grep -E '\\[luau\\]|script-runtime.*(error|failed)' | grep '$id/' ; ! journalctl --user -u noctalia -b --no-pager | grep -E '\\[luau\\]|script-runtime.*(error|failed)' | grep -q '$id/'"
       check "keyboard layouts switch"      "$hypr $id keyboard add de >/dev/null && sleep 1 && hyprctl devices -j | jq -e '[.keyboards[] | select(.main)][0].layout == \"us,de\"' >/dev/null && $id keyboard next && sleep 1 && hyprctl devices -j | jq -r '.keyboards[] | select(.main) | .active_keymap' | grep -q German"
       screenshot keyboard-layout
       check "keyboard layout removed"      "$hypr $id keyboard remove de >/dev/null && sleep 1 && hyprctl devices -j | jq -e '[.keyboards[] | select(.main)][0].layout == \"us\"' >/dev/null"
       check "displays: scale, arrangement, profile, hotplug" "$(sed "s/@ID@/$id/g" "$here/checks/displays.sh")"
-      "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg panel-open launcher '/m Setup › Displays › ' >/dev/null" || true
+      "$here/ssh" "$vm" "$user" -- "$hypr $id menu 'Setup › Displays' >/dev/null; sleep 1" || true
       screenshot displays-menu
       "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg panel-close >/dev/null" || true
       check "display size: density default, scale, keep or go back" "$(sed "s/@ID@/$id/g" "$here/checks/display-size.sh")"

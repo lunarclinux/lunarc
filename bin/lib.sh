@@ -74,9 +74,73 @@ shell_ready() {
 # Install packages, asking for the password in the terminal if there is one,
 # otherwise through the desktop's password prompt.
 install_packages() {
-  if [[ -t 0 ]]; then sudo pacman -S --needed "$@"
+  if [[ -t 0 ]]; then pacman_tx "install $*" -S --needed "$@"
   else pkexec pacman -S --needed --noconfirm "$@"
   fi
+}
+
+# Package changes run in a terminal take their snapshot first and say so
+# (decision record 0043): "==> snapshot before install cowsay … ok (#215)",
+# then the command. That pre snapshot and a post one after it pair up like
+# snap-pac's, which is told to skip (SNAP_PAC_SKIP) so there aren't two
+# pairs. If nothing changed (declined, or failed early) the snapshot goes.
+# Without snapper the change runs as it would anyway.
+SNAP_PRE=""
+snapshot_before() { # snapshot_before <what, e.g. "install cowsay"> <description>
+  local n
+  SNAP_PRE=""
+  command -v snapper >/dev/null && [[ -d /.snapshots ]] || return 0
+  if n=$(sudo snapper -c root create --type pre --cleanup-algorithm number --print-number --description "$2" 2>/dev/null) \
+      && [[ $n =~ ^[0-9]+$ ]]; then
+    SNAP_PRE=$n
+    printf '\033[36m==>\033[0m snapshot \033[2mbefore %s …\033[0m \033[36mok\033[0m \033[2m(#%s)\033[0m\n' "$1" "$n"
+  else
+    printf '\033[36m==>\033[0m snapshot \033[2mbefore %s …\033[0m \033[31mfailed\033[0m (going on without one)\n' "$1"
+  fi
+}
+snapshot_after() { # snapshot_after <description> <changed: 1 or 0>
+  [[ -n $SNAP_PRE ]] || return 0
+  if [[ $2 == 1 ]]; then
+    sudo snapper -c root create --type post --pre-number "$SNAP_PRE" --cleanup-algorithm number --description "$1" >/dev/null 2>&1 || true
+  else
+    sudo snapper -c root delete "$SNAP_PRE" >/dev/null 2>&1 || true
+  fi
+  SNAP_PRE=""
+}
+# The command as if typed at the prompt, so the terminal shows what runs.
+show_cmd() { printf '\033[2m$\033[0m %s\n' "$*"; }
+
+# What's installed (pacman and Flatpak), to tell whether a change happened.
+installed_state() { pacman -Q 2>/dev/null || true; flatpak list --columns=application,version 2>/dev/null || true; }
+
+# One pacman transaction in a terminal, with its snapshot pair.
+pacman_tx() { # pacman_tx <what> <pacman arguments…>
+  local what=$1 before rc=0 env=()
+  shift
+  sudo -v || return 1
+  snapshot_before "$what" "pacman $*"
+  if [[ -n $SNAP_PRE ]]; then env=(SNAP_PAC_SKIP=y); fi
+  before=$(installed_state)
+  show_cmd sudo pacman "$@"
+  sudo "${env[@]}" pacman "$@" || rc=$?
+  snapshot_after "pacman $*" "$([[ $(installed_state) != "$before" ]] && echo 1 || echo 0)"
+  return "$rc"
+}
+
+# The same around another command that changes the system (yay, flatpak).
+# yay runs pacman through sudo itself, so it passes the same skip along.
+system_tx() { # system_tx <what> <command…>
+  local what=$1 before rc=0
+  shift
+  sudo -v || return 1
+  snapshot_before "$what" "$*"
+  before=$(installed_state)
+  show_cmd "$@"
+  if [[ $1 == yay && -n $SNAP_PRE ]]; then yay --sudoflags SNAP_PAC_SKIP=y "${@:2}" || rc=$?
+  else "$@" || rc=$?
+  fi
+  snapshot_after "$*" "$([[ $(installed_state) != "$before" ]] && echo 1 || echo 0)"
+  return "$rc"
 }
 
 # Stay awake and night light: on or off for this login session, in the runtime

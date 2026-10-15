@@ -29,7 +29,8 @@ location lookups, no plugin catalogs, no exchange-rate downloads.
 | Firmware updates | the Linux Vendor Firmware Service (fwupd.org) | `lunarc update firmware` |
 | Weather in the bar (off by default) | `api.noctalia.dev` (your city name, from the time zone) and `api.open-meteo.com` (coordinates) | after `lunarc privacy weather on` or choosing it at first login |
 | Encrypted DNS (off by default) | the provider you pick: Quad9, Mullvad or Cloudflare (DNS over TLS) | after `lunarc privacy dns <provider>` |
-| Installing apps | Arch mirrors, the AUR, the app's own site (web apps) | `lunarc app install` |
+| Installing apps | Arch mirrors, the AUR, the app's own site (web apps) | `lunarc app install`, `lunarc package install`, the menu's Install |
+| Searching the AUR | `aur.archlinux.org` (the word you typed, three letters or more) | typing in the menu's Install; off with `lunarc privacy aur-search off` |
 | AI coding agents | the agent's provider (Anthropic, OpenAI, Google, ...) | when you run one; their telemetry is turned off (`DISABLE_TELEMETRY`, Gemini's usage statistics, opencode sharing) |
 | AI crash diagnosis | your chosen agent's provider, with the crash report | when you click Diagnose (or set background diagnosis yourself) |
 | Dictation | the speech model is downloaded once from Hugging Face and checked against a known checksum; speech is transcribed on this computer | first use of Dictate |

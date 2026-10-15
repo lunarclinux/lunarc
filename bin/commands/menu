@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
-# summary: The system menu and app search (SUPER+Space): apps, capture, toggles, style, setup, install, update, power
+# summary: The menu (SUPER+Space): apps, keybinds, style, setup, capture, install, remove, update, system
 set -euo pipefail
 source "$DISTRO_LIB/lib.sh"
 
-# The menu lives in the launcher (/m), drawn by Noctalia so it follows the
-# theme: Apps and the groups; type to search apps and every item, or press
-# Enter on a group to open it and keep typing to filter that level. Items:
+# A panel of the utilities plugin (decision record 0043): a keyboard list
+# drawn by the plugin. Type to filter (deeper items and apps included), Return
+# opens, Backspace on an empty filter goes up, Ctrl+R starts over. Its items:
 # $SHARE/default/menu/menu, or your copy in ~/.config/<id>/menu.
 
+panel=$DISTRO_ID/utilities:menu
 case ${1:-} in
   -h|--help)
-    echo "Usage: $DISTRO_ID menu [group]    open or close the system menu, or open one group of it (e.g. Capture)" ;;
-  "") noctalia msg panel-toggle launcher "/m " >/dev/null ;;
-  *) noctalia msg panel-open launcher "/m $* › " >/dev/null ;;
+    echo "Usage: $DISTRO_ID menu [item]    open or close the menu, or open it at an item (e.g. Capture, or \"Setup › Displays\")" ;;
+  "") noctalia msg panel-toggle "$panel" >/dev/null ;;
+  *) noctalia msg panel-open "$panel" "$*" >/dev/null ;;
 esac
