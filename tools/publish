@@ -44,6 +44,25 @@ for file in "$repo"/*.pkg.tar.zst "$repo/$DISTRO_REPO.db.tar.gz" "$repo/$DISTRO_
   [[ -f $file.sig ]] || fail "$(basename "$file") is not signed; build on the machine with the signing key"
 done
 
+# Release assets can't contain ':' (GitHub turns it into '.'), and a package
+# with an epoch (noctalia 1:5.2.1) has one in its file name. Name such files
+# with '.' before the database is made, so the name pacman asks for is the
+# name that exists; the version inside the package is unchanged.
+fpr=$(<"$root/pkg/keyring/fingerprint")
+export GNUPGHOME=${SIGNING_GNUPGHOME:-$HOME/.local/share/$DISTRO_ID-signing/gnupg}
+rebuild_db() {
+  rm -f "$repo/$DISTRO_REPO".{db,files}{,.sig} "$repo/$DISTRO_REPO".{db,files}.tar.gz{,.sig}
+  repo-add -q --sign --key "$fpr" "$repo/$DISTRO_REPO.db.tar.gz" "$repo"/*.pkg.tar.zst
+}
+renamed=0
+for file in "$repo"/*:*.pkg.tar.zst; do
+  [[ -e $file ]] && (( ! dry )) || continue
+  plain=$(dirname "$file")/$(basename "$file" | tr : .)
+  mv "$file" "$plain"; mv "$file.sig" "$plain.sig"
+  renamed=1
+done
+if (( renamed )); then rebuild_db; fi
+
 # "name version filename" for every package in a repository database.
 db_entries() {
   bsdtar -xOf "$1" '*/desc' 2>/dev/null | awk '
@@ -80,20 +99,22 @@ echo "publish: to $REPO_GITHUB ($tag), built in the clean chroot from ${BUILD_CO
 for e in "${new[@]}"; do echo "  update   $e"; done
 for e in "${reused[@]}"; do echo "  same     ${e%%:*} (keeps the published file)"; done
 if (( dry )); then echo "publish: dry run, nothing uploaded"; exit 0; fi
-if (( ${#new[@]} == 0 )); then echo "publish: nothing new to publish"; exit 0; fi
+# A published database that names a file with ':' points at a missing asset.
+fix_names=0
+for n in "${!pub_file[@]}"; do if [[ ${pub_file[$n]} == *:* ]]; then fix_names=1; fi; done
+if (( fix_names )); then echo "publish: the published database names files with ':'; republishing it"; fi
+if (( ${#new[@]} == 0 && ! fix_names )); then echo "publish: nothing new to publish"; exit 0; fi
 
 # Same version as published: use the published file and signature, so the
 # database's checksums match what clients download; then rebuild the database.
 if (( ${#reused[@]} )); then
   for e in "${reused[@]}"; do
     IFS=: read -r _ local_file pub <<<"$e"
+    pub=${pub//:/.}  # an older database may name it with ':'; the asset has '.'
     rm -f "$repo/$local_file" "$repo/$local_file.sig"
     gh release download "$tag" --repo "$REPO_GITHUB" --pattern "$pub" --pattern "$pub.sig" --dir "$repo"
   done
-  fpr=$(<"$root/pkg/keyring/fingerprint")
-  export GNUPGHOME=${SIGNING_GNUPGHOME:-$HOME/.local/share/$DISTRO_ID-signing/gnupg}
-  rm -f "$repo/$DISTRO_REPO".{db,files}{,.sig} "$repo/$DISTRO_REPO".{db,files}.tar.gz{,.sig}
-  repo-add -q --sign --key "$fpr" "$repo/$DISTRO_REPO.db.tar.gz" "$repo"/*.pkg.tar.zst
+  rebuild_db
 fi
 
 # pacman asks for <repo>.db and <repo>.db.sig; repo-add makes those symlinks,
