@@ -21,7 +21,7 @@ Usage: $DISTRO_ID theme <command>
   wallpaper set <n>          use wallpaper number n
   greeter                    use the current theme on the login screen too
                              (done on every change; the last one chosen wins)
-  shape [terminal|rounded]   window corners and the bar (later also menus):
+  shape [terminal|rounded]   window corners, the bar, menus and the login screen:
                              terminal (small corners, the bar edge to edge;
                              the default) or rounded (a floating pill bar)
   blur [on|off]              blur behind translucent windows and the shell
@@ -180,11 +180,11 @@ apply_wallpaper() { # apply_wallpaper <theme> <n>
 # The login screen shows the theme too: a root helper, allowed without a
 # password for the person at the computer. Elsewhere (SSH) it's refused, and
 # the theme still changes.
-greeter_apply() { # greeter_apply <theme> <mode> <wallpaper n>
+greeter_apply() { # greeter_apply <theme> <mode> <wallpaper n> (and the current shape)
   local helper=$DISTRO_LIB/greeter-theme
   [[ -x $helper ]] || return 1
-  if (( EUID == 0 )); then "$helper" "$@"
-  else timeout 10 pkexec --disable-internal-agent "$helper" "$@"
+  if (( EUID == 0 )); then "$helper" "$@" "$(shape)"
+  else timeout 10 pkexec --disable-internal-agent "$helper" "$@" "$(shape)"
   fi
 }
 
@@ -259,6 +259,10 @@ case ${1:-} in
     set_setting "theme.$1" "$2"
     write_look || die "the window look could not be written"
     reload_look
+    if [[ $1 == shape ]]; then
+      name=$(setting theme)
+      greeter_apply "$name" "$(setting theme.mode)" "$(wallpaper_index "$name")" >/dev/null 2>&1 || true
+    fi
     info "$1: $2" ;;
   greeter)
     name=$(setting theme)

@@ -252,6 +252,7 @@ if "$here/ssh" "$vm" "$user" -- "pacman -Q $id >/dev/null 2>&1"; then
   # wrapper (tuigreet as its fallback), in the theme's colours and wallpaper.
   check "login screen packages installed" "pacman -Q noctalia-greeter greetd-tuigreet >/dev/null"
   check "login screen runs the wrapper"  "grep -qx 'command = \"/usr/lib/$id/greeter\"' /etc/greetd/$id.toml && test -x /usr/lib/$id/greeter && test -x /usr/lib/$id/greeter-client"
+  check "login screen in Frosted Terminal's look" "grep -qx 'font_family = \"Geist Mono\"' /var/lib/$id/greeter.toml && grep -qx 'corner_radius_scale = 1' /var/lib/$id/greeter.toml && grep -qx 'surface = \"#070b17\"' /var/lib/$id/greeter.toml && grep -qx 'on_surface_variant = \"#b4bbd0\"' /var/lib/$id/greeter.toml && grep -qx 'error = \"#f0a39a\"' /var/lib/$id/greeter.toml"
   check "login screen is themed"        "grep -qx 'primary = \"#ebc77a\"' /var/lib/$id/greeter.toml && grep -q '^path = \"/usr/share/$id/themes/moonlit/wallpapers/' /var/lib/$id/greeter.toml && [ \"\$(echo '$password' | sudo -S -p '' readlink /var/lib/noctalia-greeter/greeter.toml)\" = /var/lib/$id/greeter.toml ]"
   check "login screen starts the distro session" "noctalia-greeter sessions | grep -qx '$name' && grep -qx 'default = \"$name\"' /var/lib/$id/greeter.toml && grep -qx 'Exec=uwsm start -e -D Hyprland hyprland.desktop' /usr/share/wayland-sessions/$id.desktop"
   check "boot splash is the distro theme" "test -f /usr/share/plymouth/themes/$id/$id.script && [ \"\$(plymouth-set-default-theme)\" = $id ]"
@@ -386,6 +387,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     # computer); from the desktop it follows the theme without a password.
     check "login screen theme: not from SSH" "! $id theme greeter >/dev/null 2>&1 && ! grep -q catppuccin /var/lib/$id/greeter.toml"
     check "login screen theme: from the desktop" "$hypr hyprctl dispatch 'hl.dsp.exec_cmd(\"$id theme greeter\")' >/dev/null; for i in \$(seq 15); do grep -qx 'primary = \"#cba6f7\"' /var/lib/$id/greeter.toml && exit 0; sleep 1; done; cat /var/lib/$id/greeter.toml; exit 1"
+    check "login screen follows the shape" "$hypr hyprctl dispatch 'hl.dsp.exec_cmd(\"$id theme shape rounded\")' >/dev/null; for i in \$(seq 15); do grep -qx 'corner_radius_scale = 1.333' /var/lib/$id/greeter.toml && break; sleep 1; done; hyprctl dispatch 'hl.dsp.exec_cmd(\"$id theme shape terminal\")' >/dev/null; for i in \$(seq 15); do grep -qx 'corner_radius_scale = 1' /var/lib/$id/greeter.toml && [ \"\$($id theme shape)\" = terminal ] && exit 0; sleep 1; done; cat /var/lib/$id/greeter.toml; exit 1"
     check "wallpaper cycles"              "$hypr $id theme wallpaper next | grep -q '^wallpaper 2 of ' && grep -q '^wallpaper.catppuccin = 2' ~/.config/$id/settings && $id theme wallpaper set 1 >/dev/null"
     screenshot catppuccin
     check "switch to eclipse"             "$hypr $id theme set eclipse >/dev/null && sleep 2 && grep -q 'f5c542' ~/.config/$id/hypr/look.lua"
@@ -802,7 +804,26 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
         "$here/ssh" "$vm" "$user" -- "$hypr $id theme shape terminal >/dev/null; $id theme blur off >/dev/null; sleep 2" || true
         click "$((sw / 2))" 15; shot calendar-blur-off; key KEY_ESC
         click "${mx:-200}" 15; shot now-playing-blur-off; key KEY_ESC
-        "$here/ssh" "$vm" "$user" -- "$hypr $id theme blur on >/dev/null; systemctl --user stop $id-test-mpris" || true
+        "$here/ssh" "$vm" "$user" -- "$hypr $id theme blur on >/dev/null" || true
+
+        # A squeezed left lane: a toggle on beside the clock, a long window
+        # title and the test player. The lane's text shortens to fit (our
+        # Noctalia bar-fit patch) instead of being cut mid-glyph; the clock
+        # stays centred.
+        "$here/ssh" "$vm" "$user" -- "$hypr $dbus $id awake on >/dev/null; hyprctl dispatch 'hl.dsp.exec_cmd(\"ghostty --class=$id.squeeze --gtk-single-instance=false --title=quarterly-notes-on-the-tide-tables-and-harbour-schedule-final-draft.md -e sleep 300\")' >/dev/null; sleep 6" || true
+        bar_shot bar-squeezed
+        clock_centred "$last_shot" "a toggle on, a long title and media"
+        read -r _ _ _ t < <(clock_lines "$last_shot")
+        text=$(ocr "$last_shot" "$(( ${t:-640} > 40 ? ${t:-640} : 640 ))x30+0+0" 7)
+        # How much room is left depends on the workspaces earlier steps
+        # opened: the media text is whole, shortened with an ellipsis, or gone
+        # (the title gives way first), but never cut off part-way.
+        if grep -qE 'Low T.*(…|\.)[^A-Za-z]*$' <<<"$text"; then state="shortened with an ellipsis"
+        elif grep -q 'Saltmarsh' <<<"$text"; then state="whole"
+        elif ! grep -q 'Low T' <<<"$text"; then state="hidden (no room)"
+        else state=""; fi
+        report "$([[ -n $state ]] && echo 0 || echo 1)" "squeezed: the media text, ${state:-cut off part-way} (read: $(tr '\n' ' ' <<<"$text" | head -c 120))"
+        "$here/ssh" "$vm" "$user" -- "$hypr $dbus $id awake off >/dev/null; pkill -f -- '^(/usr/bin/)?ghostty --class=${id}[.]squeeze'; systemctl --user stop $id-test-mpris; sleep 2" || true
 
         # The volume pill: the volume key, then gone on its own.
         v0=$("$here/ssh" "$vm" "$user" -- "$hypr wpctl get-volume @DEFAULT_AUDIO_SINK@ | awk '{ print int(\$2 * 100 + 0.5) }'")
@@ -887,55 +908,100 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       check "lock recovery key works while locked" "$hypr hyprctl binds -j | jq -e '.[] | select(.key == \"L\" and .modmask == 12 and .locked == true)' >/dev/null"
       check "lock engages, screensaver behind it" "$hypr $id lock && sleep 3 && pgrep -x swaylock-plugin >/dev/null && pgrep -x windowtolayer >/dev/null && for i in \$(seq 20); do pgrep -x tte >/dev/null && exit 0; sleep 1; done; exit 1"
       screenshot lock
-      # Idle: only the screensaver; the password box and its hint appear with
-      # the first key and fade 1.5 s after the last, so these grab the screen at
-      # once and read bands of it here on the host (the busy animation defeats
-      # OCR on the whole screen).
+      # The prompt pill (Frosted Terminal, decision record 0043): always there,
+      # low on the screen, `tester@<host> password:` and a row of dots, nothing
+      # else (no clock, no chips); the hint line appears while typing and fades
+      # 1.5 s after the last key. These grab the screen at once and read bands
+      # of it here on the host (the busy animation defeats OCR on the whole
+      # screen).
       quick_shot() { # quick_shot <label>
         local f; f=$shots/$vm-$(date +%Y%m%d-%H%M%S)-$1.png
         "$here/ssh" "$vm" "$user" -- "$hypr grim -" > "$f" 2>/dev/null || true
         log "screenshot: $f"; last_shot=$f
       }
       # OCR one horizontal band of a screenshot: band_says <png> <top per mille>
-      # <height per mille> <regex>. 0 = found, 1 = not found, 2 = no OCR tools.
+      # <height per mille> <regex> [width per mille, centred; default 600].
+      # 0 = found, 1 = not found, 2 = no OCR tools.
       band_says() {
-        local w h crop rc=1
+        local w h crop rc=1 bw=${5:-600}
         command -v tesseract >/dev/null && command -v magick >/dev/null || return 2
         read -r w h < <(magick identify -format '%w %h' "$1")
         crop=$(mktemp --suffix=.png)
-        magick "$1" -crop "$((w * 3 / 5))x$((h * $3 / 1000))+$((w / 5))+$((h * $2 / 1000))" +repage -resize 300% -colorspace gray -negate "$crop"
+        magick "$1" -crop "$((w * bw / 1000))x$((h * $3 / 1000))+$((w * (1000 - bw) / 2000))+$((h * $2 / 1000))" +repage -resize 300% -colorspace gray -negate "$crop"
         if tesseract "$crop" - --psm 6 2>/dev/null | grep -qiE "$4"; then rc=0; fi
         rm -f "$crop"; return "$rc"
       }
-      # The password box sits at the screen's centre: its "Password" label just
-      # above, the hint line below it.
-      hint_seen() { band_says "$1" 520 160 unlock; }
-      # The box's left edge (360 px wide, centred on the 1280x800 VM screen):
-      # a solid run of the theme's gold border while typing, none while idle
-      # (the animation behind it defeats OCR of the small label).
-      box_seen() { # box_seen <png>: 0 = border found, 1 = not, 2 = no tools
-        command -v magick >/dev/null || return 2
-        local n; n=$(magick "$1" -crop 4x50+457+375 +repage txt:- | grep -c '#EBC77A')
-        (( n >= 40 ))
+      # On the 1280x800 VM screen the pill is 500x56, its bottom 96 px above
+      # the screen's: y 648-704; the Caps Lock and hint lines are under it
+      # (read through a narrow crop, clear of the screensaver's art beside them).
+      pill_says() { band_says "$1" 805 90 "$2"; }
+      hint_seen() { band_says "$1" 885 60 unlock 240; }
+      # Pixels of one colour inside the pill (fuzz 4%); lit_dots counts the
+      # separate blobs of the lit-key colour, minus one for the block cursor.
+      pill_colour() { # pill_colour <png> <#rrggbb> → pixel count
+        magick "$1" -crop 520x60+380+646 +repage -fuzz 4% -fill black +opaque "$2" -fill white -opaque "$2" -colorspace gray -format '%[fx:round(mean*w*h)]' info:
+      }
+      lit_dots() { # lit_dots <png> → lit dots
+        local n
+        n=$(magick "$1" -crop 520x60+380+646 +repage -fuzz 4% -fill black +opaque '#e6e2d6' -fill white -opaque '#e6e2d6' -colorspace gray \
+          -define connected-components:verbose=true -define connected-components:area-threshold=3 -connected-components 8 null: 2>/dev/null | grep -c 'gray(255)')
+        echo $((n - 1))
       }
       report() { # report <ok?> <description>
         if [[ $1 == 0 ]]; then printf '  \033[32mok\033[0m   %s\n' "$2"; else printf '  \033[31mFAIL\033[0m %s\n' "$2"; fail=1; fi
       }
       quick_shot lock-idle
-      rc=0; hint_seen "$last_shot" || rc=$?
-      if (( rc == 2 )); then log "no tesseract/magick here: skipping the hint checks"; else
-        report "$(( rc == 1 ? 0 : 1 ))" "lock: no text while idle"
+      rc=0; pill_says "$last_shot" 'tester@.*password' || rc=$?
+      if (( rc == 2 )); then log "no tesseract/magick here: skipping the lock screen checks"; else
+        report "$rc" "lock: the prompt pill while idle (tester@host password:)"
+        rc=0; band_says "$last_shot" 0 600 '[0-2][0-9]:[0-5][0-9]|BAT|NOTIFY|SESSION' || rc=$?
+        report "$(( rc == 1 ? 0 : 1 ))" "lock: no clock or chips above it"
+        rc=0; hint_seen "$last_shot" || rc=$?
+        report "$(( rc == 1 ? 0 : 1 ))" "lock: no hint while idle"
+        report "$(( $(lit_dots "$last_shot") == 0 ? 0 : 1 ))" "lock: no dot lit while idle"
         vm_type "abc"; quick_shot lock-typing
         rc=0; hint_seen "$last_shot" || rc=$?
-        report "$rc" "lock: hint under the password box while typing"
-        rc=0; box_seen "$last_shot" || rc=$?
-        report "$rc" "lock: password box while typing"
+        report "$rc" "lock: hint under the pill while typing"
+        n=$(lit_dots "$last_shot")
+        report "$(( n == 1 ? 0 : 1 ))" "lock: 3 keys typed, one dot lit, never the count (lit $n)"
+        vm_type "defg"; quick_shot lock-typing-more
+        n=$(lit_dots "$last_shot")
+        report "$(( n == 1 ? 0 : 1 ))" "lock: 7 keys typed, still one dot lit (lit $n)"
       fi
-      virsh send-key "$vm" KEY_ENTER >/dev/null; sleep 1; quick_shot lock-wrong; sleep 3
+      virsh send-key "$vm" KEY_ENTER >/dev/null
+      # A wrong password: coral border and text once PAM has answered.
+      coral=0
+      for i in 1 2 3 4 5 6; do
+        sleep 0.5; quick_shot lock-wrong
+        command -v magick >/dev/null || break
+        coral=$(pill_colour "$last_shot" '#f0a39a'); (( coral >= 300 )) && break
+      done
+      if command -v magick >/dev/null; then
+        report "$(( coral >= 300 ? 0 : 1 ))" "lock: wrong password turns the pill coral (coral $coral)"
+        rc=0; pill_says "$last_shot" 'wrong' || rc=$?
+        report "$rc" "lock: says wrong password"
+      fi
+      sleep 3
       virsh send-key "$vm" KEY_CAPSLOCK >/dev/null; vm_type "x"; quick_shot lock-capslock
+      if command -v magick >/dev/null; then
+        rc=0; band_says "$last_shot" 880 60 'caps' 240 || rc=$?
+        report "$rc" "lock: Caps Lock is on, under the pill"
+      fi
       virsh send-key "$vm" KEY_CAPSLOCK >/dev/null; virsh send-key "$vm" KEY_ESC >/dev/null; quick_shot lock-cleared; sleep 1
       vm_type "$password"; virsh send-key "$vm" KEY_ENTER >/dev/null; sleep 5
       check "password unlocks; animation ends" "! pgrep -x swaylock-plugin >/dev/null && sleep 3 && ! pgrep -x windowtolayer >/dev/null && ! pgrep -x tte >/dev/null"
+      # lock.indicator = ring keeps the ring, which appears with the first key.
+      check "lock: the ring setting locks too" "$hypr echo 'lock.indicator = ring' >> ~/.config/$id/settings && $id lock && sleep 3 && pgrep -x swaylock-plugin >/dev/null"
+      vm_type "ab"; quick_shot lock-ring
+      if command -v magick >/dev/null; then
+        n=$(magick "$last_shot" -crop 260x260+510+270 +repage -fuzz 6% -fill black +opaque '#ebc77a' -fill white -opaque '#ebc77a' -colorspace gray -format '%[fx:round(mean*w*h)]' info:)
+        report "$(( n >= 1000 ? 0 : 1 ))" "lock: the amber ring at the centre while typing (amber $n)"
+        rc=0; pill_says "$last_shot" 'password' || rc=$?
+        report "$(( rc == 1 ? 0 : 1 ))" "lock: no pill with the ring"
+      fi
+      virsh send-key "$vm" KEY_ESC >/dev/null; sleep 0.5
+      vm_type "$password"; virsh send-key "$vm" KEY_ENTER >/dev/null; sleep 5
+      check "lock: the password unlocks the ring" "! pgrep -x swaylock-plugin >/dev/null && sed -i '/^lock.indicator = ring\$/d' ~/.config/$id/settings && ! grep -q '^lock.indicator' ~/.config/$id/settings"
       # Fail closed: without the screensaver lock, Noctalia's lock takes over.
       "$here/ssh" "$vm" "$user" -- "echo '$password' | sudo -S -p '' mv /usr/bin/swaylock-plugin /usr/bin/swaylock-plugin.off" || true
       check "falls back to Noctalia's lock" "$hypr $id lock; sleep 3; noctalia msg status | jq -e '.. | objects | select(has(\"locked\")) | .locked == true' >/dev/null"
@@ -1020,8 +1086,17 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
   check "an extra session shows the picker" "echo '$password' | sudo -S -p '' sh -c \"$extra\" && echo '$password' | sudo -S -p '' systemctl restart greetd && sleep 2 && ($greeter_up) && s=\$($greeter_sessions) && echo \"\$s\" && [ \"\$s\" = '$two' ]"
   sleep 3
   login_shot login-screen-two-sessions
-  ocr_check "login screen: picker shows the distro session" "$name" "Test Extra"
+  # (Geist Mono: OCR sometimes reads the last letters wrong.)
+  ocr_check "login screen: picker shows the distro session" "${name:0:5}" "Test Extra"
   check "removing it hides the picker again" "echo '$password' | sudo -S -p '' sh -c 'rm /usr/share/wayland-sessions/test-extra.desktop && systemctl restart greetd' && sleep 2 && ($greeter_up) && s=\$($greeter_sessions) && [ \"\$s\" = '$name' ]"
+  sleep 3
+  # The rounded shape's login screen (written as root here; from the desktop,
+  # `theme shape` does it), then back to the terminal shape.
+  check "login screen: rounded corners" "echo '$password' | sudo -S -p '' sh -c '/usr/lib/$id/greeter-theme moonlit dark 1 rounded && systemctl restart greetd' && sleep 2 && ($greeter_up) && grep -qx 'corner_radius_scale = 1.333' /var/lib/$id/greeter.toml"
+  sleep 3
+  login_shot login-screen-rounded
+  ocr_check "login screen, rounded: asks tester's password" "tester" "$name"
+  check "login screen: back to the terminal shape" "echo '$password' | sudo -S -p '' sh -c '/usr/lib/$id/greeter-theme moonlit dark 1 terminal && systemctl restart greetd' && sleep 2 && ($greeter_up) && grep -qx 'corner_radius_scale = 1' /var/lib/$id/greeter.toml"
   sleep 3
   vm_type "$password"; virsh send-key "$vm" KEY_ENTER >/dev/null
   check "logging in from the login screen" 'for i in $(seq 60); do pgrep -u "$USER" -x Hyprland >/dev/null && ! pgrep -u greeter -xf "/usr/bin/noctalia-greeter( .*)?" >/dev/null && exit 0; sleep 1; done; exit 1'

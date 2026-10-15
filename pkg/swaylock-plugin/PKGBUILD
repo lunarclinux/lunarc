@@ -10,12 +10,15 @@
 # hint-text.patch (ours): --hint-text / --hint-color draw one line of text
 # under the indicator while it is visible, so the lock says what it expects
 # (the background is our screensaver and can't see keystrokes).
-# box-indicator.patch (ours): --indicator-style box draws a password box (a
-# fixed row of dots, one lit at random per key so the length never shows; state
-# text, a Caps Lock line) instead of the ring, shown exactly when the ring would be.
+# box-indicator.patch (ours): --indicator-style box draws a password prompt in
+# a pill, low on the screen, instead of the ring: --prompt-text (user@host),
+# "password:", a fixed row of dots with one lit at random per key so the length
+# never shows, a block cursor; state text, a Caps Lock line. Shown exactly when
+# the ring would be; with --indicator-idle-visible it is drawn as soon as the
+# background is (upstream drew it only at the first key).
 pkgname=swaylock-plugin
 pkgver=1.8.7
-pkgrel=5
+pkgrel=6
 pkgdesc="Fork of swaylock that draws its background with a wallpaper program"
 arch=(x86_64)
 url="https://github.com/mstoeckl/swaylock-plugin"
@@ -29,7 +32,7 @@ source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz"
         box-indicator.patch)
 sha256sums=('98ac74457adfeb812f91e2fc4b289db664637b0d3890a051347b8d1169cc3757'
             '6fb8b6523111603cf6172303fb589c0cbd903bb0913f5e20acfd41578779e24a'
-            '24bb650f97e59a314bb5c120f6978dec909114352d14c786f107b9a54569d4eb')
+            'ba407f19705463ff25b45f95cf6e366a3824d3f3e93fb80c3300bc471553072a')
 
 # meson and ninja come from Arch (makedepends). A host build skips the
 # makedepends check, so say clearly when they're missing; never fetch build

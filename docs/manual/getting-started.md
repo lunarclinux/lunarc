@@ -213,9 +213,10 @@ nano is installed as well, with colours, line numbers and Ctrl+S to save. Prefer
 
 ## The login screen
 After a restart (unless you chose automatic login) and after logging out, the
-login screen asks for your password. It shows the theme and wallpaper last
-chosen on this computer: changing the theme changes it too (from the desktop,
-not over SSH; `lunarc theme greeter` does it again). If it ever can't start, a
+login screen asks for your password. It shows the theme, wallpaper and shape
+(terminal or rounded corners) last chosen on this computer, in Geist Mono:
+changing them changes it too (from the desktop, not over SSH; `lunarc theme
+greeter` does it again). If it ever can't start, a
 plain text login appears instead and works the same way.
 
 It starts the Lunarc desktop. If you install another desktop (GNOME, Plasma…),
@@ -223,14 +224,13 @@ a session list appears under the password box to choose it; Lunarc is
 preselected each time.
 
 ## Locking the screen
-SUPER+L locks the screen and plays the screensaver behind the lock; nothing
-else is on screen. Just start typing your password and press Enter: a
-password box appears as you type (a dot lights with each key; the box never
-shows how many characters you typed), with "Type your
-password · Enter to unlock · Esc clears" under it. It says "Checking…" after
-Enter, turns red with "Wrong password" for a wrong password, warns "Caps Lock
-is on", and fades a moment after you stop typing. Esc clears what you typed
-("Cleared"). Prefer the ring? Set `lock.indicator = ring` in
+SUPER+L locks the screen and plays the screensaver behind the lock, with one
+line near the bottom: `you@computer password:`. Type your password and press
+Enter. A dot lights with each key, never the count: the line never shows how
+many characters you typed. While you type, "Enter to unlock · Esc clears"
+shows under it. It says "checking…" after Enter, turns red with "wrong
+password" for a wrong password, warns "Caps Lock is on", and Esc clears what
+you typed ("cleared"). Prefer the ring? Set `lock.indicator = ring` in
 `~/.config/lunarc/settings`. The computer also locks after 5
 minutes idle and before it sleeps. If the lock screen ever hangs, press
 CTRL+ALT+L to start it again. To use Noctalia's lock screen instead, set
