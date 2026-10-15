@@ -15,7 +15,7 @@
 # --chroot (decision record 0044): every package is built with makechrootpkg
 # in a fresh copy of a clean chroot kept in ~/.cache/<id>-chroot (CHROOT_DIR),
 # which is created with mkarchroot or brought up to date (pacman -Syu) first,
-# from Arch's mirror (CHROOT_MIRROR) rather than this machine's mirrorlist.
+# from Arch's mirrors (CHROOT_MIRROR for one of your own) rather than this machine's mirrorlist.
 # Build and make dependencies are installed into the copy, so nothing is built
 # against this machine's libraries. The results are signed here, like host
 # builds. Needs devtools and root (sudo asks once). --fresh deletes and
@@ -75,8 +75,13 @@ if (( chroot )); then
   done
   devtools=/usr/share/devtools
   chroot_dir=${CHROOT_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/$DISTRO_ID-chroot}
+  # Arch's own mirrors, tried in order (pacman moves on when one fails; the
+  # geo-routed one has refused TLS from some networks). CHROOT_MIRROR: one URL instead.
   # shellcheck disable=SC2016  # $repo and $arch are pacman's own placeholders
-  mirror=${CHROOT_MIRROR:-'https://geo.mirror.pkgbuild.com/$repo/os/$arch'}
+  mirrors=('https://fastly.mirror.pkgbuild.com/$repo/os/$arch'
+           'https://geo.mirror.pkgbuild.com/$repo/os/$arch'
+           'https://mirror.rackspace.com/archlinux/$repo/os/$arch')
+  if [[ -n ${CHROOT_MIRROR:-} ]]; then mirrors=("$CHROOT_MIRROR"); fi
   # Arch's own build settings (the flags Arch's packages are built with).
   chroot_makepkg_conf=$devtools/makepkg.conf.d/x86_64.conf
   [[ -f $devtools/pacman.conf.d/extra.conf && -f $chroot_makepkg_conf ]] \
@@ -211,9 +216,10 @@ if (( chroot )); then
     if (( dry )); then root_dir=$work/recreated; fi
   fi
   if (( ! dry )); then mkdir -p "$chroot_dir"; fi
-  # Devtools' pacman.conf for Arch's repositories, with Arch's mirror rather
+  # Devtools' pacman.conf for Arch's repositories, with Arch's mirrors rather
   # than this machine's mirrorlist (which may lag behind or point elsewhere).
-  sed "s|^Include = /etc/pacman.d/mirrorlist\$|Server = $mirror|" \
+  servers=$(printf 'Server = %s\n' "${mirrors[@]}")
+  awk -v servers="$servers" '$0 == "Include = /etc/pacman.d/mirrorlist" { print servers; next } { print }' \
     "$devtools/pacman.conf.d/extra.conf" > "$conf_dir/pacman.conf"
   if [[ ! -d $root_dir ]]; then
     echo "pkg/build: creating the build chroot in $chroot_dir/root"
