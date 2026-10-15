@@ -1,0 +1,124 @@
+#!/usr/bin/env python3
+"""Writes tokens.json for every theme: the Frosted Terminal design tokens
+(docs/design/frosted-terminal/tokens.json) in the theme's own colours.
+
+Moonlit's dark variant is the design's tokens.json as it is. Every other
+variant is derived from the theme's palette.json by role (see derive()); the
+fonts, type, geometry and material are the same for every theme. Each file
+keeps the palette's layout: one full token set per variant ("dark", "light").
+
+  tools/make-tokens            # rewrite every theme's tokens.json
+  tools/make-tokens nord       # just one
+  tools/make-tokens --check    # fail if a committed file is out of date
+
+tools/make-themes runs this after writing palettes.
+"""
+import copy
+import json
+import pathlib
+import re
+import sys
+
+REPO = pathlib.Path(__file__).resolve().parent.parent
+THEMES = REPO / "themes"
+SPEC = REPO / "docs/design/frosted-terminal/tokens.json"
+EXACT = ("moonlit", "dark")  # the variant the design was drawn in
+
+
+def distro_name():
+    text = (REPO / "distro.conf").read_text()
+    return re.search(r'^DISTRO_NAME="([^"]*)"', text, re.M).group(1)
+
+
+def load_spec():
+    """The design's tokens, with the distro's name as a placeholder (the
+    package fills it in, like every other installed text file)."""
+    spec = json.loads(SPEC.read_text())
+    spec["name"] = spec["name"].replace(distro_name(), "@DISTRO_NAME@")
+    return spec
+
+
+def rgb(colour):
+    h = colour.lstrip("#")
+    return [int(h[i:i + 2], 16) for i in (0, 2, 4)]
+
+
+def mix(a, b, t):
+    """a moved t of the way towards b (sRGB)."""
+    return "#" + "".join(f"{round(x + (y - x) * t):02x}" for x, y in zip(rgb(a), rgb(b)))
+
+
+def rgba(colour, alpha):
+    r, g, b = rgb(colour)
+    return f"rgba({r},{g},{b},{alpha:.2f})"
+
+
+def derive(palette, mode, spec):
+    """One variant's tokens from its Noctalia palette. The alphas and mixes are
+    the design's own (Moonlit's tokens against Moonlit's palette)."""
+    p = palette
+    fg = p["mOnSurface"]
+    muted = p["mOnSurfaceVariant"]
+    accent = p["mPrimary"]
+    # The ground behind the glass is the surface taken further from the text:
+    # darker in dark mode, paler in light mode.
+    deep = mix(p["mSurface"], "#000000" if mode == "dark" else "#ffffff", 0.30)
+    # Lighter accent shades in dark mode; in light mode the same shades go
+    # towards the text colour, so they keep their contrast.
+    toward = "#ffffff" if mode == "dark" else fg
+    accent_light = mix(accent, toward, 0.45)
+    accent_hover = mix(accent, toward, 0.30)
+
+    t = copy.deepcopy(spec)
+    c = t["color"]
+    c["bg"].update(deep=deep, pane=rgba(deep, 0.52), popover=rgba(deep, 0.76), menu=rgba(deep, 0.80))
+    c["sheen"].update(top=rgba(accent_light, 0.07), bottom=rgba(fg, 0.02))
+    c["text"].update(primary=fg, body=mix(fg, deep, 0.075), secondary=mix(fg, deep, 0.135),
+                     muted=muted, dim=mix(muted, deep, 0.24), faint=mix(muted, deep, 0.38))
+    c["accent"].update(amber=accent, amberLight=accent_light, amberHover=accent_hover, onAmber=p["mOnPrimary"])
+    c["signal"].update(cyan=p["mTertiary"], violet=p["mSecondary"], coral=p["mError"],
+                       orange=mix(p["mError"], p["terminal"]["normal"]["yellow"], 0.5))
+    c["border"].update(hairline=rgba(fg, 0.13), divider=rgba(fg, 0.12), focus=rgba(accent, 0.80),
+                       popover=rgba(accent, 0.38), menuInput=rgba(accent, 0.30))
+    c["highlight"].update(paneTopEdge=f"inset 0 1px 0 {rgba(accent, 0.32)}",
+                          focusTopEdge=f"inset 0 1px 0 {rgba(accent_light, 0.60)}",
+                          focusGlow=f"0 0 24px {rgba(accent, 0.12)}")
+    c["state"].update(selectedBg=rgba(accent, 0.14), selectedRing=f"inset 0 0 0 1px {rgba(accent, 0.32)}",
+                      activeSegmentBg=rgba(accent, 0.20), activeSegmentUnderline=f"inset 0 -2px 0 {accent}")
+    return t
+
+
+def tokens_for(name, spec):
+    palette = json.loads((THEMES / name / "palette.json").read_text())
+    out = {}
+    for mode in ("dark", "light"):
+        if mode in palette:
+            out[mode] = copy.deepcopy(spec) if (name, mode) == EXACT else derive(palette[mode], mode, spec)
+    return json.dumps(out, indent=2, ensure_ascii=False) + "\n"
+
+
+def main():
+    args = sys.argv[1:]
+    check = "--check" in args
+    args = [a for a in args if a != "--check"]
+    names = sorted(d.name for d in THEMES.iterdir() if (d / "palette.json").is_file())
+    for name in args:
+        if name not in names:
+            sys.exit(f"make-tokens: no theme called {name}")
+    spec = load_spec()
+    stale = []
+    for name in args or names:
+        path = THEMES / name / "tokens.json"
+        text = tokens_for(name, spec)
+        if check:
+            if not path.is_file() or path.read_text() != text:
+                stale.append(name)
+        else:
+            path.write_text(text)
+            print(f"themes/{name}/tokens.json")
+    if stale:
+        sys.exit("make-tokens: out of date (run tools/make-tokens): " + " ".join(stale))
+
+
+if __name__ == "__main__":
+    main()

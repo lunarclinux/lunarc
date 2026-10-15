@@ -38,7 +38,7 @@ screensaver_lock() {
   if ! command -v swaylock-plugin >/dev/null || ! command -v windowtolayer >/dev/null; then return 1; fi
   local gold text night violet wrong
   gold=$(colour mPrimary ebc77a) text=$(colour mOnSurface e6e2d6) night=$(colour mSurface 0b1020)
-  violet=$(colour mSecondary 9c9bef) wrong=$(colour mError f28b82)
+  violet=$(colour mSecondary a9a8f2) wrong=$(colour mError f0a39a)
 
   # The screensaver's own terminal, one per screen, drawn as the lock background,
   # with the screensaver window's flags so it looks the same.
