@@ -35,7 +35,7 @@
 # one line in each surface), and the pinned build libraries; reset pkgrel.
 pkgname=noctalia
 pkgver=5.2.1
-pkgrel=1
+pkgrel=2
 epoch=1
 pkgdesc='A sleek, customizable desktop shell crafted for Wayland (with a top-edge highlight patch)'
 arch=(x86_64)

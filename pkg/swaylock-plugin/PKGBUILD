@@ -15,7 +15,7 @@
 # text, a Caps Lock line) instead of the ring, shown exactly when the ring would be.
 pkgname=swaylock-plugin
 pkgver=1.8.7
-pkgrel=4
+pkgrel=5
 pkgdesc="Fork of swaylock that draws its background with a wallpaper program"
 arch=(x86_64)
 url="https://github.com/mstoeckl/swaylock-plugin"

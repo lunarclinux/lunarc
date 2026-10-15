@@ -19,7 +19,7 @@
 # using them there is an error (as in pkg/noctalia).
 pkgname=noctalia-greeter
 pkgver=1.6.0
-pkgrel=2
+pkgrel=3
 pkgdesc="greetd login greeter in Noctalia's look, with a bundled wlroots compositor"
 arch=(x86_64)
 url="https://github.com/noctalia-dev/noctalia-greeter"

@@ -4,7 +4,7 @@
 # release, checksum-pinned; crates come from Cargo.lock (--locked).
 pkgname=windowtolayer
 pkgver=0.4.0
-pkgrel=1
+pkgrel=2
 pkgdesc="Run an xdg-shell Wayland client as a layer-shell wallpaper"
 arch=(x86_64)
 url="https://gitlab.freedesktop.org/mstoeckl/windowtolayer"
