@@ -31,9 +31,9 @@ sha256sums=('98ac74457adfeb812f91e2fc4b289db664637b0d3890a051347b8d1169cc3757'
             '6fb8b6523111603cf6172303fb589c0cbd903bb0913f5e20acfd41578779e24a'
             '24bb650f97e59a314bb5c120f6978dec909114352d14c786f107b9a54569d4eb')
 
-# meson and ninja come from Arch (makedepends). pkg/build skips the makedepends
-# check, so say clearly when they're missing; never fetch build tools from
-# elsewhere (decision record 0043).
+# meson and ninja come from Arch (makedepends). A host build skips the
+# makedepends check, so say clearly when they're missing; never fetch build
+# tools from elsewhere (decision record 0043).
 _meson() {
   if ! command -v meson >/dev/null || ! command -v ninja >/dev/null; then
     echo "building $pkgname needs meson and ninja: sudo pacman -S --needed meson ninja" >&2

@@ -3,11 +3,12 @@
 # "packages" in the repository set in repo.conf (REPO_GITHUB). Installed
 # systems download from REPO_URL, which redirects there.
 #
-#   pkg/build && tools/publish [--dry-run]
+#   pkg/build --chroot && tools/publish [--dry-run]
 #
 # Safe to rerun and to interrupt:
-# - it refuses unsigned builds, and any package whose version would go
-#   backwards compared with what is published;
+# - it refuses builds not made in the clean chroot (pkg/build --chroot,
+#   decision record 0044), unsigned builds, and any package whose version
+#   would go backwards compared with what is published;
 # - a package whose version hasn't changed keeps the published file (a rebuild
 #   of the same version has a different checksum, which would break clients
 #   that already downloaded it), and the database is rebuilt and re-signed to
@@ -30,8 +31,13 @@ if [[ ${1:-} == --dry-run ]]; then dry=1; fi
 
 fail() { echo "publish: $*" >&2; exit 1; }
 [[ -n $REPO_GITHUB ]] || fail "set REPO_GITHUB in repo.conf first"
-[[ -f $repo/$DISTRO_REPO.db.tar.gz ]] || fail "nothing built; run pkg/build"
+[[ -f $repo/$DISTRO_REPO.db.tar.gz ]] || fail "nothing built; run pkg/build --chroot"
 command -v gh >/dev/null || fail "needs the GitHub CLI (gh)"
+
+# Only packages built in the clean chroot, never against this machine's libraries.
+BUILD_MODE="" BUILD_COMMIT=""
+if [[ -f $root/pkg/out/build-info ]]; then source "$root/pkg/out/build-info"; fi
+[[ $BUILD_MODE == chroot ]] || fail "this build was made on the host, not in the clean chroot; run pkg/build --chroot"
 
 # Every package and the database must carry a signature.
 for file in "$repo"/*.pkg.tar.zst "$repo/$DISTRO_REPO.db.tar.gz" "$repo/$DISTRO_REPO.files.tar.gz"; do
@@ -70,7 +76,7 @@ while read -r n v f; do
   new+=("$n ${pub_ver[$n]:-(new)} -> $v")
 done < <(db_entries "$repo/$DISTRO_REPO.db.tar.gz")
 
-echo "publish: to $REPO_GITHUB ($tag)"
+echo "publish: to $REPO_GITHUB ($tag), built in the clean chroot from ${BUILD_COMMIT:0:12}"
 for e in "${new[@]}"; do echo "  update   $e"; done
 for e in "${reused[@]}"; do echo "  same     ${e%%:*} (keeps the published file)"; done
 if (( dry )); then echo "publish: dry run, nothing uploaded"; exit 0; fi

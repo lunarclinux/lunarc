@@ -8,7 +8,10 @@
 # - it is compiled against the headers of one exact Arch Hyprland package and
 #   the Hyprland libraries it was built with, taken from Arch's package archive
 #   (checksum-pinned), never from the build machine; pkgver follows that
-#   Hyprland (0.56.2-4 -> 0.56.2.4);
+#   Hyprland (0.56.2-4 -> 0.56.2.4). The clean build chroot installs Arch's
+#   newest Hyprland (depends), and a host may have any; prepare() checks that
+#   the compiler, given the Makefile's flags, sees the pinned headers. Only
+#   headers: the plugin links against no Hyprland library;
 # - it records that package in hyprbars.hyprland; the distro's Hyprland config
 #   loads it only while that Hyprland is the one installed and running;
 # - `update` holds back any other Hyprland until a hyprbars built for it is in
@@ -55,24 +58,30 @@ sha256sums=('9520567c1ba01add35b008db4160c6b9bba09fa65a16c09aa4fd71bca692e525'
 
 # The pinned packages' headers and pkg-config files, unpacked under root/ and
 # found before the build machine's own.
+_pc_path() { printf '%s' "$srcdir/root/usr/share/pkgconfig:$srcdir/root/usr/lib/pkgconfig"; }
+
 prepare() {
-  local p commit
+  local p cflags commit
   patch -d "hyprland-plugins-$_tag" -p1 < bar-only.patch
   rm -rf root; mkdir root
   for p in "${_headers[@]}"; do
     bsdtar -xf "$p-x86_64.pkg.tar.zst" -C root usr/include usr/lib/pkgconfig usr/share/pkgconfig 2>/dev/null || true
   done
   sed -i "s|=/usr|=$srcdir/root/usr|" root/usr/lib/pkgconfig/*.pc root/usr/share/pkgconfig/*.pc
-  commit=$(sed -n 's/^#define GIT_COMMIT_HASH *"\(.*\)"/\1/p' root/usr/include/hyprland/src/version.h)
+  # The Hyprland the compiler finds with the Makefile's include flags (its
+  # INCLUDES line), whatever Hyprland is installed.
+  cflags=$(PKG_CONFIG_PATH=$(_pc_path) pkg-config --cflags pixman-1 libdrm hyprland libinput libudev wayland-server xkbcommon)
+  read -ra cflags <<<"$cflags"
+  commit=$(printf '#include <hyprland/src/version.h>\n' | ${CXX:-c++} -dM -E -x c++ "${cflags[@]}" - |
+    sed -n 's/^#define GIT_COMMIT_HASH *"\(.*\)"/\1/p')
   if [[ $commit != "$_hyprland_commit" ]]; then
-    echo "the Hyprland headers are from $commit, not $_hyprland_commit" >&2
+    echo "the compiler sees Hyprland headers from ${commit:-nowhere}, not $_hyprland_commit" >&2
     return 1
   fi
 }
 
 build() {
-  PKG_CONFIG_PATH="$srcdir/root/usr/share/pkgconfig:$srcdir/root/usr/lib/pkgconfig" \
-    make -C "hyprland-plugins-$_tag/hyprbars" all
+  PKG_CONFIG_PATH=$(_pc_path) make -C "hyprland-plugins-$_tag/hyprbars" all
 }
 
 package() {
