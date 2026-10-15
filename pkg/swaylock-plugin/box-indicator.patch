@@ -27,7 +27,7 @@ index c10cf59..e0b035f 100644
  
  static void nested_surface_set_buffer_transform(struct wl_client *client,
 diff --git c/include/swaylock.h w/include/swaylock.h
-index c43c819..5de617c 100644
+index c43c819..fa440bb 100644
 --- c/include/swaylock.h
 +++ w/include/swaylock.h
 @@ -50,6 +50,7 @@ struct swaylock_colors {
@@ -38,7 +38,7 @@ index c43c819..5de617c 100644
  	struct swaylock_colorset inside;
  	struct swaylock_colorset line;
  	struct swaylock_colorset ring;
-@@ -62,6 +63,10 @@ struct swaylock_args {
+@@ -62,6 +63,17 @@ struct swaylock_args {
  	char *font;
  	/* one line shown under the indicator while it is visible (NULL: none) */
  	char *hint;
@@ -46,11 +46,36 @@ index c43c819..5de617c 100644
 +	bool indicator_box;
 +	/* the box's prompt, before "password:" (NULL: none) */
 +	char *prompt;
++	/* box: ms shown at lock before fading (0: stays, with idle-visible) */
++	uint32_t indicator_idle_show;
++	/* box: ms shown after the last key before fading (0: hidden with the
++	 * state, as the ring) */
++	uint32_t indicator_linger;
++	/* box: ms its fade-out takes */
++	uint32_t indicator_fade;
  	uint32_t font_size;
  	uint32_t radius;
  	uint32_t thickness;
+@@ -453,6 +465,9 @@ struct swaylock_state {
+ 	enum auth_state auth_state; // state of the authentication attempt
+ 	enum input_state input_state; // state of the password buffer and key inputs
+ 	uint32_t highlight_start; // position of highlight; 2048 = 1 full turn
++	struct loop_timer *box_timer; // wakes the password box when it fades
++	int64_t box_hide_at; // when the password box starts fading (ms, monotonic)
++	bool box_started, box_woken; // box shown at lock; a key since
+ 	int failed_attempts;
+ 	bool run_display, locked;
+ 	struct ext_session_lock_manager_v1 *ext_session_lock_manager_v1;
+@@ -604,6 +619,7 @@ void render(struct swaylock_surface *surface);
+ void damage_state(struct swaylock_state *state);
+ void clear_password_buffer(struct swaylock_password *pw);
+ void schedule_auth_idle(struct swaylock_state *state);
++void box_wake(struct swaylock_state *state);
+ 
+ void initialize_pw_backend(int argc, char **argv);
+ void run_pw_backend_child(void);
 diff --git c/main.c w/main.c
-index 1c58580..4481b7e 100644
+index 1c58580..65e94dd 100644
 --- c/main.c
 +++ w/main.c
 @@ -744,6 +744,7 @@ static void set_default_colors(struct swaylock_colors *colors) {
@@ -61,27 +86,33 @@ index 1c58580..4481b7e 100644
  	colors->inside = (struct swaylock_colorset){
  		.input = 0x000000C0,
  		.cleared = 0xE5A445C0,
-@@ -820,6 +821,9 @@ static int parse_options(int argc, char **argv, struct swaylock_state *state,
+@@ -820,6 +821,12 @@ static int parse_options(int argc, char **argv, struct swaylock_state *state,
  		LO_TEXT_WRONG_COLOR,
  		LO_HINT_TEXT,
  		LO_HINT_COLOR,
 +		LO_IND_STYLE,
 +		LO_PROMPT_TEXT,
 +		LO_PROMPT_COLOR,
++		LO_IND_IDLE_SHOW,
++		LO_IND_LINGER,
++		LO_IND_FADE,
  		LO_PLUGIN_GRACE,
  		LO_PLUGIN_POINTER_HYSTERESIS,
  		LO_PLUGIN_COMMAND,
-@@ -867,6 +871,9 @@ static int parse_options(int argc, char **argv, struct swaylock_state *state,
+@@ -867,6 +874,12 @@ static int parse_options(int argc, char **argv, struct swaylock_state *state,
  		{"layout-text-color", required_argument, NULL, LO_LAYOUT_TXT_COLOR},
  		{"hint-text", required_argument, NULL, LO_HINT_TEXT},
  		{"hint-color", required_argument, NULL, LO_HINT_COLOR},
 +		{"indicator-style", required_argument, NULL, LO_IND_STYLE},
 +		{"prompt-text", required_argument, NULL, LO_PROMPT_TEXT},
 +		{"prompt-color", required_argument, NULL, LO_PROMPT_COLOR},
++		{"indicator-idle-show", required_argument, NULL, LO_IND_IDLE_SHOW},
++		{"indicator-linger", required_argument, NULL, LO_IND_LINGER},
++		{"indicator-fade", required_argument, NULL, LO_IND_FADE},
  		{"line-color", required_argument, NULL, LO_LINE_COLOR},
  		{"line-clear-color", required_argument, NULL, LO_LINE_CLEAR_COLOR},
  		{"line-caps-lock-color", required_argument, NULL, LO_LINE_CAPS_LOCK_COLOR},
-@@ -972,6 +979,12 @@ static int parse_options(int argc, char **argv, struct swaylock_state *state,
+@@ -972,6 +985,18 @@ static int parse_options(int argc, char **argv, struct swaylock_state *state,
  			"One line shown under the indicator while it is visible.\n"
  		"  --hint-color <color>             "
  			"Sets the color of the hint text (its box uses the layout background).\n"
@@ -91,10 +122,16 @@ index 1c58580..4481b7e 100644
 +			"Text before \"password:\" in the password box.\n"
 +		"  --prompt-color <color>           "
 +			"Sets the color of the prompt text.\n"
++		"  --indicator-idle-show <ms>       "
++			"Box: with --indicator-idle-visible, shown this long, then fades.\n"
++		"  --indicator-linger <ms>          "
++			"Box: shown this long after the last key, then fades.\n"
++		"  --indicator-fade <ms>            "
++			"Box: how long fading out takes.\n"
  		"  --line-color <color>             "
  			"Sets the color of the line between the inside and ring.\n"
  		"  --line-clear-color <color>       "
-@@ -1233,6 +1246,30 @@ static int parse_options(int argc, char **argv, struct swaylock_state *state,
+@@ -1233,6 +1258,45 @@ static int parse_options(int argc, char **argv, struct swaylock_state *state,
  				state->args.colors.hint_text = parse_color(optarg);
  			}
  			break;
@@ -122,23 +159,84 @@ index 1c58580..4481b7e 100644
 +				state->args.colors.prompt_text = parse_color(optarg);
 +			}
 +			break;
++		case LO_IND_IDLE_SHOW:
++		case LO_IND_LINGER:
++		case LO_IND_FADE:
++			if (state) {
++				char *end;
++				long ms = strtol(optarg, &end, 10);
++				if (*optarg == '\0' || *end != '\0' || ms < 0 || ms > 3600000) {
++					swaylock_log(LOG_ERROR, "Invalid time in ms: %s", optarg);
++					return 1;
++				}
++				*(c == LO_IND_IDLE_SHOW ? &state->args.indicator_idle_show :
++					c == LO_IND_LINGER ? &state->args.indicator_linger :
++					&state->args.indicator_fade) = (uint32_t)ms;
++			}
++			break;
  		case LO_LINE_COLOR:
  			if (state) {
  				state->args.colors.line.input = parse_color(optarg);
-@@ -2272,6 +2309,8 @@ int main(int argc, char **argv) {
+@@ -2272,6 +2336,11 @@ int main(int argc, char **argv) {
  		.mode = BACKGROUND_MODE_FILL,
  		.font = strdup("sans-serif"),
  		.hint = NULL,
 +		.indicator_box = false,
 +		.prompt = NULL,
++		.indicator_idle_show = 0,
++		.indicator_linger = 0,
++		.indicator_fade = 0,
  		.font_size = 0,
  		.radius = 50,
  		.thickness = 10,
+diff --git c/password.c w/password.c
+index 59f28c7..3eca94f 100644
+--- c/password.c
++++ w/password.c
+@@ -57,6 +57,7 @@ static void set_auth_idle(void *data) {
+ 	struct swaylock_state *state = data;
+ 	state->auth_idle_timer = NULL;
+ 	state->auth_state = AUTH_STATE_IDLE;
++	box_wake(state);
+ 	damage_state(state);
+ }
+ 
+@@ -214,4 +215,6 @@ void swaylock_handle_key(struct swaylock_state *state,
+ 		}
+ 		break;
+ 	}
++	// Any key shows the password box again (--indicator-linger).
++	box_wake(state);
+ }
 diff --git c/render.c w/render.c
-index 7df5f82..d791654 100644
+index 7df5f82..6ee4936 100644
 --- c/render.c
 +++ w/render.c
-@@ -90,8 +90,299 @@ static void configure_font_drawing(cairo_t *cairo, struct swaylock_state *state,
+@@ -1,11 +1,13 @@
+ #include <math.h>
+ #include <stdlib.h>
+ #include <stdio.h>
++#include <time.h>
+ #include <wayland-client.h>
+ #include "cairo.h"
+ #include "background-image.h"
+ #include "swaylock.h"
+ #include "log.h"
++#include "loop.h"
+ 
+ #define M_PI 3.14159265358979323846
+ const float TYPE_INDICATOR_RANGE = M_PI / 3.0f;
+@@ -65,8 +67,8 @@ void render(struct swaylock_surface *surface) {
+ 		return;
+ 	}
+ 
+-	render_frame(surface);
+ 	surface->dirty = false;
++	render_frame(surface); // a fading password box marks it dirty again
+ 	surface->frame = wl_surface_frame(surface->surface);
+ 	wl_callback_add_listener(surface->frame, &surface_frame_listener, surface);
+ 	wl_surface_commit(surface->surface);
+@@ -90,8 +92,380 @@ static void configure_font_drawing(cairo_t *cairo, struct swaylock_state *state,
  	cairo_font_options_destroy(fo);
  }
  
@@ -211,22 +309,92 @@ index 7df5f82..d791654 100644
 +	return h;
 +}
 +
++static int64_t now_ms(void) {
++	struct timespec ts;
++	clock_gettime(CLOCK_MONOTONIC, &ts);
++	return (int64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
++}
++
++static void box_fade_due(void *data) {
++	struct swaylock_state *state = data;
++	state->box_timer = NULL;
++	damage_state(state);
++}
++
++// Shows the password box for ms from now (-1: until a key), then fades it.
++static void box_show_for(struct swaylock_state *state, int64_t ms) {
++	if (state->box_timer) {
++		loop_remove_timer(state->eventloop, state->box_timer);
++		state->box_timer = NULL;
++	}
++	state->box_hide_at = ms < 0 ? INT64_MAX : now_ms() + ms;
++	if (ms > 0) {
++		state->box_timer = loop_add_timer(state->eventloop, (int)ms,
++			box_fade_due, state);
++	}
++}
++
++// A key (or the end of a wrong-password state): with --indicator-linger the
++// box shows at once and stays that long after it.
++void box_wake(struct swaylock_state *state) {
++	state->box_woken = true;
++	if (state->args.indicator_box && state->args.indicator_linger > 0 &&
++			state->box_hide_at != INT64_MAX) {
++		box_show_for(state, state->args.indicator_linger);
++		damage_state(state);
++	}
++}
++
++// How much of the box shows, 0 to 1: all of it while a password is checked or
++// reported wrong (without --indicator-linger, also exactly when the ring
++// would show), until box_hide_at, then less over --indicator-fade.
++static double box_alpha(struct swaylock_state *state, bool *fading) {
++	*fading = false;
++	if (!state->box_started) {
++		// The first frame: --indicator-idle-show starts here.
++		state->box_started = true;
++		if (!state->box_woken) {
++			state->box_hide_at = INT64_MIN / 2;
++			if (state->args.indicator_idle_visible) {
++				box_show_for(state, state->args.indicator_idle_show > 0 ?
++					(int64_t)state->args.indicator_idle_show : -1);
++			}
++		}
++	}
++	if (state->auth_state != AUTH_STATE_IDLE ||
++			(state->args.indicator_linger == 0 &&
++				state->input_state != INPUT_STATE_IDLE)) {
++		return 1;
++	}
++	int64_t t = now_ms() - state->box_hide_at;
++	if (t < 0) {
++		return 1;
++	} else if (t >= state->args.indicator_fade) {
++		return 0;
++	}
++	*fading = true;
++	return 1 - (double)t / state->args.indicator_fade;
++}
++
 +// --indicator-style box: a password prompt in a pill instead of the ring,
 +// shown exactly when the ring would be. One line, as a shell would draw it:
 +// the prompt text (--prompt-text), "password:", then a fixed row of dots with
 +// one lit per key (never the characters or their count) and a block cursor;
 +// state text (checking, wrong, cleared) in place of the dots. A Caps Lock line
 +// and the hint line go under the pill. The pill sits low on the screen.
++// With --indicator-linger it shows from the first key until that long after
++// the last, Caps Lock line and hint included, then fades (--indicator-fade);
++// with --indicator-idle-show it shows that long at lock first.
 +static bool render_box_frame(struct swaylock_surface *surface) {
 +	struct swaylock_state *state = surface->state;
 +	double s = surface->scale;
 +
-+	bool draw_indicator = state->args.show_indicator &&
-+		(state->auth_state != AUTH_STATE_IDLE ||
-+			state->input_state != INPUT_STATE_IDLE ||
-+			state->args.indicator_idle_visible);
++	bool fading;
++	double alpha = box_alpha(state, &fading);
++	bool draw_indicator = state->args.show_indicator && alpha > 0;
 +	bool active = state->auth_state != AUTH_STATE_IDLE ||
 +		state->input_state != INPUT_STATE_IDLE;
++	bool timed = state->args.indicator_linger > 0;
 +
 +	const char *status = NULL;
 +	if (state->input_state == INPUT_STATE_CLEAR) {
@@ -237,8 +405,9 @@ index 7df5f82..d791654 100644
 +		status = "wrong password";
 +	}
 +	const char *caps = (state->xkb.caps_lock && state->args.show_caps_lock_text &&
-+		active) ? "Caps Lock is on" : NULL;
-+	const char *hint = (active && state->args.hint) ? state->args.hint : NULL;
++		(active || timed)) ? "Caps Lock is on" : NULL;
++	const char *hint = ((active || (timed && state->box_woken)) &&
++		state->args.hint) ? state->args.hint : NULL;
 +	const char *prompt = state->args.prompt;
 +	const char *label = "password:";
 +
@@ -322,6 +491,9 @@ index 7df5f82..d791654 100644
 +		double bx = cx - box_w / 2, by = s, cy = by + box_h / 2;
 +		double radius = box_h / 2;
 +		configure_font_drawing(cairo, state, surface->subpixel, (int)box_h);
++		if (alpha < 1) {
++			cairo_push_group(cairo);
++		}
 +
 +		// The pill: the inside colour, a faint sheen from the top (the line
 +		// colour, a fifth as strong, fading out), a 1 px top highlight in the
@@ -420,6 +592,10 @@ index 7df5f82..d791654 100644
 +			box_text_pill(cairo, hint, cx, y, small_size, small_h, pad,
 +				state->args.colors.inside.input, state->args.colors.hint_text);
 +		}
++		if (alpha < 1) {
++			cairo_pop_group_to_source(cairo);
++			cairo_paint_with_alpha(cairo, alpha);
++		}
 +	}
 +
 +	wl_subsurface_set_position(surface->subsurface, subsurf_xpos, subsurf_ypos);
@@ -427,6 +603,9 @@ index 7df5f82..d791654 100644
 +	wl_surface_attach(surface->child, buffer->buffer, 0, 0);
 +	wl_surface_damage_buffer(surface->child, 0, 0, INT32_MAX, INT32_MAX);
 +	wl_surface_commit(surface->child);
++	if (fading) {
++		surface->dirty = true; // the next frame, at the next frame callback
++	}
 +	return true;
 +}
 +
@@ -439,10 +618,10 @@ index 7df5f82..d791654 100644
  	// First, compute the text that will be drawn, if any, since this
  	// determines the size/positioning of the surface
 diff --git c/swaylock.1.scd w/swaylock.1.scd
-index 15a8d63..628c783 100644
+index 15a8d63..4043f2a 100644
 --- c/swaylock.1.scd
 +++ w/swaylock.1.scd
-@@ -184,6 +184,23 @@ Locks your Wayland session.
+@@ -184,6 +184,38 @@ Locks your Wayland session.
  *--hint-color* <rrggbb[aa]>
  	Sets the color of the hint text.
  
@@ -455,7 +634,22 @@ index 15a8d63..628c783 100644
 +	under it. The pill is filled with the inside color, bordered with the
 +	ring color and lit along its top edge with the line color of each state;
 +	the label and dim dots use the text color. It is shown exactly when the
-+	ring would be.
++	ring would be, unless *--indicator-linger* is set.
++
++*--indicator-idle-show* <ms>
++	With *--indicator-style* box and *--indicator-idle-visible*: show the box
++	for this long once the background's first frame is drawn, then fade it
++	out. 0 (the default) keeps it shown.
++
++*--indicator-linger* <ms>
++	With *--indicator-style* box: show the box at once at any key and keep it
++	(with its Caps Lock and hint lines) until this long after the last key or
++	after a wrong password stops showing, then fade it out. It stays while a
++	password is checked. 0 (the default) hides it when the ring would hide.
++
++*--indicator-fade* <ms>
++	With *--indicator-style* box: how long fading out takes, redrawn every
++	frame only while fading. 0 (the default) hides the box at once.
 +
 +*--prompt-text* <text>
 +	Text drawn before "password:" in the password box.

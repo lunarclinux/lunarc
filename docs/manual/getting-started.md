@@ -225,9 +225,11 @@ preselected each time.
 
 ## Locking the screen
 SUPER+L locks the screen and plays the screensaver behind the lock, with one
-line near the bottom: `you@computer password:`. Type your password and press
-Enter. A dot lights with each key, never the count: the line never shows how
-many characters you typed. While you type, "Enter to unlock · Esc clears"
+line near the bottom: `you@computer password:`. After 3 seconds the line fades
+away and only the screensaver is left; any key brings it back. Type your
+password and press Enter. A dot lights with each key, never the count: the line
+never shows how many characters you typed. It fades again 5 seconds after your
+last key. While you type, "Enter to unlock · Esc clears"
 shows under it. It says "checking…" after Enter, turns red with "wrong
 password" for a wrong password, warns "Caps Lock is on", and Esc clears what
 you typed ("cleared"). Prefer the ring? Set `lock.indicator = ring` in
