@@ -1,18 +1,15 @@
 -- Key bindings. SUPER is the Windows/Command key.
--- Every binding has a description: `@DISTRO_ID@ keys` (SUPER+K) lists them.
+-- Every binding has a description: SUPER+K lists them in the menu, where
+-- Return changes one (bind.lua keeps the change).
 local mod = "SUPER"
 local terminal = "@DISTRO_ID@ terminal launch"
 local function run(cmd) return hl.dsp.exec_cmd(cmd) end
-local function bind(keys, description, action, opts)
-    opts = opts or {}
-    opts.description = description
-    hl.bind(keys, action, opts)
-end
+local bind = dofile("/usr/share/@DISTRO_ID@/default/hypr/bind.lua")
 
 bind(mod .. " + Return", "Open a terminal", run(terminal))
-bind(mod .. " + ALT + Space", "System menu (same as SUPER+Space)", run("@DISTRO_ID@ menu"))
+bind(mod .. " + ALT + Space", "Menu (same as SUPER+Space)", run("@DISTRO_ID@ menu"))
 bind(mod .. " + CTRL + Space", "Next keyboard layout", run("@DISTRO_ID@ keyboard next"))
-bind(mod .. " + K", "Keyboard shortcuts", run("@DISTRO_ID@ keys"))
+bind(mod .. " + K", "Keyboard shortcuts (the menu's Keybinds)", run("@DISTRO_ID@ keys"))
 bind(mod .. " + W", "Close the window", hl.dsp.window.close())
 bind(mod .. " + F", "Fullscreen", hl.dsp.window.fullscreen())
 bind(mod .. " + T", "Float or tile the window", hl.dsp.window.float({ action = "toggle" }))

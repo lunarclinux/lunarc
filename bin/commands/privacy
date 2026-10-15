@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# summary: Privacy switches: weather lookup, encrypted DNS, connectivity check
+# summary: Privacy switches: weather lookup, encrypted DNS, connectivity check, AUR search
 set -euo pipefail
 source "$DISTRO_LIB/lib.sh"
 
@@ -14,6 +14,8 @@ Usage: $DISTRO_ID privacy [command]
   dns quad9|mullvad|cloudflare  encrypt DNS lookups (DNS over TLS) to that provider
   dns off                       use the network's own DNS server again
   connectivity on|off           the network check that detects Wi-Fi login pages
+  aur-search on|off             the menu's Install also searches the AUR as you
+                                type (sends the words to aur.archlinux.org)
 
 Everything else that could send data about you is off by default; see
 $SHARE/doc/privacy.md or the manual's "What $DISTRO_NAME connects to".
@@ -124,6 +126,8 @@ status() {
   printf '%-22s %s\n' "weather in the bar" "$(weather_state)"
   printf '%-22s %s\n' "encrypted DNS" "$(dns_state)"
   printf '%-22s %s\n' "connectivity check" "$(connectivity_state)"
+  printf '%-22s %s\n' "AUR search in menu" "$(setting privacy.aur_search on)"
+  printf '%-22s %s\n' "daily update check" "$(setting update.auto_check off)  ($DISTRO_ID update auto-check on|off)"
   if command -v firewall-cmd >/dev/null; then
     printf '%-22s %s\n' "firewall" "$(firewall-cmd --state 2>/dev/null || echo off)"
   fi
@@ -141,6 +145,11 @@ case ${1:-status} in
       *) dns_on "$2" ;;
     esac ;;
   connectivity) connectivity "${2:-}" ;;
+  aur-search)
+    case ${2:-} in
+      on|off) set_setting privacy.aur_search "$2"; info "AUR search in the menu: $2" ;;
+      *) die "aur-search on or off?" ;;
+    esac ;;
   -h|--help) usage ;;
   *) die "unknown privacy command: $1" ;;
 esac

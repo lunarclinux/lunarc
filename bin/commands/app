@@ -98,7 +98,7 @@ lib32_driver() {
 aur_install() {
   if ! command -v yay >/dev/null; then install_packages yay; fi
   info "building from the AUR (community packages; review what you install)"
-  yay -S --needed "$@"
+  if [[ -t 0 ]]; then system_tx "install $*" yay -S --needed "$@"; else yay -S --needed "$@"; fi
 }
 
 web_install() { # web_install <id> <name> <url>
@@ -177,11 +177,11 @@ remove_one() {
       case $target in
         db:*) "/usr/bin/$DISTRO_ID" dev db remove "${target#db:}" ;;
         *) read -ra pkgs <<<"docker docker-compose docker-buildx"
-           if [[ -t 0 ]]; then sudo pacman -Rns "${pkgs[@]}"; else pkexec pacman -Rns --noconfirm "${pkgs[@]}"; fi ;;
+           if [[ -t 0 ]]; then pacman_tx "remove ${pkgs[*]}" -Rns "${pkgs[@]}"; else pkexec pacman -Rns --noconfirm "${pkgs[@]}"; fi ;;
       esac ;;
     *)
       read -ra pkgs <<<"$(packages_for "$src" "$target")"
-      if [[ -t 0 ]]; then sudo pacman -Rns "${pkgs[@]}"; else pkexec pacman -Rns --noconfirm "${pkgs[@]}"; fi ;;
+      if [[ -t 0 ]]; then pacman_tx "remove ${pkgs[*]}" -Rns "${pkgs[@]}"; else pkexec pacman -Rns --noconfirm "${pkgs[@]}"; fi ;;
   esac
 }
 

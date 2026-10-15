@@ -1,37 +1,174 @@
 #!/usr/bin/env bash
-# summary: Keyboard shortcuts: a searchable list (SUPER+K)
+# summary: Keyboard shortcuts: list them, or change one (SUPER+K)
 set -euo pipefail
 source "$DISTRO_LIB/lib.sh"
 
+BINDS=${XDG_CONFIG_HOME:-$HOME/.config}/$DISTRO_ID/hypr/binds.lua
+SUBMAP=$DISTRO_ID-rebind
+MENU=$DISTRO_ID/utilities:menu
+
 usage() {
   cat <<USAGE
-Usage: $DISTRO_ID keys [--list [--tsv]]
+Usage: $DISTRO_ID keys [--list [--tsv|--json]]
+       $DISTRO_ID keys set <chord> <new chord>
+       $DISTRO_ID keys reset [<chord>]
 
-Shows every key binding that has a description, searchable, in the launcher
-(/keys). --list prints them instead. Bindings come from the running Hyprland, so your
-own additions show up too (give them a description = "..." option).
+Opens the menu's Keybinds (SUPER+K), where Return on a binding changes it.
+--list prints every binding that has a description instead. Bindings come
+from the running Hyprland, so your own additions show up too (give them a
+description = "..." option).
+
+  set     move one of the distro's bindings to another chord, e.g.
+          $DISTRO_ID keys set "SUPER + K" "SUPER + SHIFT + slash"
+          (refused if the new chord is already used)
+  reset   put one changed binding back, or all of them
+
+Changes are kept in $BINDS.
+Your own bindings live in ~/.config/hypr/hyprland.lua.
 USAGE
 }
 
-# "SUPER + SHIFT + Return<TAB>Description" lines, from Hyprland's live binds.
-list() {
-  hyprctl binds -j | jq -r '
+# Hyprland's live bindings (the normal submap) that have a description, as
+# JSON: [{chord, keys, description, editable}]. chord is the form bindings are
+# written in ("SUPER + SHIFT + K"); keys reads better (Return as Enter). Mouse
+# and lid bindings can't be changed by pressing keys.
+binds_json() {
+  hyprctl binds -j | jq '
     def mods: [ (if . / 64 | floor % 2 == 1 then "SUPER" else empty end),
                 (if . / 4  | floor % 2 == 1 then "CTRL"  else empty end),
                 (if . / 8  | floor % 2 == 1 then "ALT"   else empty end),
                 (if .      | floor % 2 == 1 then "SHIFT" else empty end) ];
     def keyname: {"Return": "Enter", "comma": ",", "period": ".", "space": "Space",
                   "Print": "Print", "mouse:272": "left drag", "mouse:273": "right drag"}[.] // .;
-    .[] | select(.has_description and .description != "")
-    | ((.modmask | mods) + [.key | keyname] | join(" + ")) + "\t" + .description'
+    def key1: if length == 1 then ascii_upcase else . end;
+    [ .[] | select((.submap // "") == "" and .has_description and .description != "")
+      | { chord: ((.modmask | mods) + [.key | key1] | join(" + ")),
+          keys: ((.modmask | mods) + [.key | keyname] | join(" + ")),
+          description,
+          editable: (.mouse != true and (.key | test("^(mouse|switch):") | not)) } ]'
+}
+
+list() { binds_json | jq -r '.[] | .keys + "\t" + .description'; }
+
+# "super+shift + k" → "SUPER + SHIFT + K" (bind.lua does the same in Lua).
+norm() {
+  local part up key="" out="" m parts=()
+  local -A have=()
+  IFS='+' read -ra parts <<<"$1"
+  for part in "${parts[@]}"; do
+    part=${part#"${part%%[![:space:]]*}"}; part=${part%"${part##*[![:space:]]}"}
+    up=${part^^}
+    case $up in CONTROL) up=CTRL ;; MOD4|WIN|LOGO) up=SUPER ;; esac
+    case $up in SUPER|CTRL|ALT|SHIFT) have[$up]=1 ;; *) key=$part ;; esac
+  done
+  for m in SUPER CTRL ALT SHIFT; do [[ -n ${have[$m]:-} ]] && out+="$m + "; done
+  if (( ${#key} == 1 )); then key=${key^^}; fi
+  printf '%s\n' "$out$key"
+}
+
+# A chord this writes into Hyprland's config: known modifiers and a key name
+# of letters, digits and underscores.
+valid_chord() { [[ $1 =~ ^((SUPER|CTRL|ALT|SHIFT)\ \+\ )*[A-Za-z0-9_]+$ ]]; }
+
+modmask() { # modmask <chord> → Hyprland's modifier mask
+  local m=0
+  [[ " $1 " == *" SUPER "* ]] && m=$((m + 64)); [[ " $1 " == *" CTRL "* ]] && m=$((m + 4))
+  [[ " $1 " == *" ALT "* ]] && m=$((m + 8)); [[ " $1 " == *" SHIFT "* ]] && m=$((m + 1))
+  printf '%s\n' "$m"
+}
+
+# The changes file, as "FROM<TAB>TO" lines.
+changes() { if [[ -f $BINDS ]]; then sed -nE 's/^ *\["([^"]*)"\] *= *"([^"]*)",? *$/\1\t\2/p' "$BINDS"; fi; }
+
+write_changes() { # stdin: FROM<TAB>TO lines
+  local tmp from to
+  mkdir -p "${BINDS%/*}"
+  tmp=$(mktemp "$BINDS.XXXXXX")
+  {
+    printf -- '-- Written by `%s keys`: the distro key bindings you moved (default = new;\n' "$DISTRO_ID"
+    printf -- '-- "" turns one off). Change them from the menu (SUPER+K) or `%s keys set`.\n' "$DISTRO_ID"
+    printf 'return {\n'
+    while IFS=$'\t' read -r from to; do
+      if [[ -n $from ]]; then printf '    ["%s"] = "%s",\n' "$from" "$to"; fi
+    done
+    printf '}\n'
+  } > "$tmp"
+  mv "$tmp" "$BINDS"
+}
+
+without() { changes | awk -F'\t' -v f="$1" '$1 != f'; } # the changes, minus one
+
+reload_hypr() { hyprctl reload >/dev/null 2>&1 || true; sleep 0.5; }
+
+# The default chord of the binding that is on <chord> now.
+default_of() { # default_of <chord>
+  local from
+  from=$(changes | awk -F'\t' -v c="$1" '$2 == c { print $1; exit }')
+  printf '%s\n' "${from:-$1}"
+}
+
+set_bind() { # set_bind <chord now> <new chord>
+  local cur new desc taken from
+  cur=$(norm "$1"); new=$(norm "$2")
+  valid_chord "$new" || die "\"$2\" isn't a chord that can be bound (e.g. SUPER + SHIFT + K)"
+  desc=$(binds_json | jq -r --arg c "$cur" 'map(select(.chord == $c)) | .[0].description // empty')
+  [[ -n $desc ]] || die "nothing is bound to $cur"
+  if [[ $cur == "$new" ]]; then info "$desc is already on $new"; return 0; fi
+  taken=$(hyprctl binds -j | jq -r --arg k "${new##* + }" --argjson m "$(modmask "$new")" '
+    map(select((.submap // "") == "" and .modmask == $m and (.key | ascii_downcase) == ($k | ascii_downcase)))
+    | if length == 0 then empty elif (.[0].description // "") == "" then "another binding" else .[0].description end')
+  [[ -z $taken ]] || die "$new is already used: $taken"
+  from=$(default_of "$cur")
+  { without "$from"; if [[ $new != "$from" ]]; then printf '%s\t%s\n' "$from" "$new"; fi; } | write_changes
+  reload_hypr
+  if ! binds_json | jq -e --arg c "$new" --arg d "$desc" 'any(.[]; .chord == $c and .description == $d)' >/dev/null; then
+    # Not one of the distro's bindings: undo, and say where it lives.
+    without "$from" | write_changes
+    reload_hypr
+    die "\"$desc\" is set in your own ~/.config/hypr/hyprland.lua; change it there"
+  fi
+  info "$desc: $new"
+}
+
+reset_bind() { # reset_bind [chord]
+  local from
+  if [[ -z ${1:-} ]]; then
+    : | write_changes; reload_hypr; info "all key bindings are back to their defaults"; return
+  fi
+  from=$(default_of "$(norm "$1")")
+  [[ -n $(changes | awk -F'\t' -v f="$from" '$1 == f') ]] || die "$1 hasn't been changed"
+  without "$from" | write_changes
+  reload_hypr
+  info "back to $from"
 }
 
 case ${1:-} in
   --list)
-    if [[ ${2:-} == --tsv ]]; then list; else list | column -t -s $'\t'; fi ;;
+    case ${2:-} in
+      --tsv) list ;;
+      --json) binds_json ;;
+      *) list | column -t -s $'\t' ;;
+    esac ;;
+  set) [[ $# -eq 3 ]] || die "usage: $DISTRO_ID keys set <chord> <new chord>"; set_bind "$2" "$3" ;;
+  reset) reset_bind "${2:-}" ;;
+  # For the menu: catch the next chord pressed (rebind.lua) and hand it over.
+  capture)
+    case ${2:-} in
+      start)
+        hyprctl dispatch "hl.dsp.submap(\"$SUBMAP\")" >/dev/null
+        # Never leave the keyboard in the capture submap for long.
+        setsid -f bash -c 'sleep 20; [[ $(hyprctl submap 2>/dev/null) == "$1" ]] || exit 0
+          hyprctl dispatch "hl.dsp.submap(\"reset\")" >/dev/null
+          noctalia msg plugin "$2" all captured cancel >/dev/null 2>&1' _ "$SUBMAP" "$MENU" >/dev/null 2>&1 ;;
+      stop)
+        if [[ $(hyprctl submap 2>/dev/null) == "$SUBMAP" ]]; then hyprctl dispatch 'hl.dsp.submap("reset")' >/dev/null; fi ;;
+      *) die "usage: $DISTRO_ID keys capture start|stop" ;;
+    esac ;;
+  captured)
+    if [[ -n ${2:-} ]]; then noctalia msg plugin "$MENU" all captured "$2" >/dev/null 2>&1 || true; fi ;;
   -h|--help) usage ;;
   "")
-    if noctalia msg status >/dev/null 2>&1; then noctalia msg panel-open launcher "/keys " >/dev/null
+    if noctalia msg status >/dev/null 2>&1; then noctalia msg panel-open "$MENU" Keybinds >/dev/null
     else list | column -t -s $'\t'; fi ;;
   *) die "unknown option: $1" ;;
 esac

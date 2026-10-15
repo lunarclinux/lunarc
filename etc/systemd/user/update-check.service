@@ -1,0 +1,9 @@
+# The daily update check, when turned on (`@DISTRO_ID@ update auto-check on`):
+# counts the waiting updates for the menu's Update and the bar. Installs nothing.
+[Unit]
+Description=Check for waiting updates
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/@DISTRO_ID@ update check --background

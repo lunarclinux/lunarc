@@ -5,7 +5,7 @@ plugin_api = 32
 author = "@DISTRO_ID@"
 license = "GPL-3.0-or-later"
 icon = "tool"
-description = "The bar's segments (menu button, workspaces, media, clock, moon, stats) and toggles (stay awake, night light, Low Gravity, silence, reminders, recording, dictation), and the system menu in the launcher."
+description = "The bar's segments (menu button, workspaces, media, clock, moon, stats) and toggles (stay awake, night light, Low Gravity, silence, reminders, recording, dictation), and the menu (SUPER+Space)."
 tags = ["system"]
 
 # The bar's own segments (Frosted Terminal, decision record 0043), drawn
@@ -118,18 +118,17 @@ width = 420
 height = 460
 placement = "attached"
 
-# The system menu and app search (SUPER+Space): /m in the launcher. Empty, it
-# lists Apps and the menu's groups; typing searches apps and every menu item.
-# Groups drill in and the launcher stays open (decision record 0042).
-[[launcher_provider]]
+# The menu (SUPER+Space; decision record 0043): one keyboard list drawn by the
+# plugin. Its own surface, from the theme's tokens: decoration = false (a patch
+# of the distro's Noctalia build) leaves the panel clear around it, so it grows
+# with its list. The keys it handles itself; Escape always closes.
+[[panel]]
 id = "menu"
-entry = "menu.luau"
-prefix = "m"
-glyph = "layout-grid"
-
-# Keyboard shortcuts (SUPER+K): /keys in the launcher.
-[[launcher_provider]]
-id = "keys"
-entry = "keys.luau"
-prefix = "keys"
-glyph = "keyboard"
+entry = "menu-panel.luau"
+width = 560
+height = 700
+placement = "floating"
+position = "top_center"
+decoration = false
+keyboard_focus = "exclusive"
+capture_keys = ["Up", "Down", "Return", "BackSpace", "ctrl+r"]

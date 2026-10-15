@@ -7,6 +7,12 @@ theme.blur = on
 # The bar's system stats: icons, hover or inline. The moon segment: on or off.
 bar.stats = icons
 bar.moon = off
+# The menu's Install searches the AUR too once you've typed three letters
+# (the words go to aur.archlinux.org). `@DISTRO_ID@ privacy aur-search off` stops it.
+privacy.aur_search = on
+# Check for updates once a day in the background (downloads the package lists
+# from the Arch and distro package servers): `@DISTRO_ID@ update auto-check on`.
+update.auto_check = off
 terminal = ghostty
 agent = claude
 crash.notify = first

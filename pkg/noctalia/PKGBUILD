@@ -1,6 +1,6 @@
 # The desktop shell (bar, launcher, panels, notifications, OSD, lock screen),
-# built from the same release and checksum as Arch's own package, with one patch
-# of ours (decision record 0043). Arch's PKGBUILD for 5.2.1-1 is the model: same
+# built from the same release and checksum as Arch's own package, with two
+# patches of ours (decision record 0043). Arch's PKGBUILD for 5.2.1-1 is the model: same
 # source, dependencies, meson options and files.
 #
 # top-highlight.patch (ours, not sent upstream): Frosted Terminal's finish on
@@ -10,6 +10,12 @@
 # lays a faint top-to-bottom gradient over them. Colours: top_highlight_color,
 # sheen_top_color and sheen_bottom_color (default: primary at 32%, on_surface
 # at 7% and 2%, so they follow the theme). Both are off unless configured.
+#
+# plugin-panel-frame.patch (ours): a plugin [[panel]] may set decoration =
+# false; the host then draws no background, border, shadow or padding, and the
+# panel's own tree is the whole surface (transparent where it draws nothing).
+# The SUPER+Space menu uses it to draw the design's menu surface and to grow
+# with its list inside a fixed-size panel.
 #
 # epoch=1, so this build always counts as newer than Arch's noctalia: the
 # distro's repository is listed after Arch's, and pacman takes a package from
@@ -30,12 +36,14 @@
 # are never used (it installs depends and makedepends first), and using them
 # there is an error.
 #
-# A new Noctalia release: update pkgver, the checksum, the patch (it touches
-# box.{h,cpp}, config_types.h, config_schema.cpp, application_services.cpp and
-# one line in each surface), and the pinned build libraries; reset pkgrel.
+# A new Noctalia release: update pkgver, the checksum, the patches (the
+# highlight touches box.{h,cpp}, config_types.h, config_schema.cpp,
+# application_services.cpp and one line in each surface; the frame touches
+# plugin_manifest.{h,cpp}, application_plugins.cpp and plugin_panel.{h,cpp}),
+# and the pinned build libraries; reset pkgrel.
 pkgname=noctalia
 pkgver=5.2.1
-pkgrel=2
+pkgrel=3
 epoch=1
 pkgdesc='A sleek, customizable desktop shell crafted for Wayland (with a top-edge highlight patch)'
 arch=(x86_64)
@@ -51,9 +59,11 @@ optdepends=('ddcutil: monitor brightness control'
 makedepends=(meson ninja nlohmann-json pkgconf stb wayland-protocols)
 options=(!debug)
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz"
-        top-highlight.patch)
+        top-highlight.patch
+        plugin-panel-frame.patch)
 sha256sums=('5418f6b759de96e56a4bbca809c5a4c60a8a9594bdf67ecb8c5a341f97c221d1'
-            'baafe5aff5cbbf08d09ea0f39dac475345f99778ca603d5c3a1099f0abd85af6')
+            'baafe5aff5cbbf08d09ea0f39dac475345f99778ca603d5c3a1099f0abd85af6'
+            'f499c11d674575d48d131aa50de2d6b2744737dcea64e1c7e90a155b66310720')
 
 _archive=https://archive.archlinux.org/packages
 _buildlibs=(libqalculate-5.13.2-1-x86_64 libical-4.0.6-1-x86_64
@@ -86,6 +96,7 @@ _meson() {
 
 prepare() {
   patch -d "$pkgname-$pkgver" -p1 < top-highlight.patch
+  patch -d "$pkgname-$pkgver" -p1 < plugin-panel-frame.patch
   rm -rf buildlibs
   _have_buildlibs && return 0
   # /.arch-chroot: devtools' clean chroot, where depends and makedepends are installed.

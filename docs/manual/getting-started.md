@@ -6,7 +6,7 @@ Working name: Lunarc (see decision record 0016); the command is `lunarc`.
 
 1. Put the ISO (`lunarc-YYYY.MM.DD-x86_64.iso`) on a USB stick, e.g. with Ventoy, and boot it. UEFI only; turn off Secure Boot. "Lunarc live (copy to RAM)" in the boot menu lets you remove the stick once it has started.
 2. It starts the live desktop: try it freely; nothing is written to disk. Wi-Fi is in the bar's network menu.
-3. To install, open **Install Lunarc** from the launcher (SUPER+Space) and answer the questions: disk (erased, or keep what's on it and use its free space), user name and password, computer name, time zone, disk encryption (recommended), automatic login. (Without the desktop: Ctrl+Alt+F2 gives a root shell; run `install-lunarc` there.)
+3. To install, open **Install Lunarc** from the menu (SUPER+Space, type "install lunarc", Return) and answer the questions: disk (erased, or keep what's on it and use its free space), user name and password, computer name, time zone, disk encryption (recommended), automatic login. (Without the desktop: Ctrl+Alt+F2 gives a root shell; run `install-lunarc` there.)
 4. Restart and remove the stick.
 
 ### Next to Windows
@@ -25,13 +25,13 @@ The installed system boots to a splash screen (the crescent on a night sky); an 
 
 ## Keys
 
-SUPER is the Windows key. SUPER+K lists every shortcut, searchable.
+SUPER is the Windows key. SUPER+K lists every shortcut, searchable; Return on one changes it.
 
 | Key | Does |
 |---|---|
-| SUPER+Space | Apps and the system menu: capture, toggles, style, setup, install, update, power |
+| SUPER+Space | The menu: apps, keybinds, style, setup, capture, install, remove, update, system |
 | SUPER+ALT+Space | The same |
-| SUPER+K | Keyboard shortcuts |
+| SUPER+K | The menu's Keybinds: every shortcut, and changing one |
 | SUPER+Return | Terminal |
 | SUPER+S | Quick settings (Wi-Fi, Bluetooth, sound) |
 | SUPER+comma | Settings |
@@ -55,7 +55,7 @@ SUPER is the Windows key. SUPER+K lists every shortcut, searchable.
 
 ## Opening apps
 
-SUPER+Space opens the launcher with your apps and the system menu: type part of an app's name and press Enter. **Noctalia Settings** there opens the settings for the bar, launcher, notifications and the rest of the desktop shell. Apps that run in a terminal (btop, for example) open in your default terminal (`lunarc terminal set`).
+SUPER+Space opens the menu: type part of an app's name and press Enter. Noctalia's own launcher, with its app grid, is a right-click on the crescent at the bar's left end. **Setup › Shell settings** opens the settings for the bar, launcher, notifications and the rest of the desktop shell. Apps that run in a terminal (btop, for example) open in your default terminal (`lunarc terminal set`).
 
 ## What's installed
 
@@ -81,9 +81,27 @@ All of them can be removed or swapped; `lunarc app list` shows more. In the term
 
 The bar is one row of flat segments with thin lines between them; `lunarc theme shape rounded` makes it a floating pill (`terminal` puts it back edge to edge). Left: the menu (the amber square; right-click for apps), the workspaces, the focused window's title and, while something plays, `▶ Title · Artist` (click for the controls, right-click to pause). Workspaces are two-digit numbers, faint when empty; the one you're on is tinted amber, underlined, and shows its moon phase (1 a waxing crescent, 2 first quarter, 3 waxing gibbous, 4 full, and on round the cycle); a small gold dot marks a workspace where a window is asking for attention (SUPER+U goes there). Click to switch, scroll to step through. `lunarc workspaces style noctalia` switches to Noctalia's own pills. Centre: the clock (click for the calendar), always at the exact middle. Just left of it the toggles: at rest only a small ⊞ icon, plus any toggle that is on (amber; `● REC 02:14` in coral while recording, red while listening). Hover the icon (or click it) and all of them show: stay awake (the eye), night light, Low Gravity (the feather: floats every window on this workspace, spread out, and tiles them again on the next click; SUPER+G), silence notifications, reminders (shown while any are pending), screen recording and dictation. Move away and the ones that are off hide again. Stay awake and night light last until you log out (`lunarc awake`, `lunarc nightlight`). Night light on warms the screen straight away; if you've set a sunset/sunrise schedule in Settings, off hands back to the schedule. Right of the clock, when you turn them on: the weather (`lunarc privacy weather on`; it looks up your city online) and tonight's moon (`lunarc bar moon on`; worked out on the computer). Right: the tray, AI usage and crashes (only when they have something), system stats (a pulse icon: click for CPU, memory, network and battery; `lunarc bar stats hover` opens them on hover, `inline` shows them in the bar), notifications (an amber dot when something is unread), the keyboard layout (only with more than one), network, sound, battery and power, each opening its own panel.
 
-## The system menu
+## The menu
 
-SUPER+Space (or SUPER+ALT+Space, or `/m` in the launcher). Empty, it lists Apps (every installed app, pinned ones first) and the menu's groups. Typing searches apps and every menu item at once: "fire" finds Firefox, "screenshot" or "reboot" the item, "install steam" the install entry. Press Enter on a group to open it and keep typing to filter that level; Backspace goes back. Backspace past `/m` gives Noctalia's own app launcher (also a right-click on the crescent). Items are in `/usr/share/lunarc/default/menu/menu`; copy it to `~/.config/lunarc/menu` to make your own.
+SUPER+Space (or SUPER+ALT+Space, or a click on the crescent) opens one small list: Apps, Keybinds, Style, Setup, Capture, Install, Remove, Update and System. It works from the keyboard:
+
+| Key | Does |
+|---|---|
+| typing | filters the list; at the top it also finds apps and items further in, shown with their group (`Setup › Displays`) |
+| Up, Down | move |
+| Return | open the item; a group opens in place, with its name before the filter |
+| Backspace | with nothing typed, back up a level |
+| Ctrl+R | back to the top, filter cleared |
+| Escape | close (so does a click outside) |
+
+- **Apps**: every installed app, pinned ones first. "fire" then Return starts Firefox, from the top too.
+- **Keybinds** (also SUPER+K): every key binding. Return on one, then press the new keys (Escape cancels); a chord that's already used is refused. Changes are kept in `~/.config/lunarc/hypr/binds.lua`; `lunarc keys reset` puts them all back.
+- **Install**: apps from the catalog first, then packages from the Arch repositories (searched on this computer), Flathub (when you've set it up) and the AUR, each tagged with where it comes from. The AUR is searched online once you've typed three letters, which sends those letters to aur.archlinux.org; `lunarc privacy aur-search off` stops that. **Remove** lists what you added.
+- Install, Remove and Update run in an ordinary terminal window, like SUPER+Return: it takes a snapshot first (`==> snapshot before install … ok (#215)`), runs the real command (`sudo pacman -S …`) and then stays open at a prompt. Close it as any window.
+- **Update** shows how many updates are waiting (`12 ready`) when `lunarc update check` last found some; opening the menu never checks. To have it check once a day, turn on System › Check for updates daily (or `lunarc update auto-check on`, or choose it at first login): it downloads the package lists from the Arch and Lunarc package servers and installs nothing; while updates are waiting, a small dot shows beside the moon on the bar's menu button.
+- **System**: lock, suspend, restart, power off, log out, update checks and snapshots, this manual and other help.
+
+Items are in `/usr/share/lunarc/default/menu/menu`; copy it to `~/.config/lunarc/menu` to make your own (an older copy still works: its Learn and Power items show under System, Toggle under Setup).
 
 ## The `lunarc` command
 
@@ -114,7 +132,8 @@ SUPER+Space (or SUPER+ALT+Space, or `/m` in the launcher). Empty, it lists Apps 
 | `lunarc capture screenshot\|record\|stop\|color\|text\|qr` | Screenshots (`~/Pictures/Screenshots`), recordings (`~/Videos/Recordings`), colour picker, copy text or a QR code from the screen |
 | `lunarc remind "stretch" in 20m` / `at 15:30` / `list` / `cancel <id>` | Reminders (also the alarm icon in the bar) |
 | `lunarc dictate toggle` / `setup` | Dictation; runs locally with whisper.cpp (the first click downloads the speech model, about 148 MB) |
-| `lunarc menu` / `lunarc keys` | The system menu / the shortcut list |
+| `lunarc menu` / `lunarc keys` | The menu / its Keybinds (`keys --list`, `keys set`, `keys reset` from the terminal) |
+| `lunarc package search\|install\|remove` | Packages from the Arch repositories, the AUR and Flathub (what the menu's Install and Remove use) |
 | `lunarc awake on` / `off` / `toggle` · `lunarc nightlight on` / `off` / `toggle` | Stay awake, night light (also in the bar and quick settings) |
 | `lunarc keyboard add de` / `remove` / `list` / `next` | Keyboard layouts (`lunarc keyboard available` lists them) |
 | `lunarc migrate --list --user` | See which config migrations have run |
@@ -125,8 +144,8 @@ Settings for these live in `~/.config/lunarc/settings` (`key = value`); defaults
 ## Displays
 Each screen keeps its own resolution, scale and rotation, wherever it's plugged in. Arrangements are remembered per set of connected screens, so docking and undocking a laptop puts things back the way you left them.
 
-- **Display size**: how big text and everything else looks. Each screen starts at a size chosen from its dimensions (a 15" 1080p laptop screen at 100%, a 15" 1440p one at 125%). To change it, open **Setup › Display size** in the system menu (SUPER+Space) or run `lunarc display size`. Pick Smaller, Default or Larger. The new size is applied straight away; keep it, or it goes back after 10 seconds. `lunarc display scale 125%` (or `smaller`, `larger`, `default`) sets it directly.
-- **Setup › Displays** in the system menu (SUPER+Space), or `lunarc display edit`: pick a screen, then resolution, scale, position (right of, left of, above, below another) or rotation.
+- **Display size**: how big text and everything else looks. Each screen starts at a size chosen from its dimensions (a 15" 1080p laptop screen at 100%, a 15" 1440p one at 125%). To change it, open **Setup › Display size** in the menu (SUPER+Space) or run `lunarc display size`. Pick Smaller, Default or Larger. The new size is applied straight away; keep it, or it goes back after 10 seconds. `lunarc display scale 125%` (or `smaller`, `larger`, `default`) sets it directly.
+- **Setup › Displays** in the menu (SUPER+Space), or `lunarc display edit`: pick a screen, then resolution, scale, position (right of, left of, above, below another) or rotation.
 - `lunarc display list` shows what's connected; `lunarc display set DP-1 2560x1440@144 1.25 right-of eDP-1` changes a screen in one go (`-` keeps a value).
 - `lunarc display save docked` names the current arrangement; it's applied again whenever exactly those screens are connected. `lunarc display profiles`, `apply <name>`, `forget <name>`.
 - `lunarc display off internal` / `on internal` turns the built-in screen off or on.
@@ -151,7 +170,7 @@ Moving to a new computer: `lunarc app export apps.txt` lists what you've install
 
 ## Updating
 
-`lunarc update` (or Update in the system menu) updates everything, in this order:
+`lunarc update` (or Update in the menu) updates everything, in this order:
 
 1. the package keyrings, so signatures check out even after a long gap;
 2. Arch and Lunarc packages, with a snapshot of the system taken just before and after;
@@ -160,7 +179,7 @@ Moving to a new computer: `lunarc app export apps.txt` lists what you've install
 
 At the end it says what changed, which snapshot to go back to, and whether to restart for a new kernel.
 
-A newer Hyprland release than the one Lunarc's settings were tested with is held back (with its libraries) until a Lunarc update says it's tested; `lunarc update --all` takes it anyway. `lunarc update check` lists what's waiting without installing.
+A newer Hyprland release than the one Lunarc's settings were tested with is held back (with its libraries) until a Lunarc update says it's tested; `lunarc update --all` takes it anyway. `lunarc update check` lists what's waiting without installing. `lunarc update auto-check on` checks once a day by itself (off by default).
 
 If an update breaks something: `lunarc update snapshots` lists the snapshots, and `lunarc update rollback <number>` puts the system back as it was in that snapshot, then you restart. Your files, `/home` and logs are not touched. The replaced system is kept until `lunarc update rollback --clean`.
 

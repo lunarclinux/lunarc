@@ -1,8 +1,9 @@
 # Run in the VM by vm/test-install as the desktop user (@ID@ = distro id).
-# Opens apps the way a person does: SUPER+Space's launcher, type the name,
-# Return. Each must open a window, run as its own systemd unit (not inside the
-# shell's), and still be open after the shell restarts. "Noctalia Settings"
-# opens the shell's settings; btop is a Terminal=true entry ($TERMINAL -e).
+# Opens apps the way a person does in Noctalia's own launcher (a right-click on
+# the crescent): type the name, Return. Each must open a window, run as its own
+# systemd unit (not inside the shell's), and still be open after the shell
+# restarts. "Noctalia Settings" opens the shell's settings; btop is a
+# Terminal=true entry ($TERMINAL -e).
 set -u
 export XDG_RUNTIME_DIR=/run/user/$(id -u) WAYLAND_DISPLAY=wayland-1
 export HYPRLAND_INSTANCE_SIGNATURE=$(ls "$XDG_RUNTIME_DIR/hypr" | head -1)

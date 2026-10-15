@@ -24,6 +24,8 @@ Usage: $DISTRO_ID terminal <command>
   set <name>         make <name> the default (installs it first if needed)
   install <name>     install <name> without changing the default
   launch [-- cmd]    open the default terminal, optionally running cmd
+  run -- cmd         open it running cmd, then stay open at a shell prompt
+                     (how the menu runs installs, updates and other commands)
 USAGE
 }
 
@@ -59,6 +61,14 @@ case ${1:-} in
       read -ra run <<<"$(field "$name" 3)"
       launch_app "${run[@]}" "$@"
     fi ;;
+  run)
+    shift
+    [[ ${1:-} == "--" ]] && shift
+    [[ $# -gt 0 ]] || die "run what? $DISTRO_ID terminal run -- <command>"
+    # The command's own arguments, never pasted into a shell string; then the
+    # user's shell, so the window stays open like any other terminal.
+    # shellcheck disable=SC2016  # expanded by the inner bash
+    exec "/usr/bin/$DISTRO_ID" terminal launch -- bash -c '"$@"; exec "${SHELL:-/bin/bash}" -i' "$DISTRO_ID" "$@" ;;
   -h|--help|"") usage ;;
   *) die "unknown terminal command: $1" ;;
 esac

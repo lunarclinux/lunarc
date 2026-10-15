@@ -1,9 +1,10 @@
 # title: Privacy choices
 # shellcheck shell=bash
-# The two things that are off by default but people often want: weather in the
-# bar (sends your city name online) and encrypted DNS (sends your lookups to a
-# provider you pick instead of the network's). Both stay off unless chosen
-# here; both can be changed later with `<id> privacy`.
+# The things that are off by default but people often want: weather in the
+# bar (sends your city name online), encrypted DNS (sends your lookups to a
+# provider you pick instead of the network's) and a daily update check
+# (downloads the package lists). All stay off unless chosen here; all can be
+# changed later (`<id> privacy`, `<id> update auto-check`).
 
 step_applies() { [[ -z $(setting privacy.asked) ]]; }
 
@@ -23,7 +24,7 @@ privacy_choose() { # privacy_choose <option>... -> the chosen option
 step_run() {
   local choice
   ui_step "$STEP" "$STEPS" "Privacy"
-  ui_text "$C_TEXT" "$DISTRO_NAME sends nothing about you anywhere: no telemetry, no usage statistics, nothing from the apps we include. Two optional things need the internet:"
+  ui_text "$C_TEXT" "$DISTRO_NAME sends nothing about you anywhere: no telemetry, no usage statistics, nothing from the apps we include. Three optional things need the internet:"
   printf '\n'
   ui_text "$C_BOLD$C_TEXT" "Weather in the bar"
   ui_text "$C_MUTED" "Looks up your city (from your time zone) to show the weather. Only the city name is sent."
@@ -49,8 +50,17 @@ step_run() {
     Cloudflare*) "/usr/bin/$DISTRO_ID" privacy dns cloudflare || true ;;
     *) : ;;
   esac
+
+  ui_step "$STEP" "$STEPS" "Privacy"
+  ui_text "$C_BOLD$C_TEXT" "Checking for updates"
+  ui_text "$C_MUTED" "Once a day, download the package lists from the Arch and $DISTRO_NAME package servers to see what's waiting. Nothing is installed; the menu shows the count."
+  printf '\n'
+  choice=$(privacy_choose "Check daily" "Only when I ask")
+  if [[ $choice == "Check daily" ]]; then
+    "/usr/bin/$DISTRO_ID" update auto-check on || true
+  fi
   set_setting privacy.asked yes
   printf '\n'
-  ui_text "$C_MUTED" "Change these any time: '$DISTRO_ID privacy', or the menu's Setup › Privacy."
+  ui_text "$C_MUTED" "Change these any time: '$DISTRO_ID privacy' and '$DISTRO_ID update auto-check', or the menu's Setup › Privacy and System › Check for updates daily."
   ui_continue
 }
