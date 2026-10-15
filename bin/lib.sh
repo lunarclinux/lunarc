@@ -182,7 +182,7 @@ look_apply() {
   local dir=${XDG_CONFIG_HOME:-$HOME/.config}/noctalia radius=12 border='#ebc77a61' v tmp
   [[ $(setting theme.shape terminal) == rounded ]] && radius=16
   v=$(token "geometry.current.panelRadius" 2>/dev/null) && [[ $v =~ ^[0-9]+$ ]] && radius=$v
-  v=$(token color.border.popover 2>/dev/null | sed -nE 's/^rgba\(([0-9]+), *([0-9]+), *([0-9]+), *([0-9.]+)\)$/\1 \2 \3 \4/p')
+  v=$(token color.border.popover 2>/dev/null | sed -nE 's/^rgba\(([0-9]+), *([0-9]+), *([0-9]+), *([0-9.]+)\)$/\1 \2 \3 \4/p' || true)
   if [[ -n $v ]]; then
     border=$(awk '{ printf "#%02x%02x%02x%02x", $1, $2, $3, int($4 * 255 + 0.5) }' <<<"$v")
   fi
@@ -225,7 +225,7 @@ bar_apply() {
   v=$(token "geometry.current.barHeight" 2>/dev/null) && [[ $v =~ ^[0-9]+$ ]] && thickness=$v
   v=$(token "geometry.current.barInset" 2>/dev/null) && [[ $v =~ ^[0-9]+$ ]] && inset=$v
   v=$(token "geometry.current.barRadius" 2>/dev/null) && [[ $v =~ ^[0-9]+$ ]] && radius=$v
-  v=$(token color.border.hairline 2>/dev/null | sed -nE 's/^rgba\(([0-9]+), *([0-9]+), *([0-9]+), *([0-9.]+)\)$/\1 \2 \3 \4/p')
+  v=$(token color.border.hairline 2>/dev/null | sed -nE 's/^rgba\(([0-9]+), *([0-9]+), *([0-9]+), *([0-9.]+)\)$/\1 \2 \3 \4/p' || true)
   if [[ -n $v ]]; then
     hairline=$(awk '{ printf "#%02x%02x%02x%02x", $1, $2, $3, int($4 * 255 + 0.5) }' <<<"$v")
   fi
