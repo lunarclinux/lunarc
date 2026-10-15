@@ -21,9 +21,14 @@ Usage: $DISTRO_ID theme <command>
   wallpaper set <n>          use wallpaper number n
   greeter                    use the current theme on the login screen too
                              (done on every change; the last one chosen wins)
+  shape [terminal|rounded]   window corners (later also the bar and menus):
+                             terminal (small, the default) or rounded
+  blur [on|off]              blur behind translucent windows and the shell
   token <path>               print one of the current theme's design tokens,
-                             e.g. color.accent.amber or geometry.terminal.gap
-  tokens                     write the current theme's tokens file again
+                             e.g. color.accent.amber or geometry.current.paneRadius
+                             (geometry.current: the set for the current shape)
+  tokens                     write the current theme's tokens file again, and
+                             the window and terminal looks made from it
                              (done on every change)
 USAGE
 }
@@ -52,6 +57,82 @@ write_tokens() { # write_tokens <theme> <mode>
   if jq --arg m "$2" '.[$m] // error("no \($m) tokens")' "$src" > "$tmp"; then mv "$tmp" "$TOKENS"
   else rm -f "$tmp"; return 1
   fi
+}
+
+# The window look made from the tokens and the shape and blur settings: data
+# for Hyprland (default/hypr/look.lua reads it), colours for Ghostty, and the
+# current shape and blur as JSON for the shell's plugins.
+LOOK_LUA=$CONFIG_DIR/hypr/look.lua
+LOOK_GHOSTTY=${XDG_CONFIG_HOME:-$HOME/.config}/ghostty/$DISTRO_ID-theme
+STYLE=${TOKENS%/*}/style.json
+shape() { local v; v=$(setting theme.shape terminal); [[ $v == rounded ]] || v=terminal; printf '%s\n' "$v"; }
+blur() { local v; v=$(setting theme.blur on); [[ $v == off ]] || v=on; printf '%s\n' "$v"; }
+
+# jq helpers: a token colour ("#rrggbb", "rgba(r,g,b,a)" or a CSS shadow
+# holding one) as Hyprland's rgba(rrggbbaa) or as #rrggbb over the background.
+LOOK_JQ='
+  def rgb: if test("^#") then [.[1:3], .[3:5], .[5:7] | ascii_downcase | explode
+      | map(if . >= 97 then . - 87 else . - 48 end) | .[0] * 16 + .[1]] + [1]
+    else capture("rgba\\((?<r>[0-9]+), *(?<g>[0-9]+), *(?<b>[0-9]+), *(?<a>[0-9.]+)\\)")
+      | [(.r, .g, .b | tonumber), (.a | tonumber)] end;
+  def hex2: [(. / 16 | floor), (. % 16)] | map(if . < 10 then . + 48 else . + 87 end) | implode;
+  def hypr: rgb | "rgba(" + (.[0:3] | map(hex2) | join("")) + ((.[3] * 255 | round) | hex2) + ")";
+  def alpha($a): rgb | .[3] = $a | "rgba(" + (.[0:3] | map(hex2) | join("")) + ((.[3] * 255 | round) | hex2) + ")";
+  def over($bg): (rgb) as $c | ($bg | rgb) as $b
+    | "#" + ([range(3)] | map(($c[.] * $c[3] + $b[.] * (1 - $c[3])) | round | hex2) | join(""));
+  def a: rgb | .[3];
+  # A translucent colour laid over another, as one translucent colour.
+  def stack($under): (rgb) as $t | ($under | rgb) as $u | (1 - (1 - $t[3]) * (1 - $u[3])) as $o
+    | "rgba(" + ([range(3)] | map((($t[.] * $t[3] + $u[.] * $u[3] * (1 - $t[3])) / $o) | round | hex2) | join(""))
+      + (($o * 255 | round) | hex2) + ")";
+  def px: capture("(?<n>[0-9.]+)px") | .n | tonumber;'
+
+write_look() {
+  [[ -f $TOKENS ]] || return 0
+  local tmp
+  mkdir -p "${LOOK_LUA%/*}" "${LOOK_GHOSTTY%/*}"
+  tmp=$(mktemp "$LOOK_LUA.XXXXXX")
+  jq -r --arg shape "$(shape)" --arg blur "$(blur)" "$LOOK_JQ"'
+    .color as $c | .geometry[$shape] as $g
+    | ($c.border.focus | a) as $fa | ($c.border.hairline | a) as $ha
+    | "-- Written by `'"$DISTRO_ID"' theme` from the theme'"'"'s design tokens; it is rewritten",
+      "-- on every theme, mode, shape or blur change.",
+      "return {",
+      "    shape = \"\($shape)\", blur = \($blur == "on"),",
+      "    gaps_in = \($g.gap / 2 | floor), gaps_out = \($g.gap), border = \($g.border), rounding = \($g.paneRadius),",
+      "    active_border = { \"\($c.highlight.focusTopEdge | alpha($fa + (1 - $fa) * ($c.highlight.focusTopEdge | a)))\", \"\($c.border.focus | hypr)\" },",
+      "    inactive_border = { \"\($c.highlight.paneTopEdge | alpha($ha + (1 - $ha) * ($c.highlight.paneTopEdge | a)))\", \"\($c.border.hairline | hypr)\" },",
+      "    glow = \"\($c.highlight.focusGlow | hypr)\", glow_range = \($c.highlight.focusGlow | px),",
+      "    shadow = \"\(.material.shadow | hypr)\",",
+      "    group_active = \"\($c.border.focus | hypr)\", group_inactive = \"\($c.border.hairline | hypr)\", group_locked = \"\($c.signal.coral | alpha($fa))\",",
+      "    groupbar_text = \"\($c.accent.onAmber | hypr)\", groupbar_text_inactive = \"\($c.text.secondary | hypr)\",",
+      "    header = {",
+      "        height = 28, font = \"\(.font.ui)\", size = \(.type.paneHeader | px), padding = 12,",
+      "        fill = \"\($c.sheen.top | stack($c.bg.pane))\", text = \"\($c.text.muted | hypr)\", text_focus = \"\($c.accent.amber | hypr)\",",
+      "    },",
+      "}"' "$TOKENS" > "$tmp" && mv "$tmp" "$LOOK_LUA" || { rm -f "$tmp"; return 1; }
+  # Ghostty: the theme's Frosted Terminal colours over the palette Noctalia writes
+  # (themes/noctalia); the config includes this file.
+  tmp=$(mktemp "$LOOK_GHOSTTY.XXXXXX")
+  jq -r "$LOOK_JQ"'
+    .color as $c
+    | "# Written by `'"$DISTRO_ID"' theme` from the theme'"'"'s design tokens; rewritten on",
+      "# every theme change. Your own settings go in the main config.",
+      "background = \($c.bg.deep)",
+      "foreground = \($c.text.body)",
+      "cursor-color = \($c.text.primary)",
+      "cursor-text = \($c.bg.deep)",
+      "selection-background = \($c.state.selectedBg | over($c.bg.deep))",
+      "selection-foreground = \($c.text.primary)"' "$TOKENS" > "$tmp" && mv "$tmp" "$LOOK_GHOSTTY" || { rm -f "$tmp"; return 1; }
+  tmp=$(mktemp "$STYLE.XXXXXX"); chmod 644 "$tmp"
+  jq --arg shape "$(shape)" --arg blur "$(blur)" '{shape: $shape, blur: ($blur == "on"), geometry: .geometry[$shape]}' "$TOKENS" > "$tmp" \
+    && mv "$tmp" "$STYLE" || { rm -f "$tmp"; return 1; }
+}
+
+# Hyprland and running Ghostty windows pick the new look up.
+reload_look() {
+  if [[ -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then hyprctl reload >/dev/null 2>&1 || true; fi
+  pkill -USR2 -x -u "$(id -u)" ghostty 2>/dev/null || true
 }
 
 apply_mode() { # apply_mode <dark|light>
@@ -136,6 +217,7 @@ case ${1:-} in
     noctalia msg color-scheme-set custom "$DISTRO_ID-$name" >/dev/null
     apply_mode "$mode"
     write_tokens "$name" "$mode" || true
+    write_look || true; reload_look
     apply_wallpaper "$name" "$(wallpaper_index "$name")"
     set_setting theme "$name"
     greeter_apply "$name" "$mode" "$(wallpaper_index "$name")" >/dev/null 2>&1 || true
@@ -147,6 +229,7 @@ case ${1:-} in
     shell_ready || die "the desktop shell isn't running"
     apply_mode "$mode"
     write_tokens "$name" "$mode" || true
+    write_look || true; reload_look
     greeter_apply "$name" "$mode" "$(wallpaper_index "$name")" >/dev/null 2>&1 || true
     info "theme: $name ($mode)" ;;
   token)
@@ -155,7 +238,20 @@ case ${1:-} in
     token "$2" ;;
   tokens)
     write_tokens "$(setting theme)" "$(setting theme.mode)" || die "the tokens could not be written"
+    write_look || die "the window look could not be written"
+    reload_look
     info "$TOKENS" ;;
+  shape|blur)
+    if [[ -z ${2:-} ]]; then "$1"; exit 0; fi
+    case $1:$2 in
+      shape:terminal|shape:rounded|blur:on|blur:off) ;;
+      shape:*) die "shape must be terminal or rounded" ;;
+      *) die "blur must be on or off" ;;
+    esac
+    set_setting "theme.$1" "$2"
+    write_look || die "the window look could not be written"
+    reload_look
+    info "$1: $2" ;;
   greeter)
     name=$(setting theme)
     greeter_apply "$name" "$(setting theme.mode)" "$(wallpaper_index "$name")" \

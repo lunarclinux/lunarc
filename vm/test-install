@@ -236,6 +236,7 @@ if "$here/ssh" "$vm" "$user" -- "pacman -Q $id >/dev/null 2>&1"; then
   check "fastfetch uses the distro logo" "grep -q '/usr/share/$id/default/branding/fastfetch-logo.txt' /etc/xdg/fastfetch/config.jsonc && fastfetch --pipe >/dev/null"
   check "boot menu has the wallpaper"   "echo '$password' | sudo -S -p '' sh -c 'grep -q \"^wallpaper: boot():/$id/wallpaper.png\" /boot/limine.conf && test -s /boot/$id/wallpaper.png'"
   check "console uses the theme palette" "grep -q 'vt.default_red=11,' /proc/cmdline"
+  check "boot menu and console colours: current, migrated" "$(sed -e "s/@ID@/$id/g" -e "s/@PW@/$password/g" "$here/checks/boot-palette.sh")"
   # The login screen (decision record 0041): Noctalia Greeter through the
   # wrapper (tuigreet as its fallback), in the theme's colours and wallpaper.
   check "login screen packages installed" "pacman -Q noctalia-greeter greetd-tuigreet >/dev/null"
@@ -351,7 +352,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     check "app import previews what's missing" "printf '[packages]\\ncowsay\\n[catalog]\\nobsidian\\n[settings]\\ntheme = nord\\n' > /tmp/import.txt && out=\$($id app import /tmp/import.txt --dry-run) && grep -q cowsay <<<\"\$out\" && grep -q obsidian <<<\"\$out\" && grep -q 'theme = nord' <<<\"\$out\" && ! pacman -Q cowsay >/dev/null 2>&1"
     check "default theme applied"         "$hypr $id theme current | grep -q '^moonlit (dark)'; noctalia msg color-scheme-get | grep -q 'custom $id-moonlit'"
     check "terminal theme generated"      'test -s ~/.config/ghostty/themes/noctalia'
-    check "Hyprland borders from theme"   "$hypr test -s ~/.config/hypr/noctalia.lua && grep -q 'ebc77a' ~/.config/hypr/noctalia.lua"
+    check "Hyprland borders from theme"   "$hypr grep -q 'ebc77acc' ~/.config/$id/hypr/look.lua && hyprctl getoption general:col.active_border | grep -qi ccebc77a && ! test -e ~/.config/hypr/noctalia.lua"
     check "GTK follows theme"             'test -s ~/.config/gtk-4.0/noctalia.css && [ "$(gsettings get org.gnome.desktop.interface icon-theme)" = "'"'"'Papirus-Dark'"'"'" ]'
     check "default terminal is ghostty"   "$id terminal list | grep -qE '^\* ghostty +installed'"
     # Design tokens (decision record 0043): the current theme's, as a file; Moonlit's are the design's own.
@@ -360,12 +361,12 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     check "theme tokens are the design's"  "$(tokens_are "$(tok_hash docs/design/frosted-terminal/tokens.json)") && [ \"\$($id theme token color.accent.amber)\" = '#ebc77a' ] && [ \"\$($id theme token geometry.terminal.paneRadius)\" = 6 ]"
     check "Geist and Geist Mono installed" "fc-list : family | grep -qx Geist && fc-list : family | grep -q '^Geist Mono' && pacman -Q otf-geist otf-geist-mono >/dev/null && test -f /usr/share/licenses/otf-geist-mono/OFL.txt"
     check "Geist Mono has weight 200"     "fc-list 'Geist Mono:weight=40' family style | grep -q ExtraLight && [ \"\$(fc-match -f '%{family[0]} %{weight}' 'Geist Mono:weight=40')\" = 'Geist Mono 40' ]"
-    check "switch theme to tide"          "$hypr $id theme set tide >/dev/null && sleep 2 && grep -q '6cb6d9' ~/.config/hypr/noctalia.lua && grep -qi '10161d' ~/.config/ghostty/themes/noctalia"
+    check "switch theme to tide"          "$hypr $id theme set tide >/dev/null && sleep 2 && grep -q '6cb6d9' ~/.config/$id/hypr/look.lua && grep -qi '10161d' ~/.config/ghostty/themes/noctalia"
     screenshot tide
     check "switch to paper (light)"       "$hypr $id theme set paper >/dev/null && sleep 2 && noctalia msg theme-mode-get | grep -q light && [ \"\$(gsettings get org.gnome.desktop.interface icon-theme)\" = \"'Papirus-Light'\" ]"
     screenshot paper
     check "all themes listed"             "[ \$($id theme list --plain | wc -l) -ge 17 ] && $id theme list --plain | grep -qP '^catppuccin\t'"
-    check "switch to catppuccin"          "$hypr $id theme set catppuccin >/dev/null && sleep 2 && grep -q 'cba6f7' ~/.config/hypr/noctalia.lua && grep -qi '1e1e2e' ~/.config/ghostty/themes/noctalia"
+    check "switch to catppuccin"          "$hypr $id theme set catppuccin >/dev/null && sleep 2 && grep -q 'cba6f7' ~/.config/$id/hypr/look.lua && grep -qi '1e1e2e' ~/.config/ghostty/themes/noctalia"
     check "theme tokens follow the theme"  "$(tokens_are "$(tok_hash themes/catppuccin/tokens.json .dark)") && [ \"\$($id theme token color.accent.amber)\" = '#cba6f7' ]"
     # Over SSH the login screen is left alone (polkit: only the person at the
     # computer); from the desktop it follows the theme without a password.
@@ -373,7 +374,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     check "login screen theme: from the desktop" "$hypr hyprctl dispatch 'hl.dsp.exec_cmd(\"$id theme greeter\")' >/dev/null; for i in \$(seq 15); do grep -qx 'primary = \"#cba6f7\"' /var/lib/$id/greeter.toml && exit 0; sleep 1; done; cat /var/lib/$id/greeter.toml; exit 1"
     check "wallpaper cycles"              "$hypr $id theme wallpaper next | grep -q '^wallpaper 2 of ' && grep -q '^wallpaper.catppuccin = 2' ~/.config/$id/settings && $id theme wallpaper set 1 >/dev/null"
     screenshot catppuccin
-    check "switch to eclipse"             "$hypr $id theme set eclipse >/dev/null && sleep 2 && grep -q 'f5c542' ~/.config/hypr/noctalia.lua"
+    check "switch to eclipse"             "$hypr $id theme set eclipse >/dev/null && sleep 2 && grep -q 'f5c542' ~/.config/$id/hypr/look.lua"
     screenshot eclipse
     check "earthshine opens light"        "$hypr $id theme set earthshine >/dev/null && sleep 2 && noctalia msg theme-mode-get | grep -q light"
     check "theme tokens follow the mode"   "$hypr $(tokens_are "$(tok_hash themes/earthshine/tokens.json .light)") && $id theme mode dark >/dev/null && $(tokens_are "$(tok_hash themes/earthshine/tokens.json .dark)")"
@@ -381,6 +382,19 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
 
     # Layer 5: crash inbox, agents, updates.
     "$here/ssh" "$vm" "$user" -- "$hypr $id theme set moonlit >/dev/null; hyprctl dispatch 'hl.dsp.exec_cmd(\"$id theme greeter\")' >/dev/null" || true
+    # Frosted Terminal windows (decision record 0043): Hyprland and Ghostty
+    # from the theme's tokens, the shape and blur settings, header strips.
+    check "windows: look from tokens, shape, blur, header strips" "$(sed "s/@ID@/$id/g" "$here/checks/frosted.sh")"
+    check "ghostty: Geist Mono, translucent, theme colours" "ghostty +show-config 2>/dev/null > /tmp/gc; grep -qx 'font-family = Geist Mono' /tmp/gc && grep -qx 'background-opacity = 0.55' /tmp/gc && grep -qx 'background = #070b17' /tmp/gc && grep -qix 'palette = 1=#f0a39a' /tmp/gc && grep -qix 'palette = 5=#a9a8f2' /tmp/gc && grep -qix 'palette = 6=#8fd4e3' /tmp/gc"
+    check "migration brings an older desktop to the new look" "printf '%s\\n' '-- Generated by Noctalia' 'return {}' > ~/.config/hypr/noctalia.lua && sed -i -e 's/^font-family = Geist Mono\$/font-family = JetBrainsMono Nerd Font/' -e 's/^font-size = 10\$/font-size = 11/' -e '/$id-theme\$/d' ~/.config/ghostty/config && rm -f ~/.config/$id/hypr/look.lua && sed -i '/frosted-windows/d' ~/.local/state/$id/migrations-applied && $hypr $id migrate --user >/dev/null && ! test -e ~/.config/hypr/noctalia.lua && grep -qx 'font-family = Geist Mono' ~/.config/ghostty/config && grep -qx 'font-size = 10' ~/.config/ghostty/config && grep -qx 'config-file = ?$id-theme' ~/.config/ghostty/config && test -s ~/.config/$id/hypr/look.lua"
+    # Two terminals side by side (the right one focused), in each shape and with blur off.
+    "$here/ssh" "$vm" "$user" -- "$(sed "s/@ID@/$id/g" "$here/checks/panes.sh")" >/dev/null 2>&1 || true
+    screenshot frosted-terminal
+    "$here/ssh" "$vm" "$user" -- "$hypr $id theme shape rounded >/dev/null; sleep 1" || true
+    screenshot frosted-rounded
+    "$here/ssh" "$vm" "$user" -- "$hypr $id theme shape terminal >/dev/null; $id theme blur off >/dev/null; sleep 1" || true
+    screenshot frosted-blur-off
+    "$here/ssh" "$vm" "$user" -- "$hypr $id theme blur on >/dev/null; for p in \$(hyprctl clients -j | jq -r '.[] | select(.workspace.id == 9) | .pid'); do kill \$p; done; $id workspaces go 1" >/dev/null 2>&1 || true
     check "crash watcher running"         "systemctl --user is-active --quiet $id-crash-watch"
     check "crash plugin enabled"          "$hypr noctalia msg plugins list 2>&1 | grep -E '$id/crashes' | grep -qiE 'enabled|on|yes|true'"
     check "a crash is captured"           "$id crash test >/dev/null; for i in \$(seq 20); do [ \"\$($id crash list --json | jq length)\" = 1 ] && exit 0; sleep 1; done; exit 1"

@@ -47,6 +47,9 @@ else
   echo "pkg/build: no signing key in $signing_home; building UNSIGNED packages" >&2
 fi
 
+sources=${XDG_CACHE_HOME:-$HOME/.cache}/$DISTRO_ID-pkg-sources
+mkdir -p "$sources"
+
 # Third-party packages the distro's repository carries (not in Arch's): every
 # folder under pkg/ with a PKGBUILD, other than the distro's own.
 for vendored in "$root"/pkg/*/; do
@@ -57,7 +60,13 @@ for vendored in "$root"/pkg/*/; do
   # The whole folder (PKGBUILD plus any patches), from the git ref being built.
   if [[ ! -f $work/src/pkg/${vendored##*/}/PKGBUILD ]]; then continue; fi
   cp -r "$work/src/pkg/${vendored##*/}/." "$build/"
-  (cd "$build" && PKGDEST=$out/repo makepkg -f --nodeps --noconfirm "${sign[@]}" >/dev/null)
+  # Downloads are kept between builds (checksum-verified each time) and tried
+  # three times, so one dropped connection doesn't fail the whole build.
+  for try in 1 2 3; do
+    (cd "$build" && SRCDEST=$sources makepkg --verifysource --noconfirm >/dev/null 2>&1) && break
+    if (( try < 3 )); then sleep 10; fi
+  done
+  (cd "$build" && SRCDEST=$sources PKGDEST=$out/repo makepkg -f --nodeps --noconfirm "${sign[@]}" >/dev/null)
 done
 
 # The distro's own packages.

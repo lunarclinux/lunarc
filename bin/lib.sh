@@ -49,9 +49,15 @@ set_setting() { # set_setting <key> <value>
 # The current theme's design tokens (docs/design/frosted-terminal): its
 # variant of themes/<name>/tokens.json, written by `theme set` and `theme mode`.
 TOKENS=$CONFIG_DIR/theme/tokens.json
+# geometry.current is the set for the shape setting (theme.shape: terminal or rounded).
 token() { # token <dotted path, e.g. color.accent.amber> → the value (tables as JSON)
   [[ -f $TOKENS ]] || return 1
-  jq -r --arg p "$1" 'getpath($p | split(".")) | if . == null then ("no token \($p)\n" | halt_error(1))
+  local path=$1 shape
+  if [[ $path == geometry.current || $path == geometry.current.* ]]; then
+    shape=$(setting theme.shape terminal); [[ $shape == rounded ]] || shape=terminal
+    path=geometry.$shape${path#geometry.current}
+  fi
+  jq -r --arg p "$path" 'getpath($p | split(".")) | if . == null then ("no token \($p)\n" | halt_error(1))
     elif type == "string" then . else tojson end' "$TOKENS"
 }
 

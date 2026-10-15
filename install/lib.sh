@@ -122,9 +122,9 @@ ui_init() {
   else
     # sudo drops COLORTERM; these terminals all do 24-bit colour.
     case $TERM in *ghostty*|*kitty*|*alacritty*|*wezterm*|foot*|*direct*) export COLORTERM=truecolor ;; esac
-    GOLD='#EBC77A' TEXT='#E6E2D6' MUTED='#A3ABC4' RED='#F28B82' SHADE='#2E3A5C' DARK='#0B1020'
-    C_GOLD=$'\e[38;2;235;199;122m' C_TEXT=$'\e[38;2;230;226;214m' C_MUTED=$'\e[38;2;163;171;196m'
-    C_RED=$'\e[38;2;242;139;130m' C_GREEN=$'\e[38;2;159;212;154m'
+    GOLD='#EBC77A' TEXT='#E6E2D6' MUTED='#B4BBD0' RED='#F0A39A' SHADE='#2E3A5C' DARK='#0B1020'
+    C_GOLD=$'\e[38;2;235;199;122m' C_TEXT=$'\e[38;2;230;226;214m' C_MUTED=$'\e[38;2;180;187;208m'
+    C_RED=$'\e[38;2;240;163;154m' C_GREEN=$'\e[38;2;159;212;154m'
   fi
   C_BOLD=$'\e[1m' C_OFF=$'\e[0m'
 
