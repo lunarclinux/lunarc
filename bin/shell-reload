@@ -27,11 +27,23 @@ lib=$(dirname "$(readlink -f "$0")")
 source "$lib/distro.conf"
 wants=/usr/lib/systemd/user/graphical-session.target.wants
 
+# `noctalia msg` finds the shell by its Wayland display: one socket per
+# display in the runtime directory. Runs it against each one found.
+noctalia_msg() { # noctalia_msg <runtime dir> <args...> (as the user)
+  local runtime=$1 sock display rc=1; shift
+  for sock in "$runtime"/noctalia-wayland-*.sock; do
+    display=${sock##*/noctalia-}; display=${display%.sock}
+    [[ $display =~ ^wayland-[0-9]+$ ]] || continue
+    XDG_RUNTIME_DIR=$runtime WAYLAND_DISPLAY=$display noctalia msg "$@" && rc=0
+  done
+  return "$rc"
+}
+
 # Restarting the shell while its own lock screen is up would leave the session
 # locked with nothing to unlock it. Runs as the user, from a transient unit.
 if [[ $mode == --noctalia-unlocked ]]; then
   for _ in $(seq 17280); do   # up to a day
-    noctalia msg status 2>/dev/null | grep -q '"locked": *true' || break
+    noctalia_msg "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" status 2>/dev/null | grep -q '"locked": *true' || break
     sleep 5
   done
   systemctl --user try-restart noctalia.service
@@ -102,15 +114,18 @@ while read -r _session uid user _rest; do
   if [[ $mode == --hypr ]]; then
     hypr_reload "$user" "$runtime"
   elif [[ $mode == --noctalia ]]; then
-    if timeout 5 runuser -u "$user" -- env XDG_RUNTIME_DIR="$runtime" noctalia msg status 2>/dev/null | grep -q '"locked": *true'; then
+    # Restart now only when the shell says it isn't locked; otherwise (locked,
+    # or no answer) a transient unit waits for the unlock.
+    if timeout 5 runuser -u "$user" -- bash -c "$(declare -f noctalia_msg); noctalia_msg \"\$1\" status" _ "$runtime" 2>/dev/null \
+      | grep -q '"locked": *false'; then
+      user_systemctl "$user" try-restart --no-block noctalia.service >/dev/null 2>&1
+    else
       timeout 20 systemd-run --user --machine="$user@" --quiet --collect --no-block \
         --unit="$DISTRO_ID-shell-restart" "$lib/shell-reload" --noctalia-unlocked >/dev/null 2>&1
-    else
-      user_systemctl "$user" try-restart --no-block noctalia.service >/dev/null 2>&1
     fi
   else
     session_services "$user"
-    timeout 5 runuser -u "$user" -- env XDG_RUNTIME_DIR="$runtime" noctalia msg config-reload >/dev/null 2>&1
+    timeout 5 runuser -u "$user" -- bash -c "$(declare -f noctalia_msg); noctalia_msg \"\$1\" config-reload" _ "$runtime" >/dev/null 2>&1
   fi
 done < <(loginctl list-sessions --no-legend 2>/dev/null | awk '{print $1, $2, $3}' | sort -u -k2,2)
 exit 0
