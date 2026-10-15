@@ -2,7 +2,10 @@
 # Don't edit: updates replace this file. Override in your own config.
 
 [shell]
-font_family = "Inter"
+# Geist, the design's second face (decision record 0043): the bar and the
+# distro's own popovers use Geist Mono, but Noctalia's panels are laid out
+# for a proportional face and cut mono labels short.
+font_family = "Geist"
 polkit_agent = true          # Noctalia's own password prompt, themed like the rest
 telemetry_enabled = false     # no usage ping to noctalia.dev
 setup_wizard_enabled = false  # the distro applies its own theme and settings at first login
@@ -12,10 +15,46 @@ setup_wizard_enabled = false  # the distro applies its own theme and settings at
 # default to the theme's primary (32%) and text colour (7% to 2%).
 top_highlight = true
 surface_sheen = true
+# Frosted Terminal popovers: Noctalia's panels (quick settings, the calendar,
+# notifications, the session menu, the launcher) float under what opened them,
+# at the design's popover fill (soft: 80%, the nearest to bg.popover's 76%).
+# Their amber border and corners come from the theme and `@DISTRO_ID@ theme
+# shape`: border_color (for panels an option of the distro's build) and
+# corner_radius_scale, written to ~/.config/noctalia/00-@DISTRO_ID@-look.toml.
 # Each app opened from the launcher runs as its own systemd unit, not inside
 # the shell's, so restarting or updating the shell doesn't close the apps it
 # opened.
 launch_apps_as_systemd_services = true
+
+[shell.panel]
+transparency_mode = "soft"
+control_center_placement = "floating"
+open_near_click_control_center = true
+session_placement = "floating"
+open_near_click_session = true
+wallpaper_placement = "floating"
+open_near_click_wallpaper = true
+
+# A section opened from the bar (the calendar from the clock, notifications
+# from the bell, a tab from network or battery) shows on its own, without the
+# tab list; quick settings (SUPER+S) keep it.
+[control_center]
+sidebar_section = "none"
+
+# Noctalia's on-screen displays match the popovers. Volume and brightness are
+# the distro's own pill (`@DISTRO_ID@ osd`), so Noctalia's are off; the
+# others (Wi-Fi, Bluetooth, caps lock, …) show in the same place.
+[osd]
+position = "bottom_center"
+background_opacity = 0.80
+
+[osd.kinds]
+volume = false
+brightness = false
+
+# Notification cards: the popover fill (and amber border, above).
+[notification]
+background_opacity = 0.80
 
 # After 5 minutes idle: lock, with the screensaver playing behind the lock
 # (`@DISTRO_ID@ lock --idle`; type the password to come back). Screens off at
@@ -134,8 +173,8 @@ capsule_padding = 12
 type = "@DISTRO_ID@/utilities:media"
 capsule = false
 
+# Left click: now playing (the plugin's popover, which the widget opens).
 [widget.media.actions]
-left = "panel-toggle control-center media"
 right = "media toggle"
 
 # The toggles (decision record 0042): an anchor icon, then only the toggles

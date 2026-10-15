@@ -169,6 +169,31 @@ launch_app() {
   exec "$@"
 }
 
+# Noctalia's panels, displays and notification cards as Frosted Terminal
+# popovers (decision record 0043): their border in the theme's border.popover
+# (an option of the distro's Noctalia build for panels), and corners for the
+# shape (the corner scale gives the panels the shape's panelRadius; Noctalia's
+# is 12 at scale 1, and the buttons and cards inside follow). Noctalia's
+# config colours are roles or hex, so this is written from the tokens, to a
+# file of its own in Noctalia's config folder that loads before config.toml
+# (files load in name order and later ones win): anything set in config.toml
+# still wins over it.
+look_apply() {
+  local dir=${XDG_CONFIG_HOME:-$HOME/.config}/noctalia radius=12 border='#ebc77a61' v tmp
+  [[ $(setting theme.shape terminal) == rounded ]] && radius=16
+  v=$(token "geometry.current.panelRadius" 2>/dev/null) && [[ $v =~ ^[0-9]+$ ]] && radius=$v
+  v=$(token color.border.popover 2>/dev/null | sed -nE 's/^rgba\(([0-9]+), *([0-9]+), *([0-9]+), *([0-9.]+)\)$/\1 \2 \3 \4/p')
+  if [[ -n $v ]]; then
+    border=$(awk '{ printf "#%02x%02x%02x%02x", $1, $2, $3, int($4 * 255 + 0.5) }' <<<"$v")
+  fi
+  mkdir -p "$dir"
+  rm -f "$dir/00-$DISTRO_ID-shape.toml"
+  tmp=$(mktemp "$dir/.look.XXXXXX")
+  printf '# Written by `%s theme` from the theme and shape; rewritten when they change.\n# Your own settings go in config.toml, which wins over this file.\n[shell]\ncorner_radius_scale = %s\n\n[shell.panel]\nborder_color = "%s"\n\n[osd]\nborder_color = "%s"\n\n[notification]\nborder_color = "%s"\n' \
+    "$DISTRO_ID" "$(awk -v r="$radius" 'BEGIN { printf "%.3f", r / 12 }')" "$border" "$border" "$border" > "$tmp" \
+    && mv "$tmp" "$dir/00-$DISTRO_ID-look.toml" || rm -f "$tmp"
+}
+
 # The bar settings, kept as one managed block in Noctalia's user config
 # (decision record 0043): its geometry for the shape (theme.shape: terminal,
 # edge to edge; rounded, a floating pill), its hairline in the theme's colour,
@@ -176,6 +201,7 @@ launch_app() {
 # entirely when off). The lists match [bar.default] in
 # default/noctalia/defaults.toml.
 bar_apply() {
+  look_apply
   local config=${XDG_CONFIG_HOME:-$HOME/.config}/noctalia/config.toml start center
   local begin="# >>> $DISTRO_ID bar" end="# <<< $DISTRO_ID bar"
   local thickness=30 inset=0 radius=0 hairline='#e6e2d621' v

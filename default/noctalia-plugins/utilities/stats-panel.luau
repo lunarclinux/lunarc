@@ -36,9 +36,9 @@ local function render()
     ui.column({ gap = 6 }, {
       ui.row({ justify = "space_between", align = "center" }, {
         ui.label({ text = "── SYSTEM", fontSize = 11, fontFamily = MONO, color = "primary" }),
-        ui.label({ text = uptime and ("up " .. uptime .. " ──") or "──", fontSize = 11, fontFamily = MONO, color = "primary" }),
+        ui.label({ text = uptime and ("up " .. uptime .. " ──") or "──", fontSize = 11, fontFamily = MONO, color = "on_surface_variant/0.8" }),
       }),
-      ui.box({ height = 1, fill = "primary/0.28" }),
+      ui.box({ height = 1, fill = "primary/0.25" }),
     }),
     ui.column({ gap = 10 }, rows),
   }))

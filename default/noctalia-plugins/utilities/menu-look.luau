@@ -1,9 +1,10 @@
 --!nonstrict
--- The menu's look (Frosted Terminal, docs/design/frosted-terminal §6): the
--- colours, radius and type from the current theme's tokens
--- (~/.config/<id>/theme/tokens.json and style.json, written by `<id> theme`),
--- and the pieces every row and the footer share. Without the files, palette
--- roles stand in, so the menu still follows the theme.
+-- The look of the menu and the popovers the plugin draws (Frosted Terminal,
+-- docs/design/frosted-terminal §5 and §6): the colours, radius and type from
+-- the current theme's tokens (~/.config/<id>/theme/tokens.json and
+-- style.json, written by `<id> theme`), and the pieces their rows, headers and
+-- footers share. Without the files, palette roles stand in, so they still
+-- follow the theme.
 local M = {}
 local cli = "@DISTRO_ID@"
 local MONO = "Geist Mono"
@@ -29,7 +30,7 @@ local function read(path)
   return ok and type(v) == "table" and v or nil
 end
 
--- Reads the tokens again (each time the menu opens, so theme and shape
+-- Reads the tokens again (each time a panel opens, so theme and shape
 -- changes show).
 function M.load()
   local t = read("~/.config/" .. cli .. "/theme/tokens.json") or {}
@@ -38,6 +39,8 @@ function M.load()
   local function get(group, key) return (c[group] or {})[key] end
   local p = {
     fill = color(get("bg", "menu")) or "surface/0.8",
+    popover = color(get("bg", "popover")) or "surface/0.76",
+    headerLine = color(get("accent", "amber"), 0.25) or "primary/0.25",
     border = color(get("border", "popover")) or "primary/0.38",
     highlight = color(get("highlight", "focusTopEdge")) or "primary/0.6",
     inputLine = color(get("border", "menuInput")) or "primary/0.3",
@@ -49,6 +52,8 @@ function M.load()
     faint = color(get("text", "faint")) or "on_surface_variant/0.6",
     amber = color(get("accent", "amber")) or "primary",
     amberLight = color(get("accent", "amberLight")) or "primary",
+    onAmber = color(get("accent", "onAmber")) or "on_primary",
+    body = color(get("text", "body")) or "on_surface",
     selected = color(get("state", "selectedBg")) or "primary/0.14",
     ring = color(get("state", "selectedRing")) or "primary/0.32",
     cyan = color(get("signal", "cyan")) or "tertiary",
@@ -59,10 +64,18 @@ function M.load()
     chip = color(get("accent", "amber"), 0.16) or "primary/0.16",
     badge = color(get("accent", "amber"), 0.18) or "primary/0.18",
     cap = color(get("text", "primary"), 0.22) or "on_surface/0.22",
+    -- Round buttons and the art's frame: the text colour at 6% and 16%.
+    button = color(get("text", "primary"), 0.06) or "on_surface/0.06",
+    buttonBorder = color(get("text", "primary"), 0.16) or "on_surface/0.16",
+    track = color(get("text", "primary"), 0.22) or "on_surface/0.22",
   }
   local geometry = style.geometry or {}
   local rounded = style.shape == "rounded"
   p.radius = tonumber(geometry.menuRadius) or (rounded and 16 or 10)
+  -- Popovers take the panels' radius, the one Noctalia's own panels get
+  -- (shell.corner_radius_scale, written with the shape).
+  p.panelRadius = tonumber(geometry.panelRadius) or (rounded and 16 or 12)
+  p.rounded = rounded
   M.p = p
   return p
 end
@@ -122,6 +135,34 @@ end
 -- A footer hint: cap, then what it does.
 function M.hint(cap, text, key)
   return M.row({ key = key, gap = 6, align = "center" }, { M.cap(cap, "cap"), M.label(text, 11.5, M.p.muted, { key = "what" }) })
+end
+
+-- A popover's header strip: `── TITLE` in amber, `meta ──` dimmed, over an
+-- amber line.
+function M.header(title, meta, key)
+  local p = M.p
+  return M.col({ key = key or "header", gap = 0 }, {
+    M.row({ key = "strip", paddingH = 14, paddingV = 7, justify = "space_between", align = "center" }, {
+      M.label("── " .. title, 11, p.amber, { key = "title" }),
+      M.label(meta and (meta .. " ──") or "──", 11, p.dim, { key = "meta" }),
+    }),
+    M.box({ key = "line", width = 0, height = 1, fill = p.headerLine }),
+  })
+end
+
+-- A popover drawn by the plugin (a panel with decoration = false): the fill,
+-- amber border and radius of Noctalia's own panels, with the top-edge
+-- highlight inside the border, around the given rows.
+function M.surface(props, rows)
+  local p = M.p
+  local kids = {
+    M.row({ key = "highlight", height = 1, paddingH = math.max(0, (props.radius or p.panelRadius) - 2) }, {
+      M.box({ width = 0, height = 1, flexGrow = 1, fill = p.highlight }),
+    }),
+  }
+  for _, r in ipairs(rows) do table.insert(kids, r) end
+  return M.col({ key = props.key or "surface", fill = p.popover, border = p.border, borderWidth = 1,
+    radius = props.radius or p.panelRadius, padding = 1, gap = 0, width = props.width }, kids)
 end
 
 -- Source tags in Install and Remove.
