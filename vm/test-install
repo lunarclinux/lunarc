@@ -906,14 +906,15 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       # password (typed like a person would) unlocks it.
       check "lock packages installed"       "pacman -Q swaylock-plugin windowtolayer >/dev/null"
       check "lock recovery key works while locked" "$hypr hyprctl binds -j | jq -e '.[] | select(.key == \"L\" and .modmask == 12 and .locked == true)' >/dev/null"
-      check "lock engages, screensaver behind it" "$hypr $id lock && sleep 3 && pgrep -x swaylock-plugin >/dev/null && pgrep -x windowtolayer >/dev/null && for i in \$(seq 20); do pgrep -x tte >/dev/null && exit 0; sleep 1; done; exit 1"
-      screenshot lock
-      # The prompt pill (Frosted Terminal, decision record 0043): always there,
-      # low on the screen, `tester@<host> password:` and a row of dots, nothing
-      # else (no clock, no chips); the hint line appears while typing and fades
-      # 1.5 s after the last key. These grab the screen at once and read bands
-      # of it here on the host (the busy animation defeats OCR on the whole
-      # screen).
+      check "lock engages"                  "$hypr $id lock && pgrep -x swaylock-plugin >/dev/null"
+      locked_at=$SECONDS
+      # The prompt pill (Frosted Terminal, decision record 0043): low on the
+      # screen, `tester@<host> password:` and a row of dots, nothing else (no
+      # clock, no chips). It shows for 3 s from the screensaver's first frame,
+      # fades out over 1.5 s, pops back at once at any key and fades again 5 s
+      # after the last; the hint line shows with it once a key was pressed.
+      # These grab the screen at once and read bands of it here on the host
+      # (the busy animation defeats OCR on the whole screen).
       quick_shot() { # quick_shot <label>
         local f; f=$shots/$vm-$(date +%Y%m%d-%H%M%S)-$1.png
         "$here/ssh" "$vm" "$user" -- "$hypr grim -" > "$f" 2>/dev/null || true
@@ -941,34 +942,86 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       pill_colour() { # pill_colour <png> <#rrggbb> → pixel count
         magick "$1" -crop 520x60+380+646 +repage -fuzz 4% -fill black +opaque "$2" -fill white -opaque "$2" -colorspace gray -format '%[fx:round(mean*w*h)]' info:
       }
+      blobs() { # blobs <png> → "<w>x<h>" of each blob of the lit-key colour in the pill
+        magick "$1" -crop 520x60+380+646 +repage -fuzz 4% -fill black +opaque '#e6e2d6' -fill white -opaque '#e6e2d6' -colorspace gray \
+          -define connected-components:verbose=true -define connected-components:area-threshold=3 -connected-components 8 null: 2>/dev/null \
+          | awk '/gray\(255\)/ { sub(/\+.*/, "", $2); print $2 }'
+      }
       lit_dots() { # lit_dots <png> → lit dots
-        local n
-        n=$(magick "$1" -crop 520x60+380+646 +repage -fuzz 4% -fill black +opaque '#e6e2d6' -fill white -opaque '#e6e2d6' -colorspace gray \
-          -define connected-components:verbose=true -define connected-components:area-threshold=3 -connected-components 8 null: 2>/dev/null | grep -c 'gray(255)')
-        echo $((n - 1))
+        local n; n=$(blobs "$1" | wc -l); echo $((n - 1))
       }
-      report() { # report <ok?> <description>
-        if [[ $1 == 0 ]]; then printf '  \033[32mok\033[0m   %s\n' "$2"; else printf '  \033[31mFAIL\033[0m %s\n' "$2"; fail=1; fi
+      # The pill is gone: OCR reads no prompt in its band and its block cursor
+      # (an 8-10 x 17-19 px blob of the key colour; the screensaver's blocks
+      # are 10x22) is not there. 0 = gone.
+      pill_gone() { # pill_gone <png>
+        local rc=0
+        pill_says "$1" 'password|tester' && return 1
+        blobs "$1" | grep -qE '^(8|9|10)x(17|18|19)$' && rc=1
+        return "$rc"
       }
-      quick_shot lock-idle
-      rc=0; pill_says "$last_shot" 'tester@.*password' || rc=$?
-      if (( rc == 2 )); then log "no tesseract/magick here: skipping the lock screen checks"; else
-        report "$rc" "lock: the prompt pill while idle (tester@host password:)"
+      # The pill is there: OCR reads its prompt, or (when the screensaver's
+      # lines cross the text) its block cursor is there. 0 = shown.
+      pill_shown() { # pill_shown <png>
+        pill_says "$1" 'tester|password' && return 0
+        blobs "$1" | grep -qE '^(8|9|10)x(17|18|19)$'
+      }
+      # Waits until <seconds> after <start> (bash's SECONDS).
+      wait_until() { local d=$(( $1 + $2 - SECONDS )); (( d > 0 )) && sleep "$d"; return 0; }
+      have_ocr=0; command -v tesseract >/dev/null && command -v magick >/dev/null && have_ocr=1
+      if (( ! have_ocr )); then log "no tesseract/magick here: skipping the lock screen checks"; fi
+      if (( have_ocr )); then
+        # Right after the lock: the pill, for 3 s from the first frame.
+        rc=1
+        for i in 1 2 3 4 5 6 7 8; do
+          quick_shot lock-start
+          pill_says "$last_shot" 'tester@.*password' && { rc=0; break; }
+          (( SECONDS - locked_at >= 4 )) && break
+        done
+        report "$rc" "lock: the prompt pill right after locking (tester@host password:)"
         rc=0; band_says "$last_shot" 0 600 '[0-2][0-9]:[0-5][0-9]|BAT|NOTIFY|SESSION' || rc=$?
         report "$(( rc == 1 ? 0 : 1 ))" "lock: no clock or chips above it"
         rc=0; hint_seen "$last_shot" || rc=$?
-        report "$(( rc == 1 ? 0 : 1 ))" "lock: no hint while idle"
-        report "$(( $(lit_dots "$last_shot") == 0 ? 0 : 1 ))" "lock: no dot lit while idle"
-        vm_type "abc"; quick_shot lock-typing
+        report "$(( rc == 1 ? 0 : 1 ))" "lock: no hint before a key"
+        report "$(( $(lit_dots "$last_shot") == 0 ? 0 : 1 ))" "lock: no dot lit before a key"
+      fi
+      check "lock: the screensaver plays behind it" "pgrep -x windowtolayer >/dev/null && for i in \$(seq 20); do pgrep -x tte >/dev/null && exit 0; sleep 1; done; exit 1"
+      wait_until "$locked_at" 7
+      quick_shot lock-idle
+      if (( have_ocr )); then
+        rc=0; pill_gone "$last_shot" || rc=$?
+        report "$rc" "lock: the pill has faded out, the screensaver alone (7 s after locking)"
+      fi
+      # While idle and hidden nothing is redrawn: swaylock-plugin's CPU over
+      # 10 s (it still passes the screensaver's frames on).
+      cpu=$("$here/ssh" "$vm" "$user" -- 'p=$(pgrep -n -x swaylock-plugin); t() { awk "{print \$14 + \$15}" /proc/$p/stat; }; a=$(t); sleep 10; b=$(t); awk -v d=$((b - a)) -v hz="$(getconf CLK_TCK)" "BEGIN { printf \"%.1f\", d * 100 / hz / 10 }"' 2>/dev/null) || cpu=""
+      c=${cpu%.*}; report "$(( ${c:-100} <= 15 ? 0 : 1 ))" "lock: hidden while idle, swaylock-plugin uses ${cpu:-?}% of a core (it passes the screensaver's frames on)"
+      if (( have_ocr )); then
+        vm_type "a"; quick_shot lock-key
+        rc=0; pill_shown "$last_shot" || rc=$?
+        report "$rc" "lock: a key brings the pill back at once"
+        n=$(lit_dots "$last_shot")
+        report "$(( n == 1 ? 0 : 1 ))" "lock: one key, one dot lit (lit $n)"
+        vm_type "bc"; quick_shot lock-typing
         rc=0; hint_seen "$last_shot" || rc=$?
         report "$rc" "lock: hint under the pill while typing"
         n=$(lit_dots "$last_shot")
         report "$(( n == 1 ? 0 : 1 ))" "lock: 3 keys typed, one dot lit, never the count (lit $n)"
-        vm_type "defg"; quick_shot lock-typing-more
+        vm_type "defg"; typed_at=$SECONDS; quick_shot lock-typing-more
         n=$(lit_dots "$last_shot")
         report "$(( n == 1 ? 0 : 1 ))" "lock: 7 keys typed, still one dot lit (lit $n)"
+        sleep 3; quick_shot lock-lingering
+        rc=0; pill_shown "$last_shot" || rc=$?
+        report "$rc" "lock: still shown 3 s after the last key"
+        wait_until "$typed_at" 6; quick_shot lock-fading
+        wait_until "$typed_at" 8; quick_shot lock-typed-gone
+        rc=0; pill_gone "$last_shot" || rc=$?
+        report "$rc" "lock: faded out again 8 s after the last key"
+        # The typed text is cleared 10 s after the last key, unseen.
+        wait_until "$typed_at" 12; quick_shot lock-autoclear
+        rc=0; pill_gone "$last_shot" || rc=$?
+        report "$rc" "lock: clearing the unsent text doesn't bring the pill back"
       fi
-      virsh send-key "$vm" KEY_ENTER >/dev/null
+      vm_type "xyz"; virsh send-key "$vm" KEY_ENTER >/dev/null
       # A wrong password: coral border and text once PAM has answered.
       coral=0
       for i in 1 2 3 4 5 6; do
@@ -976,14 +1029,26 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
         command -v magick >/dev/null || break
         coral=$(pill_colour "$last_shot" '#f0a39a'); (( coral >= 300 )) && break
       done
-      if command -v magick >/dev/null; then
+      wrong_at=$SECONDS
+      if (( have_ocr )); then
         report "$(( coral >= 300 ? 0 : 1 ))" "lock: wrong password turns the pill coral (coral $coral)"
         rc=0; pill_says "$last_shot" 'wrong' || rc=$?
         report "$rc" "lock: says wrong password"
+        sleep 1.5; quick_shot lock-wrong-later
+        coral=$(pill_colour "$last_shot" '#f0a39a')
+        report "$(( coral >= 300 ? 0 : 1 ))" "lock: still coral 1.5 s later (coral $coral)"
+        wait_until "$wrong_at" 6; quick_shot lock-wrong-lingering
+        rc=0; pill_shown "$last_shot" || rc=$?
+        report "$rc" "lock: the pill stays 5 s past the wrong password"
+        wait_until "$wrong_at" 11; quick_shot lock-wrong-gone
+        rc=0; pill_gone "$last_shot" || rc=$?
+        report "$rc" "lock: then fades out (11 s after the wrong password)"
       fi
-      sleep 3
-      virsh send-key "$vm" KEY_CAPSLOCK >/dev/null; vm_type "x"; quick_shot lock-capslock
-      if command -v magick >/dev/null; then
+      # Caps Lock on its own brings the pill back, with its line under it.
+      virsh send-key "$vm" KEY_CAPSLOCK >/dev/null; quick_shot lock-capslock
+      if (( have_ocr )); then
+        rc=0; pill_shown "$last_shot" || rc=$?
+        report "$rc" "lock: Caps Lock brings the pill back"
         rc=0; band_says "$last_shot" 880 60 'caps' 240 || rc=$?
         report "$rc" "lock: Caps Lock is on, under the pill"
       fi

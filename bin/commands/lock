@@ -69,18 +69,24 @@ screensaver_lock() {
     --text-wrong-color "$coral" --text-caps-lock-color "$amber"
     --layout-bg-color "${night:0:6}ff" --layout-border-color 00000000 --layout-text-color "$text"
   )
-  # The password prompt in a pill (our swaylock-plugin patch): always there
-  # over the screensaver, `user@host password:` and a row of dots, one lit at
-  # random per key (never the count). Setting lock.indicator = ring keeps the
-  # ring, which appears with the first key. Each is only used when the
-  # installed swaylock-plugin knows its options, so a half-finished update
-  # still locks. (--help exits 1, so read its text rather than piping it
-  # under pipefail.)
+  # The password prompt in a pill (our swaylock-plugin patch) over the
+  # screensaver, `user@host password:` and a row of dots, one lit at random
+  # per key (never the count). It shows for 3 s at lock and fades out over
+  # 1.5 s, leaving the screensaver alone; any key brings it back at once, and
+  # it fades again 5 s after the last key (it stays while the password is
+  # checked; a wrong password shows 3 s first). Setting lock.indicator = ring
+  # keeps the ring, which appears with the first key. Each is only used when
+  # the installed swaylock-plugin knows its options, so a half-finished
+  # update still locks; one without the timings keeps the pill always shown.
+  # (--help exits 1, so read its text rather than piping it under pipefail.)
   local help
   help=$(swaylock-plugin --help 2>&1 || true)
   if [[ $(setting lock.indicator box) == box && $help == *--prompt-text* ]]; then
+    args+=(--indicator-style box --indicator-idle-visible)
+    if [[ $help == *--indicator-linger* ]]; then
+      args+=(--indicator-idle-show 3000 --indicator-linger 5000 --indicator-fade 1500)
+    fi
     args+=(
-      --indicator-style box --indicator-idle-visible
       --prompt-text "${USER:-$(id -un)}@$(uname -n)" --prompt-color "$amber"
       --hint-text "Enter to unlock · Esc clears" --hint-color "$body"
       --font-size 15

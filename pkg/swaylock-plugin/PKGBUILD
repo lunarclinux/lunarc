@@ -15,10 +15,13 @@
 # "password:", a fixed row of dots with one lit at random per key so the length
 # never shows, a block cursor; state text, a Caps Lock line. Shown exactly when
 # the ring would be; with --indicator-idle-visible it is drawn as soon as the
-# background is (upstream drew it only at the first key).
+# background is (upstream drew it only at the first key). --indicator-idle-show,
+# --indicator-linger and --indicator-fade (ms) time it instead: shown for a
+# while at lock, at once at any key until a while after the last, then faded
+# out, redrawn every frame only while fading.
 pkgname=swaylock-plugin
 pkgver=1.8.7
-pkgrel=6
+pkgrel=7
 pkgdesc="Fork of swaylock that draws its background with a wallpaper program"
 arch=(x86_64)
 url="https://github.com/mstoeckl/swaylock-plugin"
@@ -32,7 +35,7 @@ source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz"
         box-indicator.patch)
 sha256sums=('98ac74457adfeb812f91e2fc4b289db664637b0d3890a051347b8d1169cc3757'
             '6fb8b6523111603cf6172303fb589c0cbd903bb0913f5e20acfd41578779e24a'
-            'ba407f19705463ff25b45f95cf6e366a3824d3f3e93fb80c3300bc471553072a')
+            'ff85e308a59f5b3ca27db7d4c562b7b93598614a034539f324e5fec9c4b9d20c')
 
 # meson and ninja come from Arch (makedepends). A host build skips the
 # makedepends check, so say clearly when they're missing; never fetch build
