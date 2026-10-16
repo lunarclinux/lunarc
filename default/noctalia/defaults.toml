@@ -26,6 +26,12 @@ surface_sheen = true
 # opened.
 launch_apps_as_systemd_services = true
 
+# The launcher's calculator converts currencies with the rates it has; it
+# doesn't download new ones (it would on every start, from libqalculate's
+# sources). The manual's privacy page lists no exchange-rate downloads.
+[shell.launcher]
+fetch_exchange_rates = false
+
 [shell.panel]
 transparency_mode = "soft"
 control_center_placement = "floating"
