@@ -2,13 +2,16 @@
 # A small MPRIS player for vm/test-install: "Low Tide" by Saltmarsh, three
 # tracks in its track list, art from a local file. Play, pause, next, seek
 # and the track list answer like a real player; nothing plays. Run in the VM
-# as the desktop user: mpris-stub.py <art.png>
+# as the desktop user: mpris-stub.py <art.png or art URL> [page URL]
+# An art URL (http/https) is passed on as is, and a page URL as xesam:url: the
+# privacy check uses them to prove the shell doesn't download either.
 import sys
 import time
 
 from gi.repository import Gio, GLib
 
 ART = sys.argv[1] if len(sys.argv) > 1 else ""
+PAGE = sys.argv[2] if len(sys.argv) > 2 else ""
 PATH = "/org/mpris/MediaPlayer2"
 XML = """
 <node>
@@ -68,7 +71,9 @@ def meta(i):
         "xesam:album": GLib.Variant("s", "Harbor Lights"),
     }
     if ART:
-        m["mpris:artUrl"] = GLib.Variant("s", "file://" + ART)
+        m["mpris:artUrl"] = GLib.Variant("s", ART if ART.startswith(("http://", "https://")) else "file://" + ART)
+    if PAGE:
+        m["xesam:url"] = GLib.Variant("s", PAGE)
     return m
 
 

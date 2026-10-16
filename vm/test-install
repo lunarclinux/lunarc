@@ -417,7 +417,10 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     check "shell config has no errors"   "$hypr"' noctalia config validate 2>&1 | tail -3; noctalia config validate >/dev/null 2>&1'
     check "weather and location off by default" "$hypr"' noctalia config export | grep -A3 "^\[weather\]" | grep -q "enabled = false" && noctalia config export | grep -A3 "^\[location\]" | grep -q "auto_locate = false"'
     check "crash capture never looks up symbols online" "systemctl --user show -p Environment $id-crash-watch.service | grep -qE 'DEBUGINFOD_URLS=( |\$)'"
-    check "idle desktop connects nowhere unexpected" "$(sed -e "s/@ID@/$id/g" -e "s/@PW@/$password/g" "$here/checks/privacy-traffic.sh")"
+    "$here/ssh" "$vm" "$user" -- "cat > ~/mpris-stub.py" < "$here/checks/mpris-stub.py"
+    check "desktop connects nowhere unexpected (shell start, every panel, idle)" "$(sed -e "s/@ID@/$id/g" -e "s/@PW@/$password/g" "$here/checks/privacy-traffic.sh")"
+    check "community templates, remote art and icons, external IP and telemetry off" "$hypr"' c=$(noctalia config export); for k in enable_community_templates remote_art remote_icons external_ip_enabled telemetry_enabled; do grep -qE "^ *$k *= *false\$" <<<"$c" || { echo "$k not false"; exit 1; }; done'
+    check "NetworkManager's connectivity check is Arch's, as documented" "nm='org.freedesktop.NetworkManager /org/freedesktop/NetworkManager org.freedesktop.NetworkManager'; busctl get-property \$nm ConnectivityCheckEnabled; busctl get-property \$nm ConnectivityCheckUri | tee /dev/stderr | grep -qx 's \"http://ping.archlinux.org/nm-check.txt\"'"
     check "editor follows the theme"     "grep -q 'rendered by Noctalia' ~/.config/micro/colorschemes/noctalia.micro && ! grep -q '{{' ~/.config/micro/colorschemes/noctalia.micro"
     check "distro shell defaults applied" "$hypr"' noctalia config export | grep -qE "^polkit_agent *= *true"'
     check "clutter hidden from launcher"  "grep -q '^NoDisplay=true' /usr/local/share/applications/avahi-discover.desktop 2>/dev/null || grep -q '^NoDisplay=true' /usr/share/$id/xdg/applications/avahi-discover.desktop"

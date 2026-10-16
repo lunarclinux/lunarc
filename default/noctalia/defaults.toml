@@ -8,6 +8,7 @@
 font_family = "Geist"
 polkit_agent = true          # Noctalia's own password prompt, themed like the rest
 telemetry_enabled = false     # no usage ping to noctalia.dev
+external_ip_enabled = false   # the network tab doesn't look up your public address (api.noctalia.dev/ip)
 setup_wizard_enabled = false  # the distro applies its own theme and settings at first login
 # Frosted Terminal (decision record 0043): a 1px amber line along the top
 # inner edge of the bar, panels, launcher, OSD and toasts, and a faint sheen
@@ -31,6 +32,12 @@ launch_apps_as_systemd_services = true
 # sources). The manual's privacy page lists no exchange-rate downloads.
 [shell.launcher]
 fetch_exchange_rates = false
+
+# Cover art from a media player is shown only from a local file; art the
+# player names by web address (and YouTube thumbnails) isn't downloaded. An
+# option of the distro's build (pkg/noctalia, no-background-fetch.patch).
+[shell.mpris]
+remote_art = false
 
 [shell.panel]
 transparency_mode = "soft"
@@ -58,9 +65,11 @@ background_opacity = 0.80
 volume = false
 brightness = false
 
-# Notification cards: the popover fill (and amber border, above).
+# Notification cards: the popover fill (and amber border, above). An icon
+# given as a web address isn't downloaded (an option of the distro's build).
 [notification]
 background_opacity = 0.80
+remote_icons = false
 
 # After 5 minutes idle: lock, with the screensaver playing behind the lock
 # (`@DISTRO_ID@ lock --idle`; type the password to come back). Screens off at
@@ -96,6 +105,9 @@ enabled = true
 # theme`, default/hypr/look.lua).
 [theme.templates]
 enable_builtin_templates = true
+# Community templates come from api.noctalia.dev; turning them on in Settings ›
+# Templates fetches the catalog.
+enable_community_templates = false
 builtin_ids = ["ghostty", "alacritty", "kitty", "foot", "wezterm", "gtk3", "gtk4", "qt", "btop", "starship"]
 
 # Distro plugins ship read-only in /usr/share; Noctalia loads them from there.
