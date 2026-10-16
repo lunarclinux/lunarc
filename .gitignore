@@ -20,8 +20,9 @@ secring*
 # ...except the public package-signing key (pkg/keyring)
 !pkg/keyring/signing-key.asc
 
-# Package build output
+# Package build output (release builds; test builds)
 pkg/out/
+pkg/out-test/
 iso/out/
 
 # Website build output (tools/make-site)

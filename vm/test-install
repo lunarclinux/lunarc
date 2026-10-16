@@ -70,7 +70,8 @@ if [[ -z $iso ]]; then
   if [[ -x $repo/pkg/build ]] && git -C "$repo" cat-file -e "$ref:pkg/build" 2>/dev/null; then
     log "building packages"
     "$repo/pkg/build" "$ref" >/dev/null
-    tar -C "$repo" -czf - pkg/out/repo | "$here/ssh" "$vm" -- 'tar -xzf - -C /root/src'
+    # A test build (pkg/out-test), where the installer looks for packages.
+    tar -C "$repo/pkg/out-test" -czf - repo | "$here/ssh" "$vm" -- 'mkdir -p /root/src/pkg/out && tar -xzf - -C /root/src/pkg/out'
   fi
   "$here/ssh" "$vm" -- 'cat > /root/tester.pub' < "$key.pub"
 

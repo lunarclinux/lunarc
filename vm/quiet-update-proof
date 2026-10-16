@@ -36,7 +36,7 @@ git -C $Q -c user.name=t -c user.email=t@t commit -qam "TEMP test build (reverte
 for n in 1 2 3; do git -C $Q -c user.name=t -c user.email=t@t commit -q --allow-empty -m "TEMP version bump $n (reverted)"; done
 $Q/pkg/build >/dev/null 2>&1 || { echo "build failed"; }
 git -C $Q reset -q --hard HEAD~4
-pkg=$(ls $Q/pkg/out/repo/$id-0*.pkg.tar.zst | head -1); echo "built: ${pkg##*/}"
+pkg=$(ls $Q/pkg/out-test/repo/$id-0*.pkg.tar.zst | head -1); echo "built: ${pkg##*/}"
 scp_dest=$(vmsh 'echo $HOME')/
 "$V/ssh" distro-clean tester -- 'cat > /home/tester/new.pkg.tar.zst' < "$pkg"
 since=$(vmsh "date '+%Y-%m-%d %H:%M:%S'")

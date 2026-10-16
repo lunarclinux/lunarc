@@ -44,7 +44,7 @@ git -C "$Q" -c user.name=t -c user.email=t@t commit -qm "TEMP live-update test b
 for n in 1 2 3; do git -C "$Q" -c user.name=t -c user.email=t@t commit -q --allow-empty -m "TEMP version bump $n (reverted)"; done
 "$Q/pkg/build" >/dev/null 2>&1 || echo "build failed"
 git -C "$Q" reset -q --hard HEAD~4
-pkg=$(ls "$Q"/pkg/out/repo/"$id"-0*.pkg.tar.zst | head -1); echo "built: ${pkg##*/}"
+pkg=$(ls "$Q"/pkg/out-test/repo/"$id"-0*.pkg.tar.zst | head -1); echo "built: ${pkg##*/}"
 vmsh 'cat > /home/tester/new.pkg.tar.zst' < "$pkg"
 echo "installed before: $(vmsh "pacman -Q $id")"
 echo "before: service $(vmsh "systemctl --user is-active $id-update-test.service" 2>/dev/null); bind $(vmsh "$ENVS hyprctl binds -j | jq 'any(.[]; .description == \"Live update test bind\")'")"
