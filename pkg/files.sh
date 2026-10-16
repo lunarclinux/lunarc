@@ -170,6 +170,8 @@ case $part in
     # Network privacy: random Wi-Fi MAC per network, IPv6 privacy addresses,
     # the hostname not sent to DHCP servers.
     put "$src/etc/NetworkManager/privacy.conf" "$dest/etc/NetworkManager/conf.d/50-$id-privacy.conf"
+    # systemd-resolved (on only for encrypted DNS): no LLMNR or multicast DNS.
+    put "$src/etc/systemd/resolved.conf.d/privacy.conf" "$dest/usr/lib/systemd/resolved.conf.d/50-$id-privacy.conf"
     # fastfetch's system-wide defaults (it reads $XDG_CONFIG_DIRS): the crescent logo, theme colours.
     put "$src/default/branding/fastfetch.jsonc" "$dest/etc/xdg/fastfetch/config.jsonc"
     # greetd's own package owns /etc/greetd/config.toml, so ours lives beside it
