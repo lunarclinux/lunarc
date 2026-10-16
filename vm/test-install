@@ -236,6 +236,7 @@ if "$here/ssh" "$vm" "$user" -- "pacman -Q $id >/dev/null 2>&1"; then
   # or mDNS; on and off both coherent; printing discovery unaffected.
   check "DNS: no LLMNR or mDNS from resolved; encrypted on and off" "$(sed -e "s/@ID@/$id/g" -e "s/@PW@/$password/g" "$here/checks/dns.sh")"
   check "encrypted DNS off leaves no resolver config" "! grep -rqs DNSOverTLS /etc/systemd/resolved.conf.d && ! test -e /etc/NetworkManager/conf.d/90-$id-dns.conf"
+  check "manual installed, every menu link opens a page" "for p in getting-started look apps privacy troubleshooting verify; do test -s /usr/share/$id/doc/\$p.md || exit 1; done; n=0; for f in \$(grep -o '/usr/share/$id/doc/[a-z-]*\\.md' /usr/share/$id/default/menu/menu); do test -s \$f || { echo missing \$f; exit 1; }; n=\$((n + 1)); done; [ \$n = 6 ]"
   check "package files intact"          "pacman -Qkk $id 2>&1 | grep -q ', 0 altered files'"
   check "login screen uses distro config" "systemctl cat greetd | grep -q -- '--config /etc/greetd/$id.toml'"
   check "hidden apps dir in XDG_DATA_DIRS" "systemctl --user show-environment | grep -q '^XDG_DATA_DIRS=/usr/share/$id/xdg'"

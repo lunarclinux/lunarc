@@ -80,5 +80,5 @@ refused by default. `lunarc firewall allow <app or port>` opens one (`localsend`
 
 ## Getting help
 
-The menu's **System** group has this manual, `lunarc help`, and links to the Arch
+The menu's **System** group has this manual (each page), `lunarc help`, and links to the Arch
 Wiki, the Hyprland Wiki and the Noctalia docs. Most of the Arch Wiki applies to Lunarc.

@@ -152,9 +152,9 @@ case $part in
     put "$src/default/privacy/gschema.override" "$dest/usr/share/glib-2.0/schemas/90_$id.gschema.override"
     # New users' AI tool defaults outside ~/.config (Gemini CLI reads ~/.gemini).
     put "$src/default/privacy/gemini-settings.json" "$dest/etc/skel/.gemini/settings.json"
-    # The connection inventory and the getting-started guide (the menu's System › Manual).
-    put "$src/docs/manual/privacy.md" "$dest/usr/share/$id/doc/privacy.md"
-    put "$src/docs/manual/getting-started.md" "$dest/usr/share/$id/doc/getting-started.md"
+    # The manual (the menu's System › Manual items), with the connection
+    # inventory (privacy.md).
+    for page in "$src"/docs/manual/*.md; do put "$page" "$dest/usr/share/$id/doc/${page##*/}"; done
     # ~/.local/bin on PATH for shells.
     put "$src/etc/profile.d/local-bin.sh" "$dest/etc/profile.d/$id-local-bin.sh"
     # The same editor default for shells outside the desktop session (TTY, SSH).
