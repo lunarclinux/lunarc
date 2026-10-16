@@ -4,10 +4,9 @@
 <section class="pane notice" aria-labelledby="preview-title">
   <h2 id="preview-title" class="notice-title"><span class="badge">{{release.channel_label}}</span> This is a preview build</h2>
   <ul>
-    <li>It's unsupported: there is no help channel yet.</li>
     <li>Things will change between builds, including how the system is set up.</li>
     <li>Back up anything you care about before you install.</li>
-    <li>The installer either erases the whole disk, or keeps what's on it and creates Lunarc's own partitions in the free space. You choose which, and it asks before changing anything.</li>
+    <li>If you have at least 40GB of free space on a disk, you'll have the option to install in a new partition & dual boot or just install over the whole disk (please take care to back up any important files ahead of time!). Currently the installer won't help with partition or free space setup.</li>
   </ul>
 </section>
 
@@ -21,7 +20,7 @@
     <div><dt>Signature</dt><dd><a href="{{release.sig_url}}">{{release.sig_file}}</a></dd></div>
   </dl>
   <div class="actions">
-    <a class="btn btn-primary" href="{{release.url}}">Download the ISO <span class="dim-on-amber">{{release.size}}</span></a>
+    <a class="btn btn-primary" href="{{release.url}}">Download Lunarc {{release.version}} <span class="dim-on-amber">{{release.size}}</span></a>
     <a class="btn" href="{{release.sig_url}}">Signature</a>
   </div>
 </section>
