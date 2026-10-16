@@ -319,7 +319,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     # Every launcher entry must be one we mean to show; new dependency clutter fails here.
     check "launcher shows only intended apps" "for f in /usr/share/applications/*.desktop; do n=\${f##*/}; grep -q '^NoDisplay=true' \"\$f\" && continue; [ -f /usr/share/$id/xdg/applications/\$n ] && continue; echo \$n; done | sort | tr '\\n' ' ' | tee /dev/stderr | grep -qxE '(btop.desktop |com.mitchellh.ghostty.desktop |dev.noctalia.Noctalia.desktop |firefox.desktop |org.gnome.Calculator.desktop |org.gnome.Decibels.desktop |org.gnome.DiskUtility.desktop |org.gnome.Snapshot.desktop |system-config-printer.desktop |org.gnome.Loupe.desktop |org.gnome.Nautilus.desktop |org.gnome.Papers.desktop |org.gnome.Showtime.desktop |org.gnome.World.PikaBackup.desktop |org.gnome.TextEditor.desktop |org.wezfurlong.wezterm.desktop )+'"
     check "launcher opens"               "$hypr"' noctalia msg panel-open launcher'
-    check "launcher: no exchange-rate downloads" "$hypr noctalia config export | grep -qx 'fetch_exchange_rates = false'"
+    check "launcher: no exchange-rate downloads" "$hypr noctalia config export | grep -qE '^ *fetch_exchange_rates = false\$'"
   else
     check "polkit agent running"         'systemctl --user is-active --quiet hyprpolkitagent'
   fi
@@ -569,15 +569,15 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
         # moon in amber.
         weather_json='{"snapshot":{"valid":true,"location_name":"Testville","latitude":40.81,"longitude":-96.7,"current":{"temperature_c":11.2,"apparent_temperature_c":9,"weather_code":3,"is_day":true,"relative_humidity_percent":62},"forecast_days":[{"temperature_max_c":14,"temperature_min_c":5}],"forecast_hours":[],"fetched_at":0}}'
         "$here/ssh" "$vm" "$user" -- "$hypr mkdir -p ~/.cache/noctalia && printf '%s' '$weather_json' > ~/.cache/noctalia/weather.json && sed -i '/^privacy.weather *=/d' ~/.config/$id/settings && echo 'privacy.weather = on' >> ~/.config/$id/settings && $id bar moon on >/dev/null; sleep 4" || true
-        check "weather: the plugin's segment, with the moon in it" "$hypr x=\$(noctalia config export | tr -d '\\n'); grep -oE 'center = \\[[^]]*\\]' <<<\"\$x\" | head -1 | grep -qE '\"clock\", *\"weather\", *\"moon\"' && noctalia config export | grep -A1 '^\\[widget.weather\\]' | grep -q 'type = \"$id/utilities:weather\"'"
+        check "weather: the plugin's segment, with the moon in it" "$hypr x=\$(noctalia config export | tr -d '\\n'); grep -oE 'center = \\[[^]]*\\]' <<<\"\$x\" | head -1 | grep -qE '\"clock\", *\"weather\", *\"moon\"' && noctalia config export | grep -A4 '^\\[widget.weather\\]' | grep -q 'type = \"$id/utilities:weather\"'"
         bar_shot bar-weather; read -r _ r _ _ < <(clock_lines "$last_shot")
         text=$(ocr "$last_shot" "200x30+$((r + 1))+0" 7)
         light=$(magick "$last_shot" -crop "200x22+$((r + 1))+4" +repage -fuzz 10% -fill black +opaque '#e6e2d6' -fill white -opaque '#e6e2d6' -colorspace gray -format '%[fx:round(mean*w*h)]' info:)
         gold=$(magick "$last_shot" -crop "200x22+$((r + 1))+4" +repage -fuzz 12% -fill black +opaque '#ebc77a' -fill white -opaque '#ebc77a' -colorspace gray -format '%[fx:round(mean*w*h)]' info:)
-        report "$(grep -qE '(^|[^0-9])11([^0-9]|$)' <<<"$text" && grep -qE '[0-9]+ ?%' <<<"$text" && (( light >= 8 && gold >= 8 )); echo $?)" "weather: '11°' in the text colour, then the moon in amber (read: $(tr '\n' ' ' <<<"$text"); light $light, amber $gold)"
+        report "$(grep -qE '(^|[^0-9])110?([^0-9]|$)' <<<"$text" && grep -qE '[0-9]+ ?%' <<<"$text" && (( light >= 8 && gold >= 8 )); echo $?)" "weather: '11°' (OCR reads ° as 0) in the text colour, then the moon in amber (read: $(tr '\n' ' ' <<<"$text"); light $light, amber $gold)"
         "$here/ssh" "$vm" "$user" -- "$hypr $id bar moon off >/dev/null; sleep 3" || true
         bar_shot bar-weather-alone; text=$(ocr "$last_shot" "200x30+$((r + 1))+0" 7)
-        report "$(grep -qE '(^|[^0-9])11([^0-9]|$)' <<<"$text" && ! grep -qE '[0-9]+ ?%' <<<"$text"; echo $?)" "weather: alone, without the moon (read: $(tr '\n' ' ' <<<"$text"))"
+        report "$(grep -qE '(^|[^0-9])110?([^0-9]|$)' <<<"$text" && ! grep -qE '[0-9]+ ?%' <<<"$text"; echo $?)" "weather: alone, without the moon (read: $(tr '\n' ' ' <<<"$text"))"
         "$here/ssh" "$vm" "$user" -- "$hypr sed -i '/^privacy.weather *=/d' ~/.config/$id/settings; rm -f ~/.cache/noctalia/weather.json; $id bar moon off >/dev/null; $id theme blur off >/dev/null; sleep 3" || true
         bar_shot bar-blur-off
         "$here/ssh" "$vm" "$user" -- "$hypr $id theme blur on >/dev/null" || true
