@@ -94,7 +94,7 @@ sha256sums=('5418f6b759de96e56a4bbca809c5a4c60a8a9594bdf67ecb8c5a341f97c221d1'
             'f499c11d674575d48d131aa50de2d6b2744737dcea64e1c7e90a155b66310720'
             'cb64e1df7b805e89f76797912c1e7fa5e4f3e51d94983629ae4c84d1f6f0030f'
             'd60e97afd47a30d7b06bf05a14baf53be4a7bcc845ce6c24eff3f619bed296a1'
-            '2a39c54c351989fd3f2caff2abf26dc2681c0a68b13205c5ea06ba09597b9573')
+            '8af842019c69c0a80be6c240003445c536cd7be7c3d3981351eab1674d9fce3f')
 
 _archive=https://archive.archlinux.org/packages
 _buildlibs=(libqalculate-5.13.2-1-x86_64 libical-4.0.6-1-x86_64

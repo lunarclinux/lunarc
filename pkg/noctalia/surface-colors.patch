@@ -65,7 +65,7 @@ index b008d45..3b1f64b 100644
      card.setAlign(FlexAlign::Stretch);
      card.setGap(Style::spaceSm * scale);
 diff --git i/src/ui/controls/button.cpp w/src/ui/controls/button.cpp
-index 8ad2653..fc68950 100644
+index 8ad2653..a4e9da1 100644
 --- i/src/ui/controls/button.cpp
 +++ w/src/ui/controls/button.cpp
 @@ -36,7 +36,8 @@ namespace {
@@ -78,6 +78,17 @@ index 8ad2653..fc68950 100644
                colorSpecFromRole(ColorRole::OnSurface)
            ),
            .hover =
+@@ -594,7 +595,9 @@ void Button::applyColors(const Color& bg, const Color& border, const Color& labe
+   if (m_badge != nullptr) {
+     m_badge->setFill(Color{label.r, label.g, label.b, label.a * 0.85F});
+     if (m_badgeLabel != nullptr) {
+-      m_badgeLabel->setColor(bg);
++      // A see-through button fill (button_color) would leave the figure invisible
++      // on the badge: use the surface colour then.
++      m_badgeLabel->setColor(bg.a >= 0.5F ? bg : colorForRole(ColorRole::Surface));
+     }
+   }
+   m_visualStateInitialized = true;
 diff --git i/src/ui/palette.cpp w/src/ui/palette.cpp
 index d2f01b5..0d08a36 100644
 --- i/src/ui/palette.cpp
