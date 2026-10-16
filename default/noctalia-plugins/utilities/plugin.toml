@@ -5,7 +5,7 @@ plugin_api = 32
 author = "@DISTRO_ID@"
 license = "GPL-3.0-or-later"
 icon = "tool"
-description = "The bar's segments (menu button, workspaces, media, clock, moon, stats) and toggles (stay awake, night light, Low Gravity, silence, reminders, recording, dictation), the menu (SUPER+Space), now playing and the volume display."
+description = "The bar's segments (menu button, workspaces, media, clock, moon, weather, stats) and toggles (stay awake, night light, Low Gravity, silence, reminders, recording, dictation), the menu (SUPER+Space), now playing and the volume display."
 tags = ["system"]
 
 # The bar's own segments (Frosted Terminal, decision record 0043), drawn
@@ -33,6 +33,12 @@ entry = "clock.luau"
 [[widget]]
 id = "moon"
 entry = "moon.luau"
+
+# Opt-in (`@DISTRO_ID@ privacy weather on`): Noctalia's weather reading as a
+# segment, with the moon in it when that is on too.
+[[widget]]
+id = "weather"
+entry = "weather.luau"
 
 # CPU, memory, network, battery: an icon with a popover, or inline
 # (`@DISTRO_ID@ bar stats`).

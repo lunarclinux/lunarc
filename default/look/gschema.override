@@ -1,0 +1,9 @@
+# App fonts in the desktop's faces (Frosted Terminal, decision record 0043):
+# GTK apps (Files, Text Editor, the keyring and other prompts) use Geist, as
+# the shell's panels do, and Geist Mono where they ask for a monospace face.
+# Defaults only: a font chosen in an app or with gsettings still wins.
+# Compiled by glib2's pacman hook.
+[org.gnome.desktop.interface]
+font-name='Geist 11'
+document-font-name='Geist 11'
+monospace-font-name='Geist Mono 11'

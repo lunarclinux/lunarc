@@ -125,6 +125,18 @@ expect "blur off" run_theme blur off
 expect "blur off in the look" look_is 't.blur == false'
 expect "blur refuses other values" refuses blur maybe
 run_theme shape terminal >/dev/null; run_theme blur on >/dev/null
+# Noctalia's look file and bar block, written with the look: the popovers'
+# border, and the design's cards and buttons inside them.
+nlook=$work/config/noctalia/00-$DISTRO_ID-look.toml
+nconfig=$work/config/noctalia/config.toml
+expect "noctalia look: popover border from the tokens" grep -qx 'border_color = "#ebc77a61"' "$nlook"
+expect "noctalia look: cards bg.deep at 55%, divider outline" bash -c "grep -qx 'card_color = \"#070b178c\"' '$nlook' && grep -qx 'card_border_color = \"#e6e2d61f\"' '$nlook'"
+expect "noctalia look: buttons text at 6%, outline at 18%" bash -c "grep -qx 'button_color = \"#e6e2d60f\"' '$nlook' && grep -qx 'button_border_color = \"#e6e2d62e\"' '$nlook'"
+expect "bar: the pane fill in dark mode" grep -qx 'background_opacity = 0.52' "$nconfig"
+printf 'theme = moonlit\ntheme.mode = light\n' > "$work/config/$DISTRO_ID/settings"
+run_theme tokens >/dev/null
+expect "bar: less see-through in light mode" grep -qx 'background_opacity = 0.85' "$nconfig"
+expect "noctalia look: light cards from the light tokens" grep -qx 'card_color = "#f7f5f08c"' "$nlook"
 expect "theme token refuses a missing path" refuses token color.nothing
 printf 'theme = nord\ntheme.mode = dark\n' > "$work/config/$DISTRO_ID/settings"
 expect "another theme's tokens follow the setting" run_theme tokens

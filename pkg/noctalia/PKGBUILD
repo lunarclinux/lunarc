@@ -1,5 +1,5 @@
 # The desktop shell (bar, launcher, panels, notifications, OSD, lock screen),
-# built from the same release and checksum as Arch's own package, with four
+# built from the same release and checksum as Arch's own package, with five
 # patches of ours (decision record 0043). Arch's PKGBUILD for 5.2.1-1 is the model: same
 # source, dependencies, meson options and files.
 #
@@ -30,6 +30,13 @@
 # isn't enough they give way whole, the first first. Others are never changed,
 # so only they can still be cut.
 #
+# surface-colors.patch (ours): [shell] card_color and card_border_color set the
+# fill and outline of the control center's section cards, button_color and
+# button_border_color those of default buttons (the quick-settings tiles among
+# them); upstream they are always the surface_variant and outline roles. The
+# distro writes them from the theme's tokens, so the cards read as the
+# design's dark inset cards and the buttons as hairline outlines.
+#
 # epoch=1, so this build always counts as newer than Arch's noctalia: the
 # distro's repository is listed after Arch's, and pacman takes a package from
 # the first repository that has it, so with the same version Arch's would
@@ -55,11 +62,13 @@
 # plugin_manifest.{h,cpp}, application_plugins.cpp and plugin_panel.{h,cpp};
 # the border, config_types.h, config_schema.cpp, panel_surface_style.h and the
 # two panel hosts; the fit, bar.cpp, widget.h, label.h, active_window_widget.cpp
-# and plugin_widget.{h,cpp}),
+# and plugin_widget.{h,cpp}; the surface colours, palette.{h,cpp},
+# config_types.h, config_schema.cpp, application_services.cpp, the control
+# center's tab.cpp and button.cpp),
 # and the pinned build libraries; reset pkgrel.
 pkgname=noctalia
 pkgver=5.2.1
-pkgrel=5
+pkgrel=6
 epoch=1
 pkgdesc='A sleek, customizable desktop shell crafted for Wayland (with a top-edge highlight patch)'
 arch=(x86_64)
@@ -78,12 +87,14 @@ source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz"
         top-highlight.patch
         plugin-panel-frame.patch
         panel-border.patch
-        bar-fit.patch)
+        bar-fit.patch
+        surface-colors.patch)
 sha256sums=('5418f6b759de96e56a4bbca809c5a4c60a8a9594bdf67ecb8c5a341f97c221d1'
             'baafe5aff5cbbf08d09ea0f39dac475345f99778ca603d5c3a1099f0abd85af6'
             'f499c11d674575d48d131aa50de2d6b2744737dcea64e1c7e90a155b66310720'
             'cb64e1df7b805e89f76797912c1e7fa5e4f3e51d94983629ae4c84d1f6f0030f'
-            'd60e97afd47a30d7b06bf05a14baf53be4a7bcc845ce6c24eff3f619bed296a1')
+            'd60e97afd47a30d7b06bf05a14baf53be4a7bcc845ce6c24eff3f619bed296a1'
+            '8af842019c69c0a80be6c240003445c536cd7be7c3d3981351eab1674d9fce3f')
 
 _archive=https://archive.archlinux.org/packages
 _buildlibs=(libqalculate-5.13.2-1-x86_64 libical-4.0.6-1-x86_64
@@ -119,6 +130,7 @@ prepare() {
   patch -d "$pkgname-$pkgver" -p1 < plugin-panel-frame.patch
   patch -d "$pkgname-$pkgver" -p1 < panel-border.patch
   patch -d "$pkgname-$pkgver" -p1 < bar-fit.patch
+  patch -d "$pkgname-$pkgver" -p1 < surface-colors.patch
   rm -rf buildlibs
   _have_buildlibs && return 0
   # /.arch-chroot: devtools' clean chroot, where depends and makedepends are installed.

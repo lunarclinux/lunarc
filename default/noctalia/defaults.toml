@@ -26,6 +26,12 @@ surface_sheen = true
 # opened.
 launch_apps_as_systemd_services = true
 
+# The launcher's calculator converts currencies with the rates it has; it
+# doesn't download new ones (it would on every start, from libqalculate's
+# sources). The manual's privacy page lists no exchange-rate downloads.
+[shell.launcher]
+fetch_exchange_rates = false
+
 [shell.panel]
 transparency_mode = "soft"
 control_center_placement = "floating"
@@ -225,11 +231,18 @@ left = "panel-toggle control-center calendar"
 type = "@DISTRO_ID@/utilities:moon"
 capsule = false
 
+# The weather as one of the bar's segments (`☁ 52°`, and `· ◐ 62%` when the
+# moon is on too): the plugin's, reading Noctalia's weather reading. Noctalia's
+# own widget is still there as type "weather". Click: the weather tab.
 [widget.weather]
-show_condition = false
-capsule_padding = 12
+type = "@DISTRO_ID@/utilities:weather"
+capsule = false
 
-# After the weather when the moon is off (the moon draws its own).
+[widget.weather.actions]
+left = "panel-toggle control-center weather"
+
+# Was after Noctalia's weather widget; kept for bar blocks written before the
+# weather segment, until `@DISTRO_ID@` rewrites them.
 [widget.weather-divider]
 type = "@DISTRO_ID@/utilities:divider"
 capsule = false

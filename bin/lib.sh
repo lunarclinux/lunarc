@@ -169,28 +169,47 @@ launch_app() {
   exec "$@"
 }
 
+# A token colour ("#rrggbb" or "rgba(r, g, b, a)") as Noctalia's #rrggbbaa,
+# optionally at another alpha. Nothing (and failure) without the token.
+token_hex() { # token_hex <path> [alpha]
+  local v
+  v=$(token "$1" 2>/dev/null) || return 1
+  v=$(sed -nE 's/^#([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$/\1 \2 \3/p; s/^rgba\(([0-9]+), *([0-9]+), *([0-9]+), *([0-9.]+)\)$/\1 \2 \3 \4/p' <<<"$v")
+  [[ -n $v ]] || return 1
+  if [[ $v =~ ^[0-9a-fA-F]{2}\ [0-9a-fA-F]{2}\ [0-9a-fA-F]{2}$ ]]; then
+    read -r r g b <<<"$v"; v="$((16#$r)) $((16#$g)) $((16#$b)) 1"
+  fi
+  awk -v a="${2:-}" '{ if (a != "") $4 = a; printf "#%02x%02x%02x%02x\n", $1, $2, $3, int($4 * 255 + 0.5) }' <<<"$v"
+}
+
 # Noctalia's panels, displays and notification cards as Frosted Terminal
 # popovers (decision record 0043): their border in the theme's border.popover
 # (an option of the distro's Noctalia build for panels), and corners for the
 # shape (the corner scale gives the panels the shape's panelRadius; Noctalia's
-# is 12 at scale 1, and the buttons and cards inside follow). Noctalia's
-# config colours are roles or hex, so this is written from the tokens, to a
-# file of its own in Noctalia's config folder that loads before config.toml
-# (files load in name order and later ones win): anything set in config.toml
-# still wins over it.
+# is 12 at scale 1, and the buttons and cards inside follow). Inside them, the
+# design's cards and buttons (options of the distro's build too): cards are
+# bg.deep at 55% with a divider-coloured outline, buttons the text colour at 6%
+# with an 18% outline, rather than the palette's lighter surface_variant.
+# Noctalia's config colours are roles or hex, so this
+# is written from the tokens, to a file of its own in Noctalia's config folder
+# that loads before config.toml (files load in name order and later ones win):
+# anything set in config.toml still wins over it.
 look_apply() {
   local dir=${XDG_CONFIG_HOME:-$HOME/.config}/noctalia radius=12 border='#ebc77a61' v tmp
+  local card='#070b178c' card_border='#e6e2d61f' button='#e6e2d60f' button_border='#e6e2d62e'
   [[ $(setting theme.shape terminal) == rounded ]] && radius=16
   v=$(token "geometry.current.panelRadius" 2>/dev/null) && [[ $v =~ ^[0-9]+$ ]] && radius=$v
-  v=$(token color.border.popover 2>/dev/null | sed -nE 's/^rgba\(([0-9]+), *([0-9]+), *([0-9]+), *([0-9.]+)\)$/\1 \2 \3 \4/p' || true)
-  if [[ -n $v ]]; then
-    border=$(awk '{ printf "#%02x%02x%02x%02x", $1, $2, $3, int($4 * 255 + 0.5) }' <<<"$v")
-  fi
+  v=$(token_hex color.border.popover) && border=$v
+  v=$(token_hex color.bg.deep 0.55) && card=$v
+  v=$(token_hex color.border.divider) && card_border=$v
+  v=$(token_hex color.text.primary 0.06) && button=$v
+  v=$(token_hex color.text.primary 0.18) && button_border=$v
   mkdir -p "$dir"
   rm -f "$dir/00-$DISTRO_ID-shape.toml"
   tmp=$(mktemp "$dir/.look.XXXXXX")
-  printf '# Written by `%s theme` from the theme and shape; rewritten when they change.\n# Your own settings go in config.toml, which wins over this file.\n[shell]\ncorner_radius_scale = %s\n\n[shell.panel]\nborder_color = "%s"\n\n[osd]\nborder_color = "%s"\n\n[notification]\nborder_color = "%s"\n' \
-    "$DISTRO_ID" "$(awk -v r="$radius" 'BEGIN { printf "%.3f", r / 12 }')" "$border" "$border" "$border" > "$tmp" \
+  printf '# Written by `%s theme` from the theme and shape; rewritten when they change.\n# Your own settings go in config.toml, which wins over this file.\n[shell]\ncorner_radius_scale = %s\ncard_color = "%s"\ncard_border_color = "%s"\nbutton_color = "%s"\nbutton_border_color = "%s"\n\n[shell.panel]\nborder_color = "%s"\n\n[osd]\nborder_color = "%s"\n\n[notification]\nborder_color = "%s"\n' \
+    "$DISTRO_ID" "$(awk -v r="$radius" 'BEGIN { printf "%.3f", r / 12 }')" "$card" "$card_border" "$button" "$button_border" \
+    "$border" "$border" "$border" > "$tmp" \
     && mv "$tmp" "$dir/00-$DISTRO_ID-look.toml" || rm -f "$tmp"
 }
 
@@ -204,7 +223,7 @@ bar_apply() {
   look_apply
   local config=${XDG_CONFIG_HOME:-$HOME/.config}/noctalia/config.toml start center
   local begin="# >>> $DISTRO_ID bar" end="# <<< $DISTRO_ID bar"
-  local thickness=30 inset=0 radius=0 hairline='#e6e2d621' v
+  local thickness=30 inset=0 radius=0 hairline='#e6e2d621' opacity=0.52 v
   mkdir -p "${config%/*}"; touch "$config"
   sed -i "\|^$begin\$|,\|^$end\$|d" "$config"
   # The older workspaces-style block this replaces.
@@ -216,12 +235,14 @@ bar_apply() {
   start='["menu", "workspaces", "window", "media"]'
   if [[ $(setting bar.workspaces moon) == noctalia ]]; then start='["menu", "workspaces-noctalia", "window", "media"]'; fi
   center='["toggles", "stay-awake", "night-light", "gravity", "silence", "reminders", "recorder", "dictate", "clock"'
+  # With both on, the weather segment shows the moon too and the moon's hides.
   if [[ $(setting privacy.weather off) == on ]]; then center+=', "weather"'; fi
-  if [[ $(setting bar.moon off) == on ]]; then center+=', "moon"'
-  elif [[ $(setting privacy.weather off) == on ]]; then center+=', "weather-divider"'
-  fi
+  if [[ $(setting bar.moon off) == on ]]; then center+=', "moon"'; fi
   center+=']'
   if [[ $(setting theme.shape terminal) == rounded ]]; then thickness=34 inset=8 radius=17; fi
+  # Light mode: less see-through. Its text is dark, and the wallpaper behind
+  # the bar often isn't (Moonlit's night sky), which left it muddy and faint.
+  if [[ $(setting theme.mode dark) == light ]]; then opacity=0.85; fi
   v=$(token "geometry.current.barHeight" 2>/dev/null) && [[ $v =~ ^[0-9]+$ ]] && thickness=$v
   v=$(token "geometry.current.barInset" 2>/dev/null) && [[ $v =~ ^[0-9]+$ ]] && inset=$v
   v=$(token "geometry.current.barRadius" 2>/dev/null) && [[ $v =~ ^[0-9]+$ ]] && radius=$v
@@ -229,6 +250,6 @@ bar_apply() {
   if [[ -n $v ]]; then
     hairline=$(awk '{ printf "#%02x%02x%02x%02x", $1, $2, $3, int($4 * 255 + 0.5) }' <<<"$v")
   fi
-  printf '%s\n# Written by `%s` from its settings (shape, workspaces style, moon, weather)\n# and the theme; rewritten when they change.\n[bar.default]\nstart = %s\ncenter = %s\nthickness = %s\nmargin_edge = %s\nmargin_ends = %s\nradius = %s\nborder = "%s"\n%s\n' \
-    "$begin" "$DISTRO_ID" "$start" "$center" "$thickness" "$inset" "$inset" "$radius" "$hairline" "$end" >> "$config"
+  printf '%s\n# Written by `%s` from its settings (shape, workspaces style, moon, weather)\n# and the theme; rewritten when they change.\n[bar.default]\nstart = %s\ncenter = %s\nthickness = %s\nmargin_edge = %s\nmargin_ends = %s\nradius = %s\nborder = "%s"\nbackground_opacity = %s\n%s\n' \
+    "$begin" "$DISTRO_ID" "$start" "$center" "$thickness" "$inset" "$inset" "$radius" "$hairline" "$opacity" "$end" >> "$config"
 }

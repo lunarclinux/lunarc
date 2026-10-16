@@ -319,6 +319,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     # Every launcher entry must be one we mean to show; new dependency clutter fails here.
     check "launcher shows only intended apps" "for f in /usr/share/applications/*.desktop; do n=\${f##*/}; grep -q '^NoDisplay=true' \"\$f\" && continue; [ -f /usr/share/$id/xdg/applications/\$n ] && continue; echo \$n; done | sort | tr '\\n' ' ' | tee /dev/stderr | grep -qxE '(btop.desktop |com.mitchellh.ghostty.desktop |dev.noctalia.Noctalia.desktop |firefox.desktop |org.gnome.Calculator.desktop |org.gnome.Decibels.desktop |org.gnome.DiskUtility.desktop |org.gnome.Snapshot.desktop |system-config-printer.desktop |org.gnome.Loupe.desktop |org.gnome.Nautilus.desktop |org.gnome.Papers.desktop |org.gnome.Showtime.desktop |org.gnome.World.PikaBackup.desktop |org.gnome.TextEditor.desktop |org.wezfurlong.wezterm.desktop )+'"
     check "launcher opens"               "$hypr"' noctalia msg panel-open launcher'
+    check "launcher: no exchange-rate downloads" "$hypr noctalia config export | grep -qE '^ *fetch_exchange_rates = false\$'"
   else
     check "polkit agent running"         'systemctl --user is-active --quiet hyprpolkitagent'
   fi
@@ -369,6 +370,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     check "terminal theme generated"      'test -s ~/.config/ghostty/themes/noctalia'
     check "Hyprland borders from theme"   "$hypr grep -q 'ebc77acc' ~/.config/$id/hypr/look.lua && hyprctl getoption general:col.active_border | grep -qi ccebc77a && ! test -e ~/.config/hypr/noctalia.lua"
     check "GTK follows theme"             'test -s ~/.config/gtk-4.0/noctalia.css && [ "$(gsettings get org.gnome.desktop.interface icon-theme)" = "'"'"'Papirus-Dark'"'"'" ]'
+    check "apps in the desktop's fonts (GTK, Qt)" "[ \"\$(gsettings get org.gnome.desktop.interface font-name)\" = \"'Geist 11'\" ] && [ \"\$(gsettings get org.gnome.desktop.interface monospace-font-name)\" = \"'Geist Mono 11'\" ] && grep -q '^general=\"Geist,11' ~/.config/qt6ct/qt6ct.conf"
     check "default terminal is ghostty"   "$id terminal list | grep -qE '^\* ghostty +installed'"
     # Design tokens (decision record 0043): the current theme's, as a file; Moonlit's are the design's own.
     tok_hash() { git -C "$repo" show "$ref:$1" | jq -cS "${2:-.}" | sed "s/@DISTRO_NAME@/$name/" | sha256sum | cut -d' ' -f1; }
@@ -561,7 +563,22 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
         bar_shot bar-moon; read -r _ r _ _ < <(clock_lines "$last_shot")
         text=$(ocr "$last_shot" "160x30+$((r + 1))+0" 7)
         report "$(grep -qE '[0-9]+ ?%' <<<"$text"; echo $?)" "moon: its segment shows right of the clock (read: $(tr '\n' ' ' <<<"$text"))"
-        "$here/ssh" "$vm" "$user" -- "$hypr $id bar moon off >/dev/null; $id theme blur off >/dev/null; sleep 3" || true
+        # The weather (opt-in): the plugin's segment, reading Noctalia's cached
+        # reading (planted here: nothing is looked up), `☁ 11° · ◐ 62%` with the
+        # moon on, in the bar's colours: the temperature in the text colour, the
+        # moon in amber.
+        weather_json='{"snapshot":{"valid":true,"location_name":"Testville","latitude":40.81,"longitude":-96.7,"current":{"temperature_c":11.2,"apparent_temperature_c":9,"weather_code":3,"is_day":true,"relative_humidity_percent":62},"forecast_days":[{"temperature_max_c":14,"temperature_min_c":5}],"forecast_hours":[],"fetched_at":0}}'
+        "$here/ssh" "$vm" "$user" -- "$hypr mkdir -p ~/.cache/noctalia && printf '%s' '$weather_json' > ~/.cache/noctalia/weather.json && sed -i '/^privacy.weather *=/d' ~/.config/$id/settings && echo 'privacy.weather = on' >> ~/.config/$id/settings && $id bar moon on >/dev/null; sleep 4" || true
+        check "weather: the plugin's segment, with the moon in it" "$hypr x=\$(noctalia config export | tr -d '\\n'); grep -oE 'center = \\[[^]]*\\]' <<<\"\$x\" | head -1 | grep -qE '\"clock\", *\"weather\", *\"moon\"' && noctalia config export | grep -A4 '^\\[widget.weather\\]' | grep -q 'type = \"$id/utilities:weather\"'"
+        bar_shot bar-weather; read -r _ r _ _ < <(clock_lines "$last_shot")
+        text=$(ocr "$last_shot" "200x30+$((r + 1))+0" 7)
+        light=$(magick "$last_shot" -crop "200x22+$((r + 1))+4" +repage -fuzz 10% -fill black +opaque '#e6e2d6' -fill white -opaque '#e6e2d6' -colorspace gray -format '%[fx:round(mean*w*h)]' info:)
+        gold=$(magick "$last_shot" -crop "200x22+$((r + 1))+4" +repage -fuzz 12% -fill black +opaque '#ebc77a' -fill white -opaque '#ebc77a' -colorspace gray -format '%[fx:round(mean*w*h)]' info:)
+        report "$(grep -qE '(^|[^0-9])110?([^0-9]|$)' <<<"$text" && grep -qE '[0-9]+ ?%' <<<"$text" && (( light >= 8 && gold >= 8 )); echo $?)" "weather: '11°' (OCR reads ° as 0) in the text colour, then the moon in amber (read: $(tr '\n' ' ' <<<"$text"); light $light, amber $gold)"
+        "$here/ssh" "$vm" "$user" -- "$hypr $id bar moon off >/dev/null; sleep 3" || true
+        bar_shot bar-weather-alone; text=$(ocr "$last_shot" "200x30+$((r + 1))+0" 7)
+        report "$(grep -qE '(^|[^0-9])110?([^0-9]|$)' <<<"$text" && ! grep -qE '[0-9]+ ?%' <<<"$text"; echo $?)" "weather: alone, without the moon (read: $(tr '\n' ' ' <<<"$text"))"
+        "$here/ssh" "$vm" "$user" -- "$hypr sed -i '/^privacy.weather *=/d' ~/.config/$id/settings; rm -f ~/.cache/noctalia/weather.json; $id bar moon off >/dev/null; $id theme blur off >/dev/null; sleep 3" || true
         bar_shot bar-blur-off
         "$here/ssh" "$vm" "$user" -- "$hypr $id theme blur on >/dev/null" || true
       else
@@ -720,6 +737,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       # clicks from the VM's USB tablet and real keys; where each one landed
       # is read from screenshots taken with and without it.
       check "popovers: Noctalia's panels styled, corners follow the shape" "$hypr x=\$(noctalia config export); grep -qi 'border_color = \"#ebc77a61' <<<\"\$x\" && grep -q 'transparency_mode = \"soft\"' <<<\"\$x\" && grep -q 'sidebar_section = \"none\"' <<<\"\$x\" && grep -qx 'corner_radius_scale = 1.000' ~/.config/noctalia/00-$id-look.toml && $id theme shape rounded >/dev/null && grep -qx 'corner_radius_scale = 1.333' ~/.config/noctalia/00-$id-look.toml && sleep 1 && noctalia config export | grep -q 'corner_radius_scale = 1.33'; rc=\$?; $id theme shape terminal >/dev/null; exit \$rc"
+      check "panels: the design's cards and buttons (dark inset cards, hairline buttons)" "$hypr x=\$(noctalia config export); grep -qi 'card_color = \"#070b178c' <<<\"\$x\" && grep -qi 'card_border_color = \"#e6e2d61f' <<<\"\$x\" && grep -qi 'button_color = \"#e6e2d60f' <<<\"\$x\" && grep -qi 'button_border_color = \"#e6e2d62e' <<<\"\$x\""
       check "popovers: the migration writes the look file on older installs" "$hypr rm -f ~/.config/noctalia/00-$id-look.toml && sed -i '/frosted-popovers/d' ~/.local/state/$id/migrations-applied && $id migrate --user >/dev/null && grep -q '^corner_radius_scale' ~/.config/noctalia/00-$id-look.toml"
       if command -v magick >/dev/null && command -v tesseract >/dev/null; then
         dbus="export DBUS_SESSION_BUS_ADDRESS=unix:path=\$XDG_RUNTIME_DIR/bus;"
@@ -759,6 +777,10 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
         shot calendar; read -r bw bh bx by < <(popover_box "$last_shot" "$rest") || true
         report "$(( ${bw:-0} > 300 && bw < 640 && by >= 34 && by <= 48 ? 0 : 1 ))" "calendar: under the bar, without the tab list (${bw:-?}x${bh:-?} at ${bx:-?},${by:-?})"
         report "$(centred_under "${bw:-0}" "${bx:-0}" "$((sw / 2))"; echo $?)" "calendar: centred under the clock"
+        # Its cards are the design's dark inset cards: none of the palette's
+        # lighter surface_variant (Moonlit #1d2742) that Noctalia fills them with.
+        variant=$(magick "$last_shot" -crop "${bw:-1}x${bh:-1}+${bx:-0}+${by:-0}" +repage -fuzz 3% -fill black +opaque '#1d2742' -fill white -opaque '#1d2742' -colorspace gray -format '%[fx:round(mean*w*h)]' info: 2>/dev/null || echo -1)
+        report "$(( variant >= 0 && variant < 400 ? 0 : 1 ))" "calendar: dark inset cards, not surface_variant ($variant px of it)"
         month=$("$here/ssh" "$vm" "$user" -- "date +%B")
         text=$(read_text "$last_shot" "${bw:-600}x${bh:-400}+${bx:-340}+${by:-38}")
         report "$(grep -qi "$month" <<<"$text"; echo $?)" "calendar: shows this month ($month; read: $(head -c 80 <<<"$text"))"
