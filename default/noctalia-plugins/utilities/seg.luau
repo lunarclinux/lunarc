@@ -11,6 +11,10 @@ M.DIVIDER = "on_surface/0.12"
 M.MUTED = "on_surface_variant"
 M.FAINT = "on_surface_variant/0.55"
 M.TINT = "primary/0.2"
+-- Icons that aren't lit. Noctalia keeps a prop's old value when a render
+-- leaves it out, so lit/unlit and on/off props are always set explicitly.
+M.ICON = "on_surface_variant"
+M.CLEAR = "#00000000"
 
 local function num(path, fallback)
   local ok, v = pcall(noctalia.getSetting, path)
@@ -40,7 +44,7 @@ function M.segment(props, children)
     paddingH = props.paddingH or 10, flexGrow = 1 }, children)
   return ui.column({
     key = props.key, gap = 0, height = h, minWidth = props.minWidth,
-    fill = props.active and M.TINT or props.fill,
+    fill = props.active and M.TINT or props.fill or M.CLEAR,
     onClick = props.onClick, onHover = props.onHover, tooltip = props.tooltip,
   }, {
     ui.box({ height = 2, fill = "#00000000" }),

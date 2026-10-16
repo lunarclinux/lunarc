@@ -10,7 +10,7 @@ local on = false
 local everywhere = false
 
 local function render()
-  toggle.show({ ui.glyph({ name = on and "feather-filled" or "feather", color = on and "primary" or nil }) }, on)
+  toggle.show({ ui.glyph({ name = on and "feather-filled" or "feather", color = on and "primary" or "on_surface_variant" }) }, on)
   local scope = everywhere and "every workspace" or "this workspace"
   barWidget.setTooltip(on and ("Low Gravity: on (" .. scope .. ")\nClick to tile again")
     or "Low Gravity: off (this workspace)\nClick to float the windows")

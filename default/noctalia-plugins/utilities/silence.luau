@@ -5,7 +5,7 @@ local toggle = require("./toggle.luau").new(barWidget, "silence")
 local silenced = false
 
 local function render()
-  toggle.show({ ui.glyph({ name = silenced and "bell-off" or "bell", color = silenced and "primary" or nil }) }, silenced)
+  toggle.show({ ui.glyph({ name = silenced and "bell-off" or "bell", color = silenced and "primary" or "on_surface_variant" }) }, silenced)
   barWidget.setTooltip(silenced and "Notifications silenced" or "Silence notifications")
 end
 
