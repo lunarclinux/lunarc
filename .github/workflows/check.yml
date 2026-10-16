@@ -1,10 +1,33 @@
-# Lint and package build on every push and pull request. The VM install test
-# (vm/test-install) needs KVM and runs locally.
+# Lint and package build when the OS changes. The VM install test
+# (vm/test-install) needs KVM and runs locally. The website has its own
+# workflow (site.yml); changes only to it, or only to design notes and
+# decision records, don't run this. The manual is part of the OS (installed
+# on every system) and runs both.
 name: check
 
 on:
   push:
+    paths:
+      - "**"
+      - "!site/**"
+      - "!tools/make-site"
+      - "!tools/deploy-site"
+      - "!tools/preview-site"
+      - "!tools/publish-iso"
+      - "!.github/workflows/site.yml"
+      - "!docs/**"
+      - "docs/manual/**"
   pull_request:
+    paths:
+      - "**"
+      - "!site/**"
+      - "!tools/make-site"
+      - "!tools/deploy-site"
+      - "!tools/preview-site"
+      - "!tools/publish-iso"
+      - "!.github/workflows/site.yml"
+      - "!docs/**"
+      - "docs/manual/**"
 
 jobs:
   lint:

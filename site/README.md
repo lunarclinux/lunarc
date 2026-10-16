@@ -127,3 +127,16 @@ ever outgrows the size limit (mostly images), move the files to Static Assets:
   signing key (a clean-chroot build; decision record 0044).
 - `downloads.lunarclinux.com`: the R2 bucket for ISOs (being set up). The site links
   there; no page loads anything from it.
+
+## CI/CD
+
+`.github/workflows/site.yml` runs when the site, the manual (docs/manual, which
+the Docs pages are made from) or the site tools change: it builds the site,
+runs `node site/smoke.mjs` (every page answers, redirects, the 404, http to
+https, the security headers, nothing loaded from other servers) and, on a push
+to main, deploys with `tools/deploy-site`. Deploying needs the repository
+secret `CLOUDFLARE_SITE_TOKEN` (a token with only Workers Scripts: Edit);
+without it that step is skipped. The OS workflow (check.yml) ignores site-only
+changes, and this one ignores OS-only changes.
+
+Preview locally: `tools/preview-site` (a rootless Podman container).

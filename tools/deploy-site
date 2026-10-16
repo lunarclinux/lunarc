@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds the website and deploys it to the Cloudflare Worker that serves
 # the distro's website (site/README.md). Uses the Cloudflare API token in
-# ~/.config/cloudflare-<id>-token (Workers Scripts: Edit).
+# ~/.config/cloudflare-<id>-token (Workers Scripts: Edit), or $CLOUDFLARE_API_TOKEN.
 #
 #   tools/deploy-site [--dry-run]
 set -euo pipefail
@@ -18,8 +18,13 @@ worker=$root/site/dist/worker.js
 echo "deploy-site: $(du -h "$worker" | cut -f1) worker, built from $(git -C "$root" rev-parse --short HEAD)"
 if [[ ${1:-} == --dry-run ]]; then exit 0; fi
 
-[[ -r $token_file ]] || fail "no Cloudflare token in $token_file"
-curl -fsS -X PUT -H "Authorization: Bearer $(<"$token_file")" \
+# CI passes the token in CLOUDFLARE_API_TOKEN (a repository secret).
+token=${CLOUDFLARE_API_TOKEN:-}
+if [[ -z $token ]]; then
+  [[ -r $token_file ]] || fail "no Cloudflare token in $token_file"
+  token=$(<"$token_file")
+fi
+curl -fsS -X PUT -H "Authorization: Bearer $token" \
   -F 'metadata={"main_module":"worker.js","compatibility_date":"2026-10-01"};type=application/json' \
   -F "worker.js=@$worker;filename=worker.js;type=application/javascript+module" \
   "https://api.cloudflare.com/client/v4/accounts/$account/workers/scripts/$DISTRO_ID-site" \

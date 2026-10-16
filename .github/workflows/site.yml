@@ -1,0 +1,71 @@
+# The website: builds and checks it when the site or the manual changes (the
+# Docs pages are made from docs/manual), and deploys it from main. OS changes
+# don't run this (check.yml covers them).
+#
+# Deploying needs the repository secret CLOUDFLARE_SITE_TOKEN: a Cloudflare API
+# token with only Account → Workers Scripts: Edit. Without it the deploy step
+# is skipped and the site is deployed by hand (tools/deploy-site).
+name: site
+
+on:
+  push:
+    paths:
+      - "site/**"
+      - "docs/manual/**"
+      - "tools/make-site"
+      - "tools/deploy-site"
+      - "tools/preview-site"
+      - "tools/publish-iso"
+      - "distro.conf"
+      - ".github/workflows/site.yml"
+  pull_request:
+    paths:
+      - "site/**"
+      - "docs/manual/**"
+      - "tools/make-site"
+      - "tools/deploy-site"
+      - "tools/preview-site"
+      - "tools/publish-iso"
+      - "distro.conf"
+      - ".github/workflows/site.yml"
+
+concurrency:
+  group: site-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Lint the site's scripts
+        run: |
+          shellcheck tools/deploy-site tools/preview-site tools/publish-iso
+          python3 -m py_compile tools/make-site
+      - name: Build
+        run: tools/make-site
+      - name: Check every page, redirect and header
+        run: node site/smoke.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: site
+          path: site/dist/
+
+  deploy:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_SITE_TOKEN }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "No CLOUDFLARE_SITE_TOKEN secret; skipping the deploy (deploy by hand with tools/deploy-site)."
+            exit 0
+          fi
+          tools/deploy-site
