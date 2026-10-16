@@ -1,0 +1,669 @@
+#!/usr/bin/env python3
+"""Builds the public website from site/ and the user manual in docs/manual.
+
+    tools/make-site                    build site/dist/ (static files + worker.js)
+    tools/make-site --serve [PORT]     build, then preview on http://localhost:PORT (default 8080)
+    tools/make-site --set-release ISO  write site/releases.json for a new ISO (size, SHA-256, date)
+
+Python standard library only. The docs pages are rendered from docs/manual/*.md
+(composed as site/src/docs.json says), the download details from
+site/releases.json. Output:
+
+    site/dist/             the files as they are served (for previewing)
+    site/dist/worker.js    one Cloudflare Worker module with every file inside it
+
+Deploying is described in site/README.md; this script never deploys.
+"""
+import base64
+import gzip
+import hashlib
+import html
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+from datetime import date
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SITE = os.path.join(ROOT, "site")
+SRC = os.path.join(SITE, "src")
+DIST = os.path.join(SITE, "dist")
+WORKER_LIMIT = 3 * 1024 * 1024  # Workers Free plan: 3 MB after compression
+
+
+def read(path):
+    with open(path, encoding="utf-8") as f:
+        return f.read()
+
+
+def distro_conf():
+    conf = {}
+    for line in read(os.path.join(ROOT, "distro.conf")).splitlines():
+        m = re.match(r'^(\w+)=("?)([^"#]*)\2', line.strip())
+        if m:
+            conf[m.group(1)] = m.group(3).strip()
+    return conf
+
+
+def die(msg):
+    sys.exit(f"make-site: {msg}")
+
+
+# --- Markdown ---------------------------------------------------------------
+# The subset the manual uses: ATX headings, paragraphs, pipe tables, nested
+# lists, fenced code, `code`, **bold**, *italic*, [links](url), bare URLs.
+# Key chords such as SUPER+Space become <kbd> caps.
+
+KEY = r"(?:SUPER|ALT|CTRL|SHIFT|Super|Alt|Ctrl|Shift)"
+CHORD = re.compile(rf"\b{KEY}(?:\+(?:{KEY}|1…0|F\d+|arrows|comma|[A-Z][a-z]+|[A-Za-z0-9]))+(?![\w+])")
+
+
+def slugify(text):
+    text = re.sub(r"<[^>]+>", "", text)
+    text = html.unescape(text).lower()
+    text = re.sub(r"[`*'’]", "", text)
+    text = re.sub(r"[^a-z0-9]+", "-", text).strip("-")
+    return text or "section"
+
+
+def kbd(chord):
+    return '<span class="keys">' + "+".join(f"<kbd>{k}</kbd>" for k in chord.split("+")) + "</span>"
+
+
+def inline(text):
+    codes = []
+
+    def keep_code(m):
+        codes.append("<code>" + html.escape(m.group(1), quote=False) + "</code>")
+        return f"\x00{len(codes) - 1}\x00"
+
+    text = re.sub(r"`([^`]+)`", keep_code, text)
+    text = html.escape(text, quote=False)
+    links = []
+
+    def keep_link(m):
+        label, url = m.group(1), m.group(2)
+        links.append(f'<a href="{html.escape(url)}">{label}</a>')
+        return f"\x01{len(links) - 1}\x01"
+
+    text = re.sub(r"\[([^\]]+)\]\(([^)\s]+)\)", keep_link, text)
+
+    def bare(m):
+        url = m.group(0)
+        trail = ""
+        while url and url[-1] in ".,;:":
+            trail = url[-1] + trail
+            url = url[:-1]
+        links.append(f'<a href="{url}">{url}</a>')
+        return f"\x01{len(links) - 1}\x01{trail}"
+
+    text = re.sub(r"https?://[^\s<)\x00]+", bare, text)
+    text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
+    text = re.sub(r"(?<![\w*])\*(?![\s*])(.+?)(?<![\s*])\*(?![\w*])", r"<em>\1</em>", text)
+    text = CHORD.sub(lambda m: kbd(m.group(0)), text)
+    text = re.sub(r"\x01(\d+)\x01", lambda m: links[int(m.group(1))], text)
+    text = re.sub(r"\x00(\d+)\x00", lambda m: codes[int(m.group(1))], text)
+    return text
+
+
+LIST_RE = re.compile(r"^( *)([-*]|\d+\.) +(.*)$")
+FENCE_RE = re.compile(r"^ *```(\w*)\s*$")
+HEAD_RE = re.compile(r"^(#{1,6}) +(.*?)#*\s*$")
+
+
+def is_table_start(lines, i):
+    return (lines[i].lstrip().startswith("|") and i + 1 < len(lines)
+            and re.match(r"^ *\|? *:?-{2,}", lines[i + 1]) is not None)
+
+
+def starts_block(lines, i):
+    line = lines[i]
+    return bool(HEAD_RE.match(line) or FENCE_RE.match(line) or LIST_RE.match(line)
+                or is_table_start(lines, i))
+
+
+def split_row(line):
+    line = line.strip()
+    if line.startswith("|"):
+        line = line[1:]
+    if line.endswith("|") and not line.endswith("\\|"):
+        line = line[:-1]
+    return [c.strip().replace("\\|", "|") for c in re.split(r"(?<!\\)\|", line)]
+
+
+class Doc:
+    """Renders Markdown, collecting headings for the on-page contents."""
+
+    def __init__(self):
+        self.headings = []
+        self.ids = set()
+
+    def heading_id(self, text):
+        base = slugify(text)
+        slug, n = base, 2
+        while slug in self.ids:
+            slug, n = f"{base}-{n}", n + 1
+        self.ids.add(slug)
+        return slug
+
+    def blocks(self, lines, tight=False):
+        out = []
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            if not line.strip():
+                i += 1
+                continue
+            m = FENCE_RE.match(line)
+            if m:
+                lang = m.group(1)
+                body = []
+                i += 1
+                while i < len(lines) and not FENCE_RE.match(lines[i]):
+                    body.append(lines[i])
+                    i += 1
+                i += 1
+                cls = f' class="language-{lang}"' if lang else ""
+                out.append(f'<pre class="code"><code{cls}>' + html.escape("\n".join(body), quote=False)
+                           + "</code></pre>")
+                continue
+            m = HEAD_RE.match(line)
+            if m:
+                level, text = len(m.group(1)), inline(m.group(2))
+                hid = self.heading_id(m.group(2))
+                if level in (2, 3):
+                    self.headings.append((level, hid, text))
+                out.append(f'<h{level} id="{hid}">{text}</h{level}>')
+                i += 1
+                continue
+            if is_table_start(lines, i):
+                head = split_row(lines[i])
+                i += 2
+                rows = []
+                while i < len(lines) and lines[i].lstrip().startswith("|"):
+                    rows.append(split_row(lines[i]))
+                    i += 1
+                t = ['<div class="table-wrap"><table>', "<thead><tr>"]
+                t += [f'<th scope="col">{inline(c)}</th>' for c in head]
+                t.append("</tr></thead><tbody>")
+                for r in rows:
+                    t.append("<tr>" + "".join(f"<td>{inline(c)}</td>" for c in r) + "</tr>")
+                t.append("</tbody></table></div>")
+                out.append("".join(t))
+                continue
+            if LIST_RE.match(line):
+                html_list, i = self.list_block(lines, i)
+                out.append(html_list)
+                continue
+            para = [line.strip()]
+            i += 1
+            while i < len(lines) and lines[i].strip() and not starts_block(lines, i):
+                para.append(lines[i].strip())
+                i += 1
+            text = inline("\n".join(para))
+            out.append(text if tight else f"<p>{text}</p>")
+        return "\n".join(out)
+
+    def list_block(self, lines, i):
+        first = LIST_RE.match(lines[i])
+        indent = len(first.group(1))
+        ordered = first.group(2)[0].isdigit()
+        items, loose = [], False
+        while i < len(lines):
+            m = LIST_RE.match(lines[i])
+            if not m or len(m.group(1)) != indent or m.group(2)[0].isdigit() != ordered:
+                break
+            content_indent = indent + len(m.group(2)) + 1
+            body = [m.group(3)]
+            i += 1
+            while i < len(lines):
+                line = lines[i]
+                if not line.strip():
+                    # A blank line continues the item only if indented content follows.
+                    j = i + 1
+                    while j < len(lines) and not lines[j].strip():
+                        j += 1
+                    if j < len(lines) and len(lines[j]) - len(lines[j].lstrip()) >= content_indent:
+                        body.extend([""] * (j - i))
+                        i = j
+                        continue
+                    if j < len(lines) and (n := LIST_RE.match(lines[j])) and len(n.group(1)) == indent:
+                        loose = True
+                    break
+                lead = len(line) - len(line.lstrip())
+                if lead >= content_indent:
+                    body.append(line[content_indent:])
+                elif not starts_block(lines, i) and lead < indent + 1:
+                    body.append(line.strip())  # lazy continuation
+                else:
+                    break
+                i += 1
+            items.append(body)
+            while i < len(lines) and not lines[i].strip():
+                j = i
+                while j < len(lines) and not lines[j].strip():
+                    j += 1
+                if j < len(lines) and (n := LIST_RE.match(lines[j])) and len(n.group(1)) == indent:
+                    i = j
+                    loose = True
+                else:
+                    break
+        tag = "ol" if ordered else "ul"
+        parts = []
+        for body in items:
+            has_blank = any(not b.strip() for b in body)
+            parts.append("<li>" + self.blocks(body, tight=not (loose or has_blank)) + "</li>")
+        return f"<{tag}>" + "".join(parts) + f"</{tag}>", i
+
+
+def md_sections(text):
+    """Splits a Markdown file into {"## heading": text} (heading line included)."""
+    sections, current, buf = {}, None, []
+    fence = False
+    for line in text.splitlines():
+        if FENCE_RE.match(line):
+            fence = not fence
+        m = None if fence else re.match(r"^## +(.*?)\s*$", line)
+        if m:
+            if current:
+                sections[current] = buf
+            current, buf = m.group(1), [line]
+        elif current:
+            buf.append(line)
+    if current:
+        sections[current] = buf
+    return sections
+
+
+def shift_headings(lines, by):
+    out, fence = [], False
+    for line in lines:
+        if FENCE_RE.match(line):
+            fence = not fence
+        m = None if fence else re.match(r"^(#{1,6})( .*)$", line)
+        if m:
+            line = "#" * max(1, min(6, len(m.group(1)) + by)) + m.group(2)
+        out.append(line)
+    return out
+
+
+# --- Assets -----------------------------------------------------------------
+
+TYPES = {
+    ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8",
+    ".js": "text/javascript; charset=utf-8", ".svg": "image/svg+xml",
+    ".woff2": "font/woff2", ".webp": "image/webp", ".png": "image/png",
+    ".txt": "text/plain; charset=utf-8", ".asc": "application/pgp-keys",
+    ".json": "application/json", ".ico": "image/x-icon",
+}
+
+
+class Site:
+    def __init__(self):
+        self.conf = distro_conf()
+        self.files = {}      # served path -> bytes
+        self.hashed = {}     # source name -> served path
+
+    def add(self, path, data):
+        self.files[path] = data if isinstance(data, bytes) else data.encode()
+
+    def add_hashed(self, name, data):
+        """Adds a file under /a/ with a content hash in its name (cached for a year)."""
+        if isinstance(data, str):
+            data = data.encode()
+        stem, ext = os.path.splitext(os.path.basename(name))
+        digest = hashlib.sha256(data).hexdigest()[:10]
+        path = f"/a/{stem}.{digest}{ext}"
+        self.add(path, data)
+        self.hashed[name] = path
+        return path
+
+    def asset(self, name):
+        if name not in self.hashed:
+            die(f"unknown asset {name}")
+        return self.hashed[name]
+
+
+def build_assets(site):
+    id_ = site.conf["DISTRO_ID"]
+    fonts = os.path.join(SRC, "fonts")
+    for f in sorted(os.listdir(fonts)):
+        if f.endswith(".woff2"):
+            with open(os.path.join(fonts, f), "rb") as fh:
+                site.add_hashed(f"fonts/{f}", fh.read())
+    img = os.path.join(SRC, "img")
+    for f in sorted(os.listdir(img)):
+        with open(os.path.join(img, f), "rb") as fh:
+            site.add_hashed(f"img/{f}", fh.read())
+    # The hero backdrop is the default theme's first wallpaper, as shipped.
+    wp_dir = os.path.join(ROOT, "themes", "moonlit", "wallpapers")
+    wallpaper = sorted(os.listdir(wp_dir))[0]
+    site.add_hashed("img/wallpaper.svg", read(os.path.join(wp_dir, wallpaper)))
+    site.add_hashed("img/mark.svg", read(os.path.join(ROOT, "default", "branding", "mark.svg")))
+    site.add_hashed("img/logo.svg", read(os.path.join(ROOT, "default", "branding", "logo.svg")))
+
+    css = read(os.path.join(SRC, "style.css"))
+    css = re.sub(r"\{\{asset:([^}]+)\}\}", lambda m: site.asset(m.group(1)), css)
+    site.add_hashed("style.css", css)
+    site.add_hashed("site.js", read(os.path.join(SRC, "site.js")))
+
+    # Files at fixed addresses.
+    site.add(f"/{id_}-signing-key.asc", read(os.path.join(ROOT, "pkg", "keyring", "signing-key.asc")))
+    site.add("/licenses/geist-ofl.txt", read(os.path.join(fonts, "OFL.txt")))
+    site.add("/robots.txt", "User-agent: *\nAllow: /\n")
+
+
+# --- Pages ------------------------------------------------------------------
+
+def lookup(ctx, key):
+    cur = ctx
+    for part in key.split("."):
+        if isinstance(cur, dict) and part in cur:
+            cur = cur[part]
+        else:
+            die(f"template value {{{{{key}}}}} is missing")
+    return str(cur)
+
+
+def render(template, ctx, site):
+    def sub(m):
+        key = m.group(1).strip()
+        if key.startswith("asset:"):
+            return site.asset(key[6:])
+        if key.startswith("raw:"):
+            return lookup(ctx, key[4:])
+        return html.escape(lookup(ctx, key))
+    return re.sub(r"\{\{([^}]+)\}\}", sub, template)
+
+
+def nav_html(section):
+    items = [("/download", "Download", "download"), ("/docs", "Docs", "docs"), ("/about", "About", "about")]
+    out = []
+    for href, label, key in items:
+        cur = ' aria-current="page"' if key == section else ""
+        out.append(f'<li><a href="{href}"{cur}>{label}</a></li>')
+    return "".join(out)
+
+
+def human_size(n):
+    return f"{n / 1e9:.2f} GB" if n >= 1e9 else f"{n / 1e6:.0f} MB"
+
+
+def fingerprint_groups(fpr):
+    groups = [fpr[i:i + 4] for i in range(0, len(fpr), 4)]
+    return " ".join(groups[:5]) + "  " + " ".join(groups[5:])
+
+
+def release_ctx(conf):
+    rel = json.loads(read(os.path.join(SITE, "releases.json")))
+    cur = rel["current"]
+    for key in ("channel", "version", "date", "file", "size", "sha256"):
+        if key not in cur:
+            die(f"releases.json: current.{key} is missing")
+    if not re.fullmatch(r"[0-9a-f]{64}", cur["sha256"]):
+        die("releases.json: current.sha256 isn't a SHA-256")
+    base = rel.get("base_url", "").rstrip("/") + "/"
+    d = date.fromisoformat(cur["date"])
+    sig = cur.get("sig", cur["file"] + ".sig")
+    return {
+        "channel": cur["channel"],
+        "channel_label": cur["channel"].capitalize(),
+        "version": cur["version"],
+        "date": cur["date"],
+        "date_long": f"{d.day} {d.strftime('%B %Y')}",
+        "file": cur["file"],
+        "size": human_size(cur["size"]),
+        "size_bytes": f"{cur['size']:,}",
+        "sha256": cur["sha256"],
+        "url": base + cur["file"],
+        "sig_file": sig,
+        "sig_url": base + sig,
+    }
+
+
+def page(site, layout, path, title, description, section, content, ctx, body_class=""):
+    full_title = title if title == ctx["name"] else f"{title} · {ctx['name']}"
+    page_ctx = dict(ctx, title=full_title, description=description, path=path,
+                    nav=nav_html(section), content=content, body_class=body_class)
+    out = render(layout, page_ctx, site)
+    # Values substituted into content were escaped already; the content and nav are HTML.
+    file = "/index.html" if path == "/" else (path + ".html" if path == "/404" else path + "/index.html")
+    site.pages[path] = file
+    site.add(file, out)
+
+
+def build_docs(site, layout, ctx):
+    spec = json.loads(read(os.path.join(SRC, "docs.json")))
+    used = {}
+    sources = {}
+    pages = spec["pages"]
+    for p in pages:
+        for part in p["parts"]:
+            src = part["file"]
+            if src not in sources:
+                sources[src] = read(os.path.join(ROOT, src))
+                used.setdefault(src, set())
+
+    side = ['<ul>']
+    for p in pages:
+        side.append(f'<li><a href="/docs/{p["slug"]}"{{cur:{p["slug"]}}}>{html.escape(p["title"])}</a></li>')
+    side.append("</ul>")
+    side_tpl = "".join(side)
+
+    for n, p in enumerate(pages):
+        lines = []
+        for part in p["parts"]:
+            text = sources[part["file"]]
+            if "section" in part:
+                sections = md_sections(text)
+                if part["section"] not in sections:
+                    die(f'{part["file"]} has no section "## {part["section"]}"')
+                used[part["file"]].add(part["section"])
+                body = sections[part["section"]]
+                if part.get("heading", True) is False:
+                    body = shift_headings(body[1:], -1)
+            else:
+                body = text.splitlines()
+                if part.get("demote"):
+                    body = shift_headings(body, 1)  # its title becomes a section of the page
+                elif body and body[0].startswith("# "):
+                    body = body[1:]
+                used[part["file"]].update(md_sections(text).keys())
+            lines += body + [""]
+        doc = Doc()
+        body_html = doc.blocks(lines)
+        toc = ""
+        h2 = [h for h in doc.headings if h[0] == 2]
+        if len(h2) >= 2:
+            toc = ('<nav class="toc" aria-labelledby="toc-title"><p class="toc-title" id="toc-title">On this page</p><ul>'
+                   + "".join(f'<li><a href="#{hid}">{text}</a></li>' for _, hid, text in h2)
+                   + "</ul></nav>")
+        sidebar = re.sub(r"\{cur:([\w-]+)\}",
+                         lambda m: ' aria-current="page"' if m.group(1) == p["slug"] else "", side_tpl)
+        prev_next = ['<nav class="pager" aria-label="Previous and next page">']
+        if n > 0:
+            q = pages[n - 1]
+            prev_next.append(f'<a class="prev" href="/docs/{q["slug"]}"><span>Previous</span>{html.escape(q["title"])}</a>')
+        if n + 1 < len(pages):
+            q = pages[n + 1]
+            prev_next.append(f'<a class="next" href="/docs/{q["slug"]}"><span>Next</span>{html.escape(q["title"])}</a>')
+        prev_next.append("</nav>")
+        sources_note = ", ".join(sorted({os.path.basename(pt["file"]) for pt in p["parts"]}))
+        content = f"""<div class="docs">
+<nav class="docnav" id="docs-pages" aria-label="Docs pages"><p class="docnav-title">Docs</p>{sidebar}</nav>
+<article class="doc">
+<p class="crumbs"><a href="/docs">Docs</a> <span aria-hidden="true">›</span> {html.escape(p["title"])} <a class="jump" href="#docs-pages">All pages</a></p>
+<h1>{html.escape(p["title"])}</h1>
+{toc}
+<div class="prose">
+{body_html}
+</div>
+<p class="source">From the {html.escape(ctx["name"])} manual: {html.escape(sources_note)}</p>
+{"".join(prev_next)}
+</article>
+</div>"""
+        page(site, layout, f"/docs/{p['slug']}", p["title"], p["description"], "docs", content, ctx)
+
+    for src, text in sources.items():
+        missing = [s for s in md_sections(text) if s not in used[src]]
+        if missing:
+            die(f"{src}: sections not on any docs page: {', '.join(missing)} (add them to site/src/docs.json)")
+    manual = sorted(f for f in os.listdir(os.path.join(ROOT, "docs", "manual")) if f.endswith(".md"))
+    for f in manual:
+        if f"docs/manual/{f}" not in sources:
+            die(f"docs/manual/{f} isn't on any docs page (add it to site/src/docs.json)")
+
+    index = ['<ul class="doclist">']
+    for p in pages:
+        index.append(f'<li><a href="/docs/{p["slug"]}">{html.escape(p["title"])}</a><span>{html.escape(p["description"])}</span></li>')
+    index.append("</ul>")
+    content = f"""<div class="page narrow">
+<h1>Docs</h1>
+<p class="lede">The {html.escape(ctx["name"])} manual: how to install it and use it.</p>
+{"".join(index)}
+</div>"""
+    page(site, layout, "/docs", "Docs", f"The {ctx['name']} manual: installing, first steps, updates, apps, privacy and more.",
+         "docs", content, ctx)
+
+
+def build(serve_port=None):
+    site = Site()
+    site.pages = {}
+    conf = site.conf
+    build_assets(site)
+    layout = read(os.path.join(SRC, "layout.html"))
+    fpr = read(os.path.join(ROOT, "pkg", "keyring", "fingerprint")).strip()
+    ctx = {
+        "name": conf["DISTRO_NAME"],
+        "id": conf["DISTRO_ID"],
+        "year": str(date.today().year),
+        "release": release_ctx(conf),
+        "key": {"fingerprint": fpr, "fingerprint_spaced": fingerprint_groups(fpr),
+                "file": f"{conf['DISTRO_ID']}-signing-key.asc"},
+    }
+    pages_dir = os.path.join(SRC, "pages")
+    meta = json.loads(read(os.path.join(pages_dir, "pages.json")))
+    for name, m in meta.items():
+        content = render(read(os.path.join(pages_dir, name)), ctx, site)
+        page(site, layout, m["path"], m["title"], m["description"], m.get("section", ""), content, ctx,
+             m.get("body_class", ""))
+    build_docs(site, layout, ctx)
+    write(site)
+
+
+def write(site):
+    if os.path.isdir(DIST):
+        shutil.rmtree(DIST)
+    os.makedirs(DIST)
+    for path, data in site.files.items():
+        out = os.path.join(DIST, path.lstrip("/"))
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        with open(out, "wb") as f:
+            f.write(data)
+
+    # The Worker: every file, keyed by the address it's served at.
+    routes = {}
+    for path, file in site.pages.items():
+        routes[path] = file
+    table = {}
+    for path, data in sorted(site.files.items()):
+        ext = os.path.splitext(path)[1]
+        ctype = TYPES.get(ext)
+        if not ctype:
+            die(f"no content type for {path}")
+        entry = {"t": ctype, "e": '"' + hashlib.sha256(data).hexdigest()[:16] + '"'}
+        if path.startswith("/a/"):
+            entry["c"] = "public, max-age=31536000, immutable"
+        elif ext == ".html":
+            entry["c"] = "public, max-age=300"
+        else:
+            entry["c"] = "public, max-age=3600"
+        if ctype.startswith(("text/", "image/svg", "application/")):
+            entry["s"] = data.decode("utf-8")
+        else:
+            entry["b"] = base64.b64encode(data).decode()
+        table[path] = entry
+    worker = read(os.path.join(SITE, "worker.js"))
+    marker = 'import { FILES, ROUTES } from "./files.js";'
+    if marker not in worker:
+        die(f"site/worker.js must contain the line: {marker}")
+    generated = ("// Generated by tools/make-site from site/; don't edit.\n"
+                 f"const FILES = {json.dumps(table, separators=(',', ':'), ensure_ascii=False)};\n"
+                 f"const ROUTES = {json.dumps(routes, separators=(',', ':'))};")
+    worker = worker.replace(marker, generated)
+    with open(os.path.join(DIST, "worker.js"), "w", encoding="utf-8") as f:
+        f.write(worker)
+    with open(os.path.join(DIST, "package.json"), "w") as f:
+        f.write('{"type": "module", "private": true}\n')  # lets Node import worker.js for previewing
+
+    raw = len(worker.encode())
+    packed = len(gzip.compress(worker.encode(), 9))
+    files = sum(len(d) for d in site.files.values())
+    print(f"make-site: {len(site.files)} files ({files / 1024:.0f} KiB) in {DIST}")
+    print(f"make-site: worker.js {raw / 1024:.0f} KiB, {packed / 1024:.0f} KiB gzipped "
+          f"(limit {WORKER_LIMIT // 1024 // 1024} MB gzipped on the Free plan)")
+    if packed > WORKER_LIMIT:
+        die("worker.js is over the Workers size limit; move images to Workers Static Assets (site/README.md)")
+
+
+def set_release(iso):
+    name = os.path.basename(iso)
+    m = re.fullmatch(r"[a-z0-9-]+?-(\d{4})\.(\d{2})\.(\d{2})-x86_64\.iso", name)
+    if not m:
+        die(f"{name}: expected <name>-YYYY.MM.DD-x86_64.iso")
+    h = hashlib.sha256()
+    with open(iso, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    path = os.path.join(SITE, "releases.json")
+    rel = json.loads(read(path))
+    channel = rel.get("current", {}).get("channel", "preview")
+    rel["current"] = {
+        "channel": channel,
+        "version": f"{m.group(1)}.{m.group(2)}.{m.group(3)}",
+        "date": f"{m.group(1)}-{m.group(2)}-{m.group(3)}",
+        "file": name,
+        "size": os.path.getsize(iso),
+        "sha256": h.hexdigest(),
+        "sig": name + ".sig",
+    }
+    with open(path, "w") as f:
+        json.dump(rel, f, indent=2)
+        f.write("\n")
+    print(f"make-site: {path} now describes {name}")
+    if not os.path.exists(iso + ".sig"):
+        print(f"make-site: no {name}.sig next to the ISO yet; sign it before uploading (site/README.md)")
+
+
+def serve(port):
+    os.chdir(DIST)
+    node = shutil.which("node")
+    if node:
+        print(f"make-site: serving through worker.js on http://localhost:{port} (Ctrl+C stops)")
+        subprocess.run([node, os.path.join(SITE, "serve.mjs"), str(port)])
+    else:
+        print(f"make-site: Node.js not found; plain file server on http://localhost:{port} "
+              "(no Worker headers or clean URLs)")
+        subprocess.run([sys.executable, "-m", "http.server", str(port), "--bind", "127.0.0.1"])
+
+
+def main(argv):
+    if argv[:1] == ["--set-release"]:
+        if len(argv) != 2:
+            die("usage: tools/make-site --set-release <file.iso>")
+        set_release(argv[1])
+        return
+    if argv[:1] in (["-h"], ["--help"]):
+        print(__doc__.strip())
+        return
+    build()
+    if argv[:1] == ["--serve"]:
+        serve(int(argv[1]) if len(argv) > 1 else 8080)
+    elif argv:
+        die(f"unknown option {argv[0]}")
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

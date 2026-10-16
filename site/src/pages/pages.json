@@ -1,0 +1,6 @@
+{
+  "index.html": {"path": "/", "title": "Lunarc", "description": "Lunarc is Arch Linux with the Hyprland window manager, set up as a complete desktop: encrypted by default, a snapshot before every update, no telemetry.", "body_class": "home"},
+  "download.html": {"path": "/download", "title": "Download", "description": "Download the Lunarc preview ISO, check its checksum and signature, and write it to a USB stick.", "section": "download"},
+  "about.html": {"path": "/about", "title": "About", "description": "About Lunarc: a personal, clean-room Arch Linux distribution, and the projects it builds on.", "section": "about"},
+  "404.html": {"path": "/404", "title": "Page not found", "description": "This page doesn't exist."}
+}

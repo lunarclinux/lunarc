@@ -1,0 +1,72 @@
+<section class="hero" aria-labelledby="hero-title">
+  <div class="hero-inner">
+    <h1 id="hero-title">Lunarc</h1>
+    <p class="hero-text">Arch Linux with the Hyprland window manager, set up as a complete desktop. The disk is encrypted by default, a snapshot is taken before every update, and nothing about you is sent anywhere.</p>
+    <div class="actions">
+      <a class="btn btn-primary" href="/download">Download</a>
+      <a class="btn" href="/docs">Read the docs</a>
+    </div>
+    <p class="hero-meta">{{release.channel_label}} build {{release.version}} · x86_64 · UEFI</p>
+  </div>
+  <figure class="shot shot-hero">
+    <div class="strip" aria-hidden="true"><span>── desktop · 1</span><span>1280×800 ──</span></div>
+    <img src="{{asset:img/desktop.webp}}" width="1280" height="800" alt="The Lunarc desktop: the bar along the top and two terminal windows side by side, one showing system information next to the crescent logo, the other listing the themes with their colours.">
+  </figure>
+</section>
+
+<section class="section" aria-labelledby="included">
+  <h2 class="strip-heading" id="included"><span aria-hidden="true">── </span>What's included</h2>
+  <ul class="features">
+    <li class="pane">
+      <h3><span class="glyph" aria-hidden="true">◆</span>Desktop</h3>
+      <p>Hyprland with the Noctalia shell: a bar, notifications, quick settings, a lock screen, and one menu (<span class="keys"><kbd>SUPER</kbd>+<kbd>Space</kbd></span>) for apps, settings, installs and updates. Every shortcut is listed and can be changed.</p>
+    </li>
+    <li class="pane">
+      <h3><span class="glyph" aria-hidden="true">+</span>Apps</h3>
+      <p>Firefox, Files, Text Editor, Papers, Image Viewer, video and music players, Camera, Calculator, Disks, Print Settings, Pika Backup and the Ghostty terminal. Common video and audio formats play out of the box. More from the app catalog: Steam, LibreOffice, Obsidian, VS Code, Signal and others.</p>
+    </li>
+    <li class="pane">
+      <h3><span class="glyph" aria-hidden="true">■</span>Encrypted</h3>
+      <p>Full-disk encryption (LUKS2) is the installer's default. The firewall refuses incoming connections. Backups are encrypted.</p>
+    </li>
+    <li class="pane">
+      <h3><span class="glyph" aria-hidden="true">↑</span>Snapshots</h3>
+      <p>A snapshot of the system before and after every update. Roll back with one command, or start a snapshot from the boot menu if an update stops the computer from starting.</p>
+    </li>
+    <li class="pane">
+      <h3><span class="glyph" aria-hidden="true">!</span>Privacy</h3>
+      <p>No telemetry from Lunarc or from the apps it includes. Every connection a fresh install makes is <a href="/docs/privacy">listed</a>, with how to turn it off.</p>
+    </li>
+    <li class="pane">
+      <h3><span class="glyph" aria-hidden="true">◐</span>Themes</h3>
+      <p>Seventeen themes, most with dark and light variants. Small or rounded corners, blur on or off.</p>
+    </li>
+    <li class="pane">
+      <h3><span class="glyph" aria-hidden="true">~</span>Next to Windows</h3>
+      <p>Installs into the free space of a disk that has Windows on it. Nothing on the Windows partitions is changed; the boot menu has both.</p>
+    </li>
+    <li class="pane">
+      <h3><span class="glyph" aria-hidden="true">?</span>One command</h3>
+      <p><code>lunarc update</code>, <code>lunarc app install</code>, <code>lunarc theme set</code>, <code>lunarc display</code>, <code>lunarc privacy</code> and more. <a href="/docs/command">All commands</a>.</p>
+    </li>
+  </ul>
+</section>
+
+<section class="section" aria-labelledby="screens">
+  <h2 class="strip-heading" id="screens"><span aria-hidden="true">── </span>Screenshots</h2>
+  <div class="gallery">
+    <figure class="shot">
+      <img src="{{asset:img/menu.webp}}" width="1280" height="800" loading="lazy" alt="The SUPER+Space menu open over the desktop: a filter box above a list of Apps, Keybinds, Style, Setup, Capture, Install, Remove, Update and System.">
+      <figcaption>The <span class="keys"><kbd>SUPER</kbd>+<kbd>Space</kbd></span> menu</figcaption>
+    </figure>
+    <figure class="shot">
+      <img src="{{asset:img/popover.webp}}" width="1280" height="800" loading="lazy" alt="The now playing panel open under the bar: album art, title and artist, playback controls, progress, the next three tracks and the sound output.">
+      <figcaption>Now playing, opened from the bar</figcaption>
+    </figure>
+    <figure class="shot">
+      <img src="{{asset:img/lock.webp}}" width="1280" height="800" loading="lazy" alt="The lock screen: the screensaver's lettering, and below it a single line asking for the password.">
+      <figcaption>The lock screen</figcaption>
+    </figure>
+  </div>
+  <p class="note">Taken in a virtual machine, which draws no blur behind windows and panels.</p>
+</section>

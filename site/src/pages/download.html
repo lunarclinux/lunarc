@@ -1,0 +1,87 @@
+<div class="page">
+<h1>Download</h1>
+
+<section class="pane notice" aria-labelledby="preview-title">
+  <h2 id="preview-title" class="notice-title"><span class="badge">{{release.channel_label}}</span> This is a preview build</h2>
+  <ul>
+    <li>It's unsupported: there is no help channel yet.</li>
+    <li>Things will change between builds, including how the system is set up.</li>
+    <li>Back up anything you care about before you install.</li>
+    <li>Installing erases the disk you choose, unless you choose to keep Windows (or whatever is on it) and install into its free space.</li>
+  </ul>
+</section>
+
+<section class="pane release" aria-labelledby="release-title">
+  <div class="strip"><h2 id="release-title"><span aria-hidden="true">── </span>Lunarc {{release.version}}</h2><span aria-hidden="true">x86_64 ──</span></div>
+  <dl class="facts">
+    <div><dt>File</dt><dd><code>{{release.file}}</code></dd></div>
+    <div><dt>Size</dt><dd>{{release.size}} <span class="dim">({{release.size_bytes}} bytes)</span></dd></div>
+    <div><dt>Date</dt><dd><time datetime="{{release.date}}">{{release.date_long}}</time></dd></div>
+    <div><dt>SHA-256</dt><dd><code class="hash" data-copy>{{release.sha256}}</code></dd></div>
+    <div><dt>Signature</dt><dd><a href="{{release.sig_url}}">{{release.sig_file}}</a></dd></div>
+  </dl>
+  <div class="actions">
+    <a class="btn btn-primary" href="{{release.url}}">Download the ISO <span class="dim-on-amber">{{release.size}}</span></a>
+    <a class="btn" href="{{release.sig_url}}">Signature</a>
+  </div>
+</section>
+
+<section class="section" aria-labelledby="verify">
+  <h2 class="strip-heading" id="verify"><span aria-hidden="true">── </span>Check the download</h2>
+  <p>The checksum shows the file arrived intact. The signature shows it was made with the Lunarc signing key, whose fingerprint is:</p>
+  <pre class="code fpr"><code>{{key.fingerprint_spaced}}</code></pre>
+  <p>Get the key from this site: <a href="/{{key.file}}" download>{{key.file}}</a>. It's the same key that signs Lunarc's packages, and every Lunarc install has it in the <code>lunarc-keyring</code> package.</p>
+  <ol class="steps">
+    <li>
+      <p>Check the checksum, in the folder you downloaded to. The output must match the SHA-256 above.</p>
+      <pre class="code"><code>sha256sum {{release.file}}</code></pre>
+    </li>
+    <li>
+      <p>Check the key's fingerprint matches the one above, then import it:</p>
+      <pre class="code"><code>gpg --show-keys {{key.file}}
+gpg --import {{key.file}}</code></pre>
+    </li>
+    <li>
+      <p>Check the signature:</p>
+      <pre class="code"><code>gpg --verify {{release.sig_file}} {{release.file}}</code></pre>
+      <p>It must say <code>Good signature from "Lunarc Package Signing"</code>. A warning that the key "is not certified with a trusted signature" is expected: it only means you haven't signed the key yourself.</p>
+    </li>
+  </ol>
+  <p>On Windows, PowerShell prints the checksum: <code>Get-FileHash .\{{release.file}} -Algorithm SHA256</code>. Gpg4win provides <code>gpg</code>.</p>
+</section>
+
+<section class="section" aria-labelledby="requirements">
+  <h2 class="strip-heading" id="requirements"><span aria-hidden="true">── </span>System requirements</h2>
+  <ul class="plain-list">
+    <li><strong>A 64-bit PC</strong> (x86_64) that starts in <strong>UEFI</strong> mode. Older BIOS-only computers aren't supported.</li>
+    <li><strong>Secure Boot turned off</strong> (see below).</li>
+    <li><strong>An internet connection while installing</strong>: the installer downloads packages. Wired or Wi-Fi.</li>
+    <li><strong>Disk</strong>: the whole disk, or at least 40 GB of free, unpartitioned space to install next to Windows. The installer sets no other minimum; it's tested on a 60 GB disk.</li>
+    <li><strong>Memory</strong>: the installer doesn't check; it's tested with 8 GB. The live system's "copy to RAM" option also holds the whole image ({{release.size}}) in memory.</li>
+    <li><strong>Graphics</strong>: AMD, Intel, or NVIDIA GTX 16xx / RTX 20xx and newer with NVIDIA's driver. Older NVIDIA cards use the open-source nouveau driver.</li>
+    <li><strong>A USB stick</strong> of at least 4 GB.</li>
+  </ul>
+</section>
+
+<section class="section" aria-labelledby="usb">
+  <h2 class="strip-heading" id="usb"><span aria-hidden="true">── </span>Write it to a USB stick</h2>
+  <p>Any one of these:</p>
+  <ul class="plain-list">
+    <li><strong>Ventoy</strong>: install Ventoy on the stick once, then copy the ISO onto it like any file. The stick can hold several ISOs.</li>
+    <li><strong>Fedora Media Writer</strong> (Windows, macOS, Linux): choose "Select .iso file". <strong>Impression</strong> or <strong>Disks</strong> (Linux): pick the ISO and the stick.</li>
+    <li><strong>dd</strong> (Linux), replacing <code>/dev/sdX</code> with the stick, not a partition of it. Check with <code>lsblk</code> first: everything on that device is erased.
+      <pre class="code"><code>sudo dd if={{release.file}} of=/dev/sdX bs=4M status=progress oflag=sync</code></pre>
+    </li>
+  </ul>
+</section>
+
+<section class="section" aria-labelledby="secure-boot">
+  <h2 class="strip-heading" id="secure-boot"><span aria-hidden="true">── </span>Secure Boot</h2>
+  <p>Lunarc doesn't support Secure Boot yet: turn it off in the computer's firmware settings (often F2, Del or F10 at power-on) before starting from the stick. If Windows on the same computer uses BitLocker, it may ask for its recovery key once after this change; have the key at hand.</p>
+</section>
+
+<section class="section" aria-labelledby="next">
+  <h2 class="strip-heading" id="next"><span aria-hidden="true">── </span>Then</h2>
+  <p>Start the computer from the stick. Lunarc starts a live desktop you can try without changing anything; <strong>Install Lunarc</strong> in the menu installs it. <a href="/docs/installing">Installing</a> walks through it, including installing next to Windows.</p>
+</section>
+</div>

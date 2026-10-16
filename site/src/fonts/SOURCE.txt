@@ -1,0 +1,13 @@
+Geist.woff2 and GeistMono.woff2 are the variable-weight web fonts
+(Geist[wght].woff2, GeistMono[wght].woff2) from Vercel's geist-font v1.7.2
+release, the release pkg/geist-font/PKGBUILD pins:
+
+  https://github.com/vercel/geist-font/releases/download/v1.7.2/geist-font-v1.7.2.zip
+  sha256 7fc800d2ac6b92844895196e5041aca55d814c15db70c44f79b3b83ab82b04e2
+
+Copied unchanged (the release ships WOFF2, so nothing was converted):
+  a369fcf5628ea2aa4e1b9e2ec6a5b3624e365bda588e1f0f2f12b564f728fbb8  Geist.woff2
+  fba8f577f38a2bbcbe818efa6348dd58f36303a10b8737c42fefad275be563ab  GeistMono.woff2
+
+Licence: SIL Open Font License 1.1, OFL.txt (from the same zip); served at
+/licenses/geist-ofl.txt.
