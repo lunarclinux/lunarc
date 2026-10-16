@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Page views on the website over the last N days (default 7), from the
+# anonymous counts the site's Worker keeps (site/worker.js, count()): views
+# per page, per country, and the sites visitors came from.
+#
+#   tools/site-stats [days]
+#
+# Needs a Cloudflare API token with Account Analytics: Read, in
+# ~/.config/cloudflare-<id>-token or $CLOUDFLARE_API_TOKEN.
+set -euo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd)
+# shellcheck source=/dev/null
+source "$root/distro.conf"
+account=2dde7234199ae2ccde54cc72ee26242b
+dataset=${DISTRO_ID}_site_pageviews
+days=${1:-7}
+[[ $days =~ ^[0-9]+$ ]] || { echo "site-stats: days must be a number" >&2; exit 1; }
+token=${CLOUDFLARE_API_TOKEN:-$(cat "${CLOUDFLARE_TOKEN_FILE:-$HOME/.config/cloudflare-$DISTRO_ID-token}")}
+
+sql() { # sql <title> <query>
+  echo "── $1"
+  curl -fsS -H "Authorization: Bearer $token" --data "$2 FORMAT TabSeparated" \
+    "https://api.cloudflare.com/client/v4/accounts/$account/analytics_engine/sql" \
+    | awk -F'\t' '{ printf "  %8s  %s\n", $2, ($1 == "" ? "(none)" : $1) }' \
+    || echo "  (no answer: does the token have Account Analytics: Read?)"
+}
+since="timestamp > NOW() - INTERVAL '$days' DAY"
+sql "Views per page, last $days days" "SELECT blob1, SUM(_sample_interval) AS n FROM $dataset WHERE $since GROUP BY blob1 ORDER BY n DESC"
+sql "Countries" "SELECT blob2, SUM(_sample_interval) AS n FROM $dataset WHERE $since GROUP BY blob2 ORDER BY n DESC LIMIT 20"
+sql "Came from" "SELECT blob3, SUM(_sample_interval) AS n FROM $dataset WHERE $since AND blob3 != '' GROUP BY blob3 ORDER BY n DESC LIMIT 20"

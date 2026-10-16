@@ -59,8 +59,24 @@ function serve(request, path, status = 200) {
   return new Response(request.method === "HEAD" ? null : body(path, file), { status, headers });
 }
 
+// One anonymous count per page view, in Cloudflare's Analytics Engine (the
+// PAGEVIEWS binding; absent in the local preview, then nothing is counted):
+// the page, the visitor's country (which Cloudflare already knows) and the
+// referring site's domain. No address, no identifier, nothing in the browser.
+function count(env, request, page) {
+  if (!env || !env.PAGEVIEWS || request.method !== "GET") return;
+  let from = "";
+  try {
+    const ref = new URL(request.headers.get("referer") || "");
+    if (ref.hostname !== new URL(request.url).hostname) from = ref.hostname;
+  } catch {}
+  try {
+    env.PAGEVIEWS.writeDataPoint({ indexes: [page], blobs: [page, (request.cf && request.cf.country) || "", from] });
+  } catch {}
+}
+
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     const url = new URL(request.url);
     if (url.protocol === "http:" && url.hostname !== "localhost" && url.hostname !== "127.0.0.1") {
       url.protocol = "https:";
@@ -85,8 +101,12 @@ export default {
     if (REDIRECTS[clean]) return redirect(REDIRECTS[clean] + url.search);
     if (clean !== path && ROUTES[clean]) return redirect(clean + url.search);
 
-    if (ROUTES[path] && path !== "/404") return serve(request, ROUTES[path]);
+    if (ROUTES[path] && path !== "/404") {
+      count(env, request, path);
+      return serve(request, ROUTES[path]);
+    }
     if (FILES[path] && !path.endsWith(".html")) return serve(request, path);
+    count(env, request, "/404");
     return serve(request, ROUTES["/404"], 404);
   },
 };

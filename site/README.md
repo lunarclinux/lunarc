@@ -140,3 +140,12 @@ without it that step is skipped. The OS workflow (check.yml) ignores site-only
 changes, and this one ignores OS-only changes.
 
 Preview locally: `tools/preview-site` (a rootless Podman container).
+
+## Page counts
+
+The Worker counts page views anonymously in Cloudflare's Analytics Engine
+(dataset `<id>_site_pageviews`, bound as `PAGEVIEWS` by tools/deploy-site): the
+page, the country and the referring site's domain, nothing else (no address,
+no identifier, no cookie, no script). `tools/site-stats [days]` reads them; it
+needs a token with Account Analytics: Read. Downloads of the ISO are in the R2
+bucket's metrics.
