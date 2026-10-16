@@ -1,0 +1,124 @@
+diff --git i/src/app/application_services.cpp w/src/app/application_services.cpp
+index 9747332..4c3b59f 100644
+--- i/src/app/application_services.cpp
++++ w/src/app/application_services.cpp
+@@ -580,6 +580,12 @@ void Application::initStyleThemeAndWayland() {
+         finish.sheenBottom = *shell.sheenBottomColor;
+       }
+       Box::setGlobalSurfaceFinish(finish);
++      surface_colors::setOverrides({
++          .cardFill = shell.cardColor,
++          .cardBorder = shell.cardBorderColor,
++          .buttonFill = shell.buttonColor,
++          .buttonBorder = shell.buttonBorderColor,
++      });
+     }
+     lastCornerRadiusScale = corner;
+     if (cornerChanged) {
+diff --git i/src/config/config_types.h w/src/config/config_types.h
+index dbb89fe..a45e123 100644
+--- i/src/config/config_types.h
++++ w/src/config/config_types.h
+@@ -1153,6 +1153,11 @@ struct ShellConfig {
+   // on_surface at 7% and 2% (sheen).
+   bool topHighlight = false;
+   std::optional<ColorSpec> topHighlightColor;
++  // Control center section cards and default buttons; unset = palette roles.
++  std::optional<ColorSpec> cardColor;
++  std::optional<ColorSpec> cardBorderColor;
++  std::optional<ColorSpec> buttonColor;
++  std::optional<ColorSpec> buttonBorderColor;
+   bool surfaceSheen = false;
+   std::optional<ColorSpec> sheenTopColor;
+   std::optional<ColorSpec> sheenBottomColor;
+diff --git i/src/config/schema/config_schema.cpp w/src/config/schema/config_schema.cpp
+index 6ad257a..f87c92a 100644
+--- i/src/config/schema/config_schema.cpp
++++ w/src/config/schema/config_schema.cpp
+@@ -1619,6 +1619,10 @@ namespace noctalia::config::schema {
+         field(&ShellConfig::cardBorders, "card_borders"),
+         field(&ShellConfig::topHighlight, "top_highlight"),
+         colorSpecField(&ShellConfig::topHighlightColor, "top_highlight_color", /*alwaysEmit=*/false),
++        colorSpecField(&ShellConfig::cardColor, "card_color", /*alwaysEmit=*/false),
++        colorSpecField(&ShellConfig::cardBorderColor, "card_border_color", /*alwaysEmit=*/false),
++        colorSpecField(&ShellConfig::buttonColor, "button_color", /*alwaysEmit=*/false),
++        colorSpecField(&ShellConfig::buttonBorderColor, "button_border_color", /*alwaysEmit=*/false),
+         field(&ShellConfig::surfaceSheen, "surface_sheen"),
+         colorSpecField(&ShellConfig::sheenTopColor, "sheen_top_color", /*alwaysEmit=*/false),
+         colorSpecField(&ShellConfig::sheenBottomColor, "sheen_bottom_color", /*alwaysEmit=*/false),
+diff --git i/src/shell/control_center/tab.cpp w/src/shell/control_center/tab.cpp
+index b008d45..3b1f64b 100644
+--- i/src/shell/control_center/tab.cpp
++++ w/src/shell/control_center/tab.cpp
+@@ -8,6 +8,13 @@ namespace control_center {
+ 
+   void applySectionCardStyle(Flex& card, float scale, float fillOpacity) {
+     card.setCardStyle(scale, fillOpacity);
++    const auto& colors = surface_colors::overrides();
++    if (colors.cardFill) {
++      card.setFill(*colors.cardFill);
++    }
++    if (colors.cardBorder && Style::cardBordersEnabled()) {
++      card.setBorder(*colors.cardBorder, Style::borderWidth);
++    }
+     card.setDirection(FlexDirection::Vertical);
+     card.setAlign(FlexAlign::Stretch);
+     card.setGap(Style::spaceSm * scale);
+diff --git i/src/ui/controls/button.cpp w/src/ui/controls/button.cpp
+index 8ad2653..fc68950 100644
+--- i/src/ui/controls/button.cpp
++++ w/src/ui/controls/button.cpp
+@@ -36,7 +36,8 @@ namespace {
+       return Button::ButtonPalette{
+           .borderWidth = Style::borderWidth,
+           .normal = makeState(
+-              colorSpecFromRole(ColorRole::SurfaceVariant), colorSpecFromRole(ColorRole::Outline),
++              surface_colors::overrides().buttonFill.value_or(colorSpecFromRole(ColorRole::SurfaceVariant)),
++              surface_colors::overrides().buttonBorder.value_or(colorSpecFromRole(ColorRole::Outline)),
+               colorSpecFromRole(ColorRole::OnSurface)
+           ),
+           .hover =
+diff --git i/src/ui/palette.cpp w/src/ui/palette.cpp
+index d2f01b5..0d08a36 100644
+--- i/src/ui/palette.cpp
++++ w/src/ui/palette.cpp
+@@ -125,6 +125,14 @@ void setPalette(const Palette& p) {
+   paletteChanged().emit();
+ }
+ 
++namespace surface_colors {
++  namespace {
++    Overrides g_overrides;
++  }
++  const Overrides& overrides() noexcept { return g_overrides; }
++  void setOverrides(const Overrides& o) { g_overrides = o; }
++} // namespace surface_colors
++
+ Color colorForRoleSnapshot(ColorRole role) {
+   std::scoped_lock lock(g_paletteMutex);
+   return colorForRole(role);
+diff --git i/src/ui/palette.h w/src/ui/palette.h
+index d405342..7339a9a 100644
+--- i/src/ui/palette.h
++++ w/src/ui/palette.h
+@@ -147,6 +147,20 @@ void setPalette(const Palette& p);
+ // and re-apply palette-derived colors to their scene nodes on each emit.
+ Signal<>& paletteChanged();
+ 
++// Fixed colours for the control center's section cards and default buttons
++// ([shell] card_color, card_border_color, button_color, button_border_color);
++// unset keeps the palette roles (surface_variant and outline).
++namespace surface_colors {
++  struct Overrides {
++    std::optional<ColorSpec> cardFill;
++    std::optional<ColorSpec> cardBorder;
++    std::optional<ColorSpec> buttonFill;
++    std::optional<ColorSpec> buttonBorder;
++  };
++  [[nodiscard]] const Overrides& overrides() noexcept;
++  void setOverrides(const Overrides& o);
++} // namespace surface_colors
++
+ // Linearly interpolates each field of two palettes in sRGB space. Used by
+ // ThemeService to drive smooth cross-fade transitions on theme changes.
+ Palette lerpPalette(const Palette& a, const Palette& b, float t);

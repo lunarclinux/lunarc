@@ -1,5 +1,5 @@
 --!nonstrict
--- Bar indicator: a bug glyph and the number of open crashes. Hidden when there
+-- Bar indicator: a bug glyph and the number of open crashes, in coral. Hidden when there
 -- are none. Wiggles briefly when a crash comes in or repeats.
 local common = require("./common.luau")
 
@@ -16,9 +16,8 @@ local function render()
   barWidget.render(container({ gap = 4, align = "center" }, {
     ui.box({ width = shift, height = 1, opacity = 0 }),
     ui.glyph({ name = "bug", size = 15, color = "error" }),
-    ui.row({ fill = "error/0.22", radius = 8, paddingH = 6, align = "center" }, {
-      ui.label({ text = tostring(count), color = "error", fontWeight = "bold" }),
-    }),
+    -- The count as plain text, like the bar's other figures (no pill).
+    ui.label({ text = tostring(count), fontSize = 12, color = "error", fontWeight = "semibold" }),
     ui.box({ width = 3 - shift, height = 1, opacity = 0 }),
   }))
   barWidget.setTooltip(count == 1 and "1 open crash" or (tostring(count) .. " open crashes"))

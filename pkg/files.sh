@@ -150,6 +150,8 @@ case $part in
       > "$dest/etc/profile.d/$id-privacy.sh"
     put "$src/etc/sysctl.d/hardening.conf" "$dest/usr/lib/sysctl.d/90-$id-hardening.conf"
     put "$src/default/privacy/gschema.override" "$dest/usr/share/glib-2.0/schemas/90_$id.gschema.override"
+    # App fonts: GTK apps in Geist and Geist Mono (defaults; the user's choice wins).
+    put "$src/default/look/gschema.override" "$dest/usr/share/glib-2.0/schemas/91_$id-look.gschema.override"
     # New users' AI tool defaults outside ~/.config (Gemini CLI reads ~/.gemini).
     put "$src/default/privacy/gemini-settings.json" "$dest/etc/skel/.gemini/settings.json"
     # The connection inventory and the getting-started guide (the menu's System › Manual).
