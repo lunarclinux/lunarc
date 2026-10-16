@@ -8,15 +8,16 @@
 # --release: use the signed packages already in pkg/out (from
 # `pkg/build --chroot`, the build that was published) instead of building
 # unsigned ones, so the ISO carries exactly what installed systems get.
+# The ISO scripts come from that build's commit unless --ref is given.
 #
 # The build VM must be an installed system with archiso, whose 'tester' password
 # is in ~/.local/share/arch-distro-vm/<vm>.password (vm/test-install sets that up).
 set -euo pipefail
 export LIBVIRT_DEFAULT_URI=qemu:///system
 here=$(cd "$(dirname "$0")" && pwd); repo=$(dirname "$here")
-vm=distro-dev ref=HEAD release=0
+vm=distro-dev ref=HEAD ref_given=0 release=0
 while [[ $# -gt 0 ]]; do
-  case $1 in --vm) vm=$2; shift 2 ;; --ref) ref=$2; shift 2 ;; --release) release=1; shift ;; *) echo "unknown option: $1" >&2; exit 2 ;; esac
+  case $1 in --vm) vm=$2; shift 2 ;; --ref) ref=$2; ref_given=1; shift 2 ;; --release) release=1; shift ;; *) echo "unknown option: $1" >&2; exit 2 ;; esac
 done
 log() { printf '\033[1m[build-iso]\033[0m %s\n' "$*"; }
 pw=$(<~/.local/share/arch-distro-vm/$vm.password)
@@ -32,8 +33,10 @@ if (( release )); then
   for f in "$repo"/pkg/out/repo/*.pkg.tar.zst; do
     [[ -f $f.sig ]] || { echo "build-iso: $(basename "$f") isn't signed" >&2; exit 1; }
   done
-  ref=$BUILD_COMMIT
-  log "using the signed packages built from ${ref:0:7}"
+  # The ISO's own scripts come from the packages' commit, unless --ref names
+  # a later one (a fix to the ISO build that doesn't touch the packages).
+  (( ref_given )) || ref=$BUILD_COMMIT
+  log "using the signed packages built from ${BUILD_COMMIT:0:7}, ISO scripts from $(git -C "$repo" rev-parse --short "$ref")"
 else
   log "building packages from $(git -C "$repo" rev-parse --short "$ref")"
   "$repo/pkg/build" "$ref" >/dev/null 2>&1
