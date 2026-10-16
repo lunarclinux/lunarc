@@ -24,10 +24,20 @@ if [[ -z $token ]]; then
   [[ -r $token_file ]] || fail "no Cloudflare token in $token_file"
   token=$(<"$token_file")
 fi
-curl -fsS -X PUT -H "Authorization: Bearer $token" \
-  -F "metadata={\"main_module\":\"worker.js\",\"compatibility_date\":\"2026-10-01\",\"bindings\":[{\"type\":\"analytics_engine\",\"name\":\"PAGEVIEWS\",\"dataset\":\"${DISTRO_ID}_site_pageviews\"}]};type=application/json" \
-  -F "worker.js=@$worker;filename=worker.js;type=application/javascript+module" \
-  "https://api.cloudflare.com/client/v4/accounts/$account/workers/scripts/$DISTRO_ID-site" \
-  | jq -e '.success' >/dev/null || fail "Cloudflare refused the upload"
+# The page counts need Analytics Engine, switched on once in the dashboard
+# (Workers & Pages > Analytics Engine). Until it is, deploy without counting.
+binding='{"type":"analytics_engine","name":"PAGEVIEWS","dataset":"'"$DISTRO_ID"'_site_pageviews"}'
+put() { # put <bindings JSON array>
+  curl -sS -X PUT -H "Authorization: Bearer $token" \
+    -F "metadata={\"main_module\":\"worker.js\",\"compatibility_date\":\"2026-10-01\",\"bindings\":$1};type=application/json" \
+    -F "worker.js=@$worker;filename=worker.js;type=application/javascript+module" \
+    "https://api.cloudflare.com/client/v4/accounts/$account/workers/scripts/$DISTRO_ID-site"
+}
+answer=$(put "[$binding]")
+if jq -e '.errors[]? | select(.code == 10089)' <<<"$answer" >/dev/null; then
+  echo "deploy-site: Analytics Engine isn't switched on yet; deploying without page counts"
+  answer=$(put "[]")
+fi
+jq -e '.success' <<<"$answer" >/dev/null || fail "Cloudflare refused the upload: $(jq -c '.errors' <<<"$answer")"
 site=$(jq -r .base_url "$root/site/releases.json" | sed -E 's#^https://downloads\.#https://#; s#/$##')
 echo "deploy-site: live at $site"
