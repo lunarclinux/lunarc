@@ -79,7 +79,11 @@ dns_servers() { # dns_servers <provider>
 
 # Encrypted DNS through systemd-resolved: NetworkManager hands its DNS to
 # resolved, which only talks to the chosen provider over TLS (no plain-text
-# fallback, no built-in fallback servers).
+# fallback, no built-in fallback servers). Off, resolved doesn't run at all:
+# not the service and not its sockets (a name lookup through a socket would
+# start it again). Either way it never uses LLMNR or multicast DNS (the
+# package's resolved.conf.d drop-in; decision record 0046).
+resolved_units=(systemd-resolved.service systemd-resolved-varlink.socket systemd-resolved-monitor.socket)
 dns_on() { # dns_on <provider>
   local servers
   servers=$(dns_servers "$1") || die "unknown DNS provider: $1 (quad9, mullvad or cloudflare)"
@@ -87,11 +91,13 @@ dns_on() { # dns_on <provider>
     install -d /etc/systemd/resolved.conf.d /etc/NetworkManager/conf.d
     printf "# provider: %s\n# Written by \`%s privacy dns\`; \`%s privacy dns off\` removes it.\n[Resolve]\nDNS=%s\nDNSOverTLS=yes\nDomains=~.\nFallbackDNS=\n" "$1" "$4" "$4" "$2" > "$3"
     printf "[main]\ndns=systemd-resolved\n" > "$5"
-    systemctl enable --now systemd-resolved.service >/dev/null 2>&1
+    shift 5
+    systemctl enable "$@" >/dev/null 2>&1
+    systemctl start "$@"
     systemctl restart systemd-resolved.service
     ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
     systemctl restart NetworkManager.service
-  ' _ "$1" "$servers" "$dns_conf" "$DISTRO_ID" "$nm_dns_conf"
+  ' _ "$1" "$servers" "$dns_conf" "$DISTRO_ID" "$nm_dns_conf" "${resolved_units[@]}"
   set_setting privacy.dns "$1"
   info "dns: encrypted, $1"
   info "On a Wi-Fi network with a login page (hotels, airports), run '$DISTRO_ID privacy dns off' to sign in, then turn it back on."
@@ -99,11 +105,11 @@ dns_on() { # dns_on <provider>
 
 dns_off() {
   as_root bash -euc '
-    rm -f "$1" "$2"
-    systemctl disable --now systemd-resolved.service >/dev/null 2>&1 || true
+    rm -f "$1" "$2"; shift 2
+    systemctl disable --now "$@" >/dev/null 2>&1 || true
     if [[ -L /etc/resolv.conf ]]; then rm -f /etc/resolv.conf; fi
     systemctl restart NetworkManager.service
-  ' _ "$dns_conf" "$nm_dns_conf"
+  ' _ "$dns_conf" "$nm_dns_conf" "${resolved_units[@]}"
   set_setting privacy.dns off
   info "dns: the network's own DNS server"
 }

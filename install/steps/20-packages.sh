@@ -1,7 +1,10 @@
 # shellcheck shell=bash
 # title: Installing the system
 # Install the base system and the distro packages into the target. Sourced by install.sh.
+# A release build (pkg/out; the ISO's copy is always there), else a test build
+# (pkg/out-test) in a development checkout.
 repo=$root/pkg/out/repo
+if [[ ! -f $repo/$DISTRO_REPO.db && -f $root/pkg/out-test/repo/$DISTRO_REPO.db ]]; then repo=$root/pkg/out-test/repo; fi
 [[ -f $repo/$DISTRO_REPO.db ]] || die "no distro packages in $repo; build them first with pkg/build"
 
 # The live system needs the local repository to resolve the distro packages.

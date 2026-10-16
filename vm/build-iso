@@ -9,6 +9,8 @@
 # `pkg/build --chroot`, the build that was published) instead of building
 # unsigned ones, so the ISO carries exactly what installed systems get.
 # The ISO scripts come from that build's commit unless --ref is given.
+# Without it, packages are built from the ref into pkg/out-test (pkg/out is
+# left alone).
 #
 # The build VM must be an installed system with archiso, whose 'tester' password
 # is in ~/.local/share/arch-distro-vm/<vm>.password (vm/test-install sets that up).
@@ -41,10 +43,14 @@ else
   log "building packages from $(git -C "$repo" rev-parse --short "$ref")"
   "$repo/pkg/build" "$ref" >/dev/null 2>&1
 fi
+# The release build (pkg/out) or the test build just made (pkg/out-test),
+# where iso/build looks for packages in the copy.
+out=$repo/pkg/out-test
+if (( release )); then out=$repo/pkg/out; fi
 ssh_vm "echo '$pw' | sudo -S -p '' sh -c 'pacman -S --needed --noconfirm archiso >/dev/null && rm -rf /home/tester/isosrc /home/tester/isoout'"
 ssh_vm 'mkdir -p ~/isosrc'
 git -C "$repo" archive "$ref" | ssh_vm 'tar -x -C ~/isosrc'
-tar -C "$repo" -cf - pkg/out/repo | ssh_vm 'tar -x -m -C ~/isosrc'
+tar -C "$out" -cf - repo | ssh_vm 'mkdir -p ~/isosrc/pkg/out && tar -x -m -C ~/isosrc/pkg/out'
 
 log "running mkarchiso in $vm"
 ssh_vm "cd ~/isosrc && echo '$pw' | sudo -S -p '' iso/build /home/tester/isoout > /tmp/isobuild.log 2>&1" \

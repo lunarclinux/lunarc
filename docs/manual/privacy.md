@@ -52,6 +52,7 @@ no exchange-rate downloads.
 - **Developer tools:** `DO_NOT_TRACK=1` and the tools' own opt-outs (.NET, Next.js, Astro, Nuxt, Gatsby, Homebrew, Azure, PowerShell, Hugging Face, Turborepo, Angular, Storybook, Google Cloud SDK and others) are set for every session and shell. VS Code, Code - OSS and Zed installed through `lunarc app` start with telemetry off.
 - **Kernel:** kernel addresses and logs hidden from users, no unprivileged BPF, debugging limited to a process's parent, no runtime kernel replacement (kexec), ICMP redirects ignored.
 - **Printing:** the print service answers only this computer and never shares its printers; Avahi looks for printers but never announces this computer's name, address or services.
+- **Name lookups:** nothing answers name questions from the local network (no LLMNR or multicast DNS from the system's resolver). With encrypted DNS off, the system resolver doesn't run at all; lookups go to the network's DNS server.
 - **Lock:** SUPER+L, idle and before sleep; wrong-password lockouts are short (10 tries, 2 minutes).
 
 ## Changing your mind

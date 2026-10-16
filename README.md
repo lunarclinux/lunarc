@@ -55,8 +55,8 @@ See `docs/manual/getting-started.md` for installing, keys and commands.
 ## Building
 
 ```sh
-pkg/build          # distro packages into pkg/out/repo
-pkg/build --chroot # the same in a clean Arch chroot; publishing is: pkg/build --chroot && tools/publish
+pkg/build          # distro packages into pkg/out-test/repo (tests, development)
+pkg/build --chroot # the same in a clean Arch chroot, into pkg/out/repo; publishing is: pkg/build --chroot && tools/publish
 vm/build-iso       # installer ISO (built in the dev VM)
 vm/test-install    # install into the clean VM and run the checks
 tools/lint         # what CI runs

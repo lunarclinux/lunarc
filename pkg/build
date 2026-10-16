@@ -5,8 +5,13 @@
 #   pkg/build --chroot [--fresh] [ref]       in a clean, current Arch chroot (for publishing)
 #   pkg/build --chroot --dry-run [ref]       print the root and signing steps instead
 #
-# default ref: HEAD; output: pkg/out/repo/. The version comes from the last
-# layer tag: l5-complete plus 3 commits -> 0.5.3.
+# default ref: HEAD. The version comes from the last layer tag: l5-complete
+# plus 3 commits -> 0.5.3.
+#
+# Output: --chroot builds go to pkg/out/repo/, which only ever holds a clean
+# chroot build (what tools/publish and vm/build-iso --release use); host builds
+# go to pkg/out-test/repo/, so tests and development never replace it.
+# PKG_OUT=<folder> puts either somewhere else (never a host build in pkg/out).
 #
 # Packages and the repository database are signed when the signing key is on
 # this machine (SIGNING_GNUPGHOME, default ~/.local/share/<id>-signing/gnupg).
@@ -42,7 +47,15 @@ if (( (dry || fresh) && ! chroot )); then
   echo "pkg/build: --dry-run and --fresh go with --chroot" >&2; exit 2
 fi
 fail() { echo "pkg/build: $*" >&2; exit 1; }
-out=$root/pkg/out
+if (( chroot )); then out=$root/pkg/out; else out=$root/pkg/out-test; fi
+if [[ -n ${PKG_OUT:-} ]]; then out=$(realpath -m -- "$PKG_OUT"); fi
+if (( ! chroot )) && [[ $out == "$(realpath -m -- "$root/pkg/out")" ]]; then
+  fail "pkg/out holds only clean-chroot builds (pkg/build --chroot); build elsewhere (default pkg/out-test)"
+fi
+# The output folder is emptied first, so it may only hold an earlier build.
+if [[ -d $out && -n $(ls -A "$out") && ! -d $out/repo ]]; then
+  fail "$out isn't empty and isn't an earlier build's output; not replacing it"
+fi
 # Packages record the folder they were built in (.BUILDINFO), and the repository
 # is published, so build in a fixed, neutral place rather than under $HOME.
 # mktemp: a private folder, never a predictable shared path.
@@ -119,7 +132,7 @@ if (( chroot && ! dry )); then mkdir -p "$out/logs"; fi
 vendored=()
 for dir in "$work"/src/pkg/*/; do
   name=$(basename "$dir")
-  case $name in main|settings|keyring|out) continue ;; esac
+  case $name in main|settings|keyring|out|out-test) continue ;; esac
   [[ -f $dir/PKGBUILD ]] || continue
   mkdir -p "$work/$name"
   cp -r "$dir." "$work/$name/"

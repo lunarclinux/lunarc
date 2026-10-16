@@ -5,7 +5,7 @@ source "$DISTRO_LIB/lib.sh"
 
 usage() {
   cat <<USAGE
-Usage: $DISTRO_ID update [--all] | check | new-apps | firmware | snapshots | rollback <n> [--dry-run] | rollback --clean
+Usage: $DISTRO_ID update [--all] | check | new-apps | firmware | snapshots | rollback <n> [--dry-run] | rollback --clean | candy on|off
 
   (no argument)   update everything: keyrings first, then Arch and $DISTRO_NAME
                   packages (a snapshot is taken before and after), then AUR
@@ -19,6 +19,7 @@ Usage: $DISTRO_ID update [--all] | check | new-apps | firmware | snapshots | rol
                   the menu's Update and a dot on the bar's menu button show the count
   doctor          check what updates need (network, clock, package key) and fix
                   what it can
+  candy on|off    pacman's progress bars drawn as Pac-Man eating dots (off by default)
   new-apps        install default apps added since this computer was installed
                   (an update does this; each is offered once)
   firmware        check for and install firmware updates (BIOS/UEFI, SSD, dock...)
@@ -567,6 +568,28 @@ rollback_clean() {
   info "Deleted."
 }
 
+# pacman's ILoveCandy option in /etc/pacman.conf; only that line changes.
+candy() { # candy [on|off]
+  local conf=/etc/pacman.conf state=off
+  if grep -qE '^[[:space:]]*ILoveCandy[[:space:]]*$' "$conf"; then state=on; fi
+  case ${1:-} in
+    "") info "candy: $state" ;;
+    on)
+      if [[ $state == off ]]; then
+        if grep -qE '^[[:space:]]*Color[[:space:]]*$' "$conf"; then
+          sudo sed -i -E '0,/^[[:space:]]*Color[[:space:]]*$/s//&\nILoveCandy/' "$conf"
+        else
+          sudo sed -i '0,/^\[options\]$/s//&\nILoveCandy/' "$conf"
+        fi
+      fi
+      info "candy: on" ;;
+    off)
+      if [[ $state == on ]]; then sudo sed -i -E '/^[[:space:]]*ILoveCandy[[:space:]]*$/d' "$conf"; fi
+      info "candy: off" ;;
+    *) die "candy on or off?" ;;
+  esac
+}
+
 if [[ ${1:-} == "" || ${1:-} == --all ]] && [[ $(booted_snapshot) != 0 ]]; then
   die "you're running snapshot $(booted_snapshot) (changes are kept in memory only). Keep it first: $DISTRO_ID boot snapshots keep, then restart"
 fi
@@ -601,6 +624,7 @@ case ${1:-} in
     esac ;;
   rollback-apply) rollback_apply "${2:?snapshot number}" "$([[ ${3:-} == --dry-run ]] && echo 1 || echo 0)" ;;
   rollback-clean) rollback_clean ;;
+  candy) candy "${2:-}" ;;
   doctor)
     preflight "$([[ -t 0 ]] && echo 1 || echo 0)" 1
     sync_databases "$USER_RUNTIME/update-errors.log" || exit 1

@@ -89,6 +89,11 @@ System | Snapshots | roll back an update | term: @DISTRO_ID@ update snapshots
 System | Keep this snapshot | started from one? | term: @DISTRO_ID@ boot snapshots keep
 System | Battery charge limit | stop at 80% | term: @DISTRO_ID@ power charge-limit on
 System | Manual | getting started | xdg-open /usr/share/@DISTRO_ID@/doc/getting-started.md
+System | Manual: the look | themes, shapes, the bar | xdg-open /usr/share/@DISTRO_ID@/doc/look.md
+System | Manual: apps | install, remove, defaults | xdg-open /usr/share/@DISTRO_ID@/doc/apps.md
+System | Manual: privacy | what connects where | xdg-open /usr/share/@DISTRO_ID@/doc/privacy.md
+System | Manual: troubleshooting | | xdg-open /usr/share/@DISTRO_ID@/doc/troubleshooting.md
+System | Manual: checking downloads | | xdg-open /usr/share/@DISTRO_ID@/doc/verify.md
 System | The @DISTRO_ID@ command | what it can do | term: @DISTRO_ID@ help
 System | Arch Wiki | | xdg-open https://wiki.archlinux.org
 System | Hyprland Wiki | | xdg-open https://wiki.hypr.land

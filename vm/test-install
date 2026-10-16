@@ -3,7 +3,7 @@
 # with the live ISO), installs a git ref over SSH, reboots into the installed
 # system and runs checks.
 #
-#   vm/test-install [--vm distro-clean] [--from l0-complete] [--ref HEAD] [--keep] [--iso VOLUME] [--encrypt] [--rollback] [--bootsnap] [--alongside]
+#   vm/test-install [--vm distro-clean] [--from l0-complete] [--ref HEAD] [--keep] [--iso VOLUME] [--encrypt] [--rollback] [--bootsnap] [--alongside] [--upgrade-from REF|default]
 #
 # --encrypt installs onto LUKS and types the passphrase at boot (virsh send-key).
 # --bootsnap starts the pre-update snapshot of a package install from the boot
@@ -14,6 +14,13 @@
 # Manager files, an NTFS partition, a firmware entry), installs into the free
 # space beside it and checks none of it changed (decision record 0035).
 #
+# --upgrade-from installs an older ref instead (its own installer, and packages
+# built by its own pkg/build in a temporary worktree), logs in once, then
+# updates it straight to --ref's packages from a local copy of the repository
+# (keyrings, pacman -Syu with the migration hook, new default apps, user
+# migrations, as `update` does), restarts, and runs the checks on the updated
+# system. "default": the last commit of 2026-10-12, the first public ISO's.
+#
 # --iso boots the VM from an installer ISO in libvirt's default pool (built by
 # iso/build) and runs the installer bundled in it, instead of copying a git ref.
 # --keep leaves the VM running afterwards. Needs vm/make-seed to have been run.
@@ -21,7 +28,7 @@
 set -euo pipefail
 export LIBVIRT_DEFAULT_URI=qemu:///system
 here=$(cd "$(dirname "$0")" && pwd); repo=$(dirname "$here")
-vm=distro-clean from=l0-complete ref=HEAD keep=0 iso="" encrypt=0 rollback=0 bootsnap=0 alongside=0
+vm=distro-clean from=l0-complete ref=HEAD keep=0 iso="" encrypt=0 rollback=0 bootsnap=0 alongside=0 upgrade_from=""
 while [[ $# -gt 0 ]]; do
   case $1 in
     --vm) vm=$2; shift 2 ;; --from) from=$2; shift 2 ;;
@@ -31,9 +38,17 @@ while [[ $# -gt 0 ]]; do
     --rollback) rollback=1; shift ;;
     --bootsnap) bootsnap=1; shift ;;
     --alongside) alongside=1; shift ;;
+    --upgrade-from) upgrade_from=$2; shift 2 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
+if [[ -n $upgrade_from ]]; then
+  [[ -z $iso ]] || { echo "--upgrade-from and --iso don't go together" >&2; exit 2; }
+  if [[ $upgrade_from == default ]]; then
+    upgrade_from=$(git -C "$repo" rev-list -1 --before='2026-10-12 23:59:59' "$ref")
+  fi
+  git -C "$repo" rev-parse --verify -q "$upgrade_from^{commit}" >/dev/null || { echo "no such ref: $upgrade_from" >&2; exit 2; }
+fi
 key=~/.local/share/arch-distro-vm/id_ed25519
 user=tester
 log() { printf '\033[1m[test-install]\033[0m %s\n' "$*"; }
@@ -60,17 +75,41 @@ log "live ISO reachable"
 id=$(. "$repo/distro.conf"; echo "$DISTRO_ID")
 repo_name=$(. "$repo/distro.conf"; echo "$DISTRO_REPO")
 repo_url=$(. "$repo/distro.conf"; . "$repo/repo.conf"; echo "$REPO_URL")
+tarball="" old_tree=""
+cleanup() {
+  rm -f "$tarball"
+  if [[ -n $old_tree ]]; then git -C "$repo" worktree remove --force "$old_tree" 2>/dev/null || rm -rf "$old_tree"; fi
+}
+trap cleanup EXIT
+install_ref=$ref
+if [[ -n $upgrade_from ]]; then install_ref=$upgrade_from; fi
 if [[ -z $iso ]]; then
-  tarball=$(mktemp); trap 'rm -f "$tarball"' EXIT
-  git -C "$repo" archive --format=tar.gz -o "$tarball" "$ref"
-  log "copying $(git -C "$repo" rev-parse --short "$ref") ($ref)"
+  tarball=$(mktemp)
+  git -C "$repo" archive --format=tar.gz -o "$tarball" "$install_ref"
+  log "copying $(git -C "$repo" rev-parse --short "$install_ref") ($install_ref)"
   "$here/ssh" "$vm" -- 'rm -rf /root/src && mkdir -p /root/src'
   "$here/ssh" "$vm" -- 'tar -xzf - -C /root/src' < "$tarball"
   # Layer 6 and later install from distro packages, built here and copied along.
-  if [[ -x $repo/pkg/build ]] && git -C "$repo" cat-file -e "$ref:pkg/build" 2>/dev/null; then
+  if [[ -n $upgrade_from ]]; then
+    # The older ref's packages, built by its own pkg/build in a worktree of it.
+    log "building packages from $(git -C "$repo" rev-parse --short "$install_ref") with its own pkg/build"
+    old_tree=$(mktemp -d "${TMPDIR:-/tmp}/distro-upgrade-from.XXXXXX")
+    git -C "$repo" worktree add -q --detach "$old_tree" "$install_ref"
+    # Downloads from the shared source cache (an older pkg/build may not use
+    # it), tried three times.
+    for try in 1 2 3; do
+      SRCDEST=${XDG_CACHE_HOME:-$HOME/.cache}/$id-pkg-sources "$old_tree/pkg/build" >/dev/null && break
+      (( try < 3 )) || { log "BUILDING $(git -C "$repo" rev-parse --short "$install_ref") FAILED"; exit 1; }
+      sleep 20
+    done
+    old_out=$old_tree/pkg/out-test
+    if [[ ! -d $old_out/repo ]]; then old_out=$old_tree/pkg/out; fi
+    tar -C "$old_out" -czf - repo | "$here/ssh" "$vm" -- 'mkdir -p /root/src/pkg/out && tar -xzf - -C /root/src/pkg/out'
+  elif [[ -x $repo/pkg/build ]] && git -C "$repo" cat-file -e "$ref:pkg/build" 2>/dev/null; then
     log "building packages"
     "$repo/pkg/build" "$ref" >/dev/null
-    tar -C "$repo" -czf - pkg/out/repo | "$here/ssh" "$vm" -- 'tar -xzf - -C /root/src'
+    # A test build (pkg/out-test), where the installer looks for packages.
+    tar -C "$repo/pkg/out-test" -czf - repo | "$here/ssh" "$vm" -- 'mkdir -p /root/src/pkg/out && tar -xzf - -C /root/src/pkg/out'
   fi
   "$here/ssh" "$vm" -- 'cat > /root/tester.pub' < "$key.pub"
 
@@ -146,24 +185,77 @@ log "install took $((SECONDS - started))s; rebooting into the installed system"
 
 "$here/ssh" "$vm" -- 'umount -R /mnt; poweroff' || true
 for _ in $(seq 60); do [[ $(virsh domstate "$vm") == "shut off" ]] && break; sleep 2; done
+# Waits for the installed system to come up (typing the disk passphrase).
+wait_boot() {
+  if (( encrypt )); then
+    # Type the passphrase at the unlock prompt. Wait well past the boot menu
+    # first (letters typed there would edit entries), and retry at most three times.
+    type_passphrase() {
+      local c; for c in $(grep -o . <<<"$passphrase"); do virsh send-key "$vm" "KEY_${c^^}" >/dev/null; done
+      virsh send-key "$vm" KEY_ENTER >/dev/null
+    }
+    local unlocked=0 attempt
+    for attempt in 1 2 3; do
+      sleep 25
+      "$here/ssh" "$vm" "$user" -- true 2>/dev/null && { unlocked=1; break; }
+      log "typing the disk passphrase (attempt $attempt)"
+      type_passphrase
+    done
+    (( unlocked )) || wait_ssh "$user" 120
+  fi
+  wait_ssh "$user" 300
+}
 virsh start "$vm" >/dev/null
-if (( encrypt )); then
-  # Type the passphrase at the unlock prompt. Wait well past the boot menu
-  # first (letters typed there would edit entries), and retry at most three times.
-  type_passphrase() {
-    local c; for c in $(grep -o . <<<"$passphrase"); do virsh send-key "$vm" "KEY_${c^^}" >/dev/null; done
-    virsh send-key "$vm" KEY_ENTER >/dev/null
-  }
-  unlocked=0
-  for attempt in 1 2 3; do
-    sleep 25
-    "$here/ssh" "$vm" "$user" -- true 2>/dev/null && { unlocked=1; break; }
-    log "typing the disk passphrase (attempt $attempt)"
-    type_passphrase
-  done
-  (( unlocked )) || wait_ssh "$user" 120
+wait_boot
+
+# --upgrade-from: the older install, as someone used it (one login), updated
+# to --ref's packages the way `update` does, then restarted.
+upgraded=0
+if [[ -n $upgrade_from ]]; then
+  upgrade() { "$here/ssh" "$vm" "$user" -- "$@"; }
+  sudo_up="echo '$password' | sudo -S -p ''"
+  session='export XDG_RUNTIME_DIR=/run/user/$(id -u) WAYLAND_DISPLAY=wayland-1; export DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus HYPRLAND_INSTANCE_SIGNATURE=$(ls $XDG_RUNTIME_DIR/hypr 2>/dev/null | head -1);'
+  for _ in $(seq 60); do upgrade "test -f ~/.local/state/$id/first-login-done" 2>/dev/null && break; sleep 3; done
+  sleep 10
+  log "installed $(upgrade "pacman -Q $id"); first login done: $(upgrade "test -f ~/.local/state/$id/first-login-done && echo yes || echo no")"
+  log "building packages from $(git -C "$repo" rev-parse --short "$ref") ($ref)"
+  "$repo/pkg/build" "$ref" >/dev/null
+  siglevel=Required
+  if [[ ! -f $repo/pkg/out-test/repo/$repo_name.db.sig ]]; then siglevel="Optional TrustAll"; fi
+  tar -C "$repo/pkg/out-test" -czf - repo | upgrade 'rm -rf ~/upgrade && mkdir ~/upgrade && tar -xzf - -C ~/upgrade'
+  local_repo=/var/tmp/$id-upgrade-repo
+  # The distro repository's section points at the local copy for the update,
+  # and back at the hosted one afterwards.
+  upgrade 'cat > ~/upgrade-setup.sh' <<SETUP
+set -e
+rm -rf $local_repo
+mv /home/$user/upgrade/repo $local_repo
+chown -R root:root $local_repo; chmod 755 $local_repo; chmod 644 $local_repo/*
+sed -i '/^\[$repo_name\]\$/,/^\[/{s|^Server = .*|Server = file://$local_repo|; s|^SigLevel = .*|SigLevel = $siglevel|}' /etc/pacman.conf
+grep -A2 '^\[$repo_name\]' /etc/pacman.conf
+# The hosted database's signature would be checked against the local one.
+rm -f /var/lib/pacman/sync/$repo_name.db.sig /var/lib/pacman/sync/$repo_name.files.sig
+SETUP
+  upgrade "$sudo_up bash ~/upgrade-setup.sh" || { log "UPGRADE SETUP FAILED"; exit 1; }
+  log "updating to $(git -C "$repo" rev-parse --short "$ref")"
+  started=$SECONDS
+  # As `update` does: keyrings first, then everything (the migration hook runs
+  # the system migrations), new default apps, then the user's migrations.
+  upgrade "$sudo_up pacman -Syy --needed --noconfirm archlinux-keyring $id-keyring >/dev/null && $sudo_up pacman -Su --noconfirm > /tmp/upgrade.log 2>&1; rc=\$?; grep -iE 'migration|error|warning' /tmp/upgrade.log; exit \$rc" \
+    || { log "UPDATE FAILED"; upgrade 'tail -40 /tmp/upgrade.log'; exit 1; }
+  upgrade "printf '%s\\ny\\n' '$password' | sudo -k -S -p '' $id update new-apps 2>&1 | tail -3" || log "new default apps: not installed"
+  pending=$(upgrade "$sudo_up $id migrate --system --list | grep -v '^applied'" || true)
+  if [[ -n $pending ]]; then log "SYSTEM MIGRATIONS NOT ALL APPLIED:"; printf '%s\n' "$pending"; fi
+  upgrade "$session $id migrate --user" || { log "USER MIGRATIONS FAILED"; exit 1; }
+  # Back to the hosted repository (-yy: a matching database and signature).
+  # Only those two lines change back: migrations may have changed others.
+  upgrade "$sudo_up sed -i '/^\\[$repo_name\\]\$/,/^\\[/{s|^Server = .*|Server = $repo_url|; s|^SigLevel = .*|SigLevel = Required|}' /etc/pacman.conf && grep -A2 '^\\[$repo_name\\]' /etc/pacman.conf && $sudo_up rm -f /var/lib/pacman/sync/$repo_name.db.sig /var/lib/pacman/sync/$repo_name.files.sig && $sudo_up pacman -Syy >/dev/null 2>&1; true"
+  log "update took $((SECONDS - started))s; now $(upgrade "pacman -Q $id"); restarting"
+  upgraded=1
+  upgrade "$sudo_up systemctl reboot" >/dev/null 2>&1 || true
+  sleep 15
+  wait_boot
 fi
-wait_ssh "$user" 300
 
 log "checks"
 fail=0
@@ -231,13 +323,20 @@ if "$here/ssh" "$vm" "$user" -- "pacman -Q $id >/dev/null 2>&1"; then
   check "firmware checks only on request" "pacman -Q fwupd >/dev/null && ! systemctl is-enabled --quiet fwupd-refresh.timer"
   check "home folder private"           "[ \$(stat -c %a ~) = 700 ]"
   check "privacy switches report"       "$id privacy | grep -qE '^weather in the bar +off' && $id firewall apps | grep -q localsend"
-  check "encrypted DNS on and off"      "$sudo_vm env HOME=/root /usr/bin/$id privacy dns quad9 >/dev/null && sleep 3 && resolvectl status | grep -q '+DNSOverTLS' && getent hosts archlinux.org >/dev/null && $sudo_vm env HOME=/root /usr/bin/$id privacy dns off >/dev/null && sleep 3 && [ ! -L /etc/resolv.conf ] && ! grep -rqs DNSOverTLS /etc/systemd/resolved.conf.d && getent hosts archlinux.org >/dev/null"
+  # DNS (decision record 0046): resolved only for encrypted DNS, never LLMNR
+  # or mDNS; on and off both coherent; printing discovery unaffected.
+  check "DNS: no LLMNR or mDNS from resolved; encrypted on and off" "$(sed -e "s/@ID@/$id/g" -e "s/@PW@/$password/g" "$here/checks/dns.sh")"
+  check "encrypted DNS off leaves no resolver config" "! grep -rqs DNSOverTLS /etc/systemd/resolved.conf.d && ! test -e /etc/NetworkManager/conf.d/90-$id-dns.conf"
+  check "manual installed, every menu link opens a page" "for p in getting-started look apps privacy troubleshooting verify; do test -s /usr/share/$id/doc/\$p.md || exit 1; done; n=0; for f in \$(grep -o '/usr/share/$id/doc/[a-z-]*\\.md' /usr/share/$id/default/menu/menu); do test -s \$f || { echo missing \$f; exit 1; }; n=\$((n + 1)); done; [ \$n = 6 ]"
   check "package files intact"          "pacman -Qkk $id 2>&1 | grep -q ', 0 altered files'"
   check "login screen uses distro config" "systemctl cat greetd | grep -q -- '--config /etc/greetd/$id.toml'"
   check "hidden apps dir in XDG_DATA_DIRS" "systemctl --user show-environment | grep -q '^XDG_DATA_DIRS=/usr/share/$id/xdg'"
   check "system names itself (os-release)" ". /etc/os-release; [ \"\$ID\" = $id ] && [ \"\$ID_LIKE\" = arch ] && [ -n \"\$NAME\" ]"
   check "signing key trusted"            "pacman -Q $id-keyring >/dev/null && echo '$password' | sudo -S -p '' pacman-key --list-keys $(cat "$repo/pkg/keyring/fingerprint") >/dev/null"
   check "package repository enabled, signed" "grep -A2 '^\\[$id\\]\$' /etc/pacman.conf | grep -qx 'SigLevel = Required' && grep -A2 '^\\[$id\\]\$' /etc/pacman.conf | grep -qx 'Server = $repo_url'"
+  check "pacman: colour on, candy off by default" "grep -qx Color /etc/pacman.conf && ! grep -q '^ILoveCandy' /etc/pacman.conf && $id update candy 2>&1 | grep -qx 'candy: off'"
+  check "pacman: candy on and off, nothing else changes" "cp /etc/pacman.conf /tmp/pacman.conf.before && $sudo_vm $id update candy on >/dev/null 2>&1 && grep -qx ILoveCandy /etc/pacman.conf && $id update candy 2>&1 | grep -qx 'candy: on' && [ \"\$(diff /tmp/pacman.conf.before /etc/pacman.conf | grep -c '^[<>]')\" = 1 ] && $sudo_vm $id update candy off >/dev/null 2>&1 && cmp -s /tmp/pacman.conf.before /etc/pacman.conf"
+  check "pacman: the colour migration, twice, changes only that line" "$sudo_vm sed -i 's/^Color\$/#Color/' /etc/pacman.conf && $sudo_vm env DISTRO_ID=$id bash /usr/share/$id/migrations/system/20261015-2310-pacman-color.sh && $sudo_vm env DISTRO_ID=$id bash /usr/share/$id/migrations/system/20261015-2310-pacman-color.sh && cmp -s /tmp/pacman.conf.before /etc/pacman.conf"
   check "snapshots configured (@snapshots)" "[ \"\$(findmnt -no FSROOT /.snapshots)\" = /@snapshots ] && echo '$password' | sudo -S -p '' snapper -c root get-config | grep TIMELINE_CREATE | grep -qw no"
   check "a package install takes snapshots" "echo '$password' | sudo -S -p '' pacman -S --noconfirm tree >/dev/null && echo '$password' | sudo -S -p '' snapper -c root --csvout list --columns type,description | grep -q '^pre,.*tree' && echo '$password' | sudo -S -p '' snapper -c root --csvout list --columns type | grep -qx post"
   check "boot menu lists the snapshot"   "n=\$(echo '$password' | sudo -S -p '' snapper -c root --csvout list --columns number,type,description | awk -F, '\$2 == \"pre\" && /tree/ { print \$1 }' | tail -1) && echo '$password' | sudo -S -p '' grep -q \"^//Before update, .* (#\$n)\$\" /boot/limine.conf && echo '$password' | sudo -S -p '' grep -q \"rootflags=subvol=@snapshots/\$n/snapshot .*systemd.volatile=overlay\" /boot/limine.conf"
@@ -279,6 +378,12 @@ if "$here/ssh" "$vm" "$user" -- "test -x /usr/lib/$id/commands/migrate"; then
   check "fresh install: system migrations marked" "echo '$password' | sudo -S -p '' $id migrate --system --list | grep -qv pending || true; ! (echo '$password' | sudo -S -p '' $id migrate --system --list | grep -q pending)"
   check "new user: user migrations marked"        "$id migrate --user --list | grep -q '^applied' && ! $id migrate --user --list | grep -q pending"
   check "migration service ran at login"          "systemctl --user show -p Result $id-migrate.service | grep -q success"
+  if (( upgraded )); then
+    new_version=$(. "$repo/pkg/out-test/build-info"; echo "$BUILD_VERSION")
+    check "updated from ${upgrade_from:0:7}: runs the new packages ($new_version)" "pacman -Q $id $id-settings | awk '{ print \$2 }' | grep -qv '^$new_version-' && exit 1; true"
+    check "updated: no migration failed in the update" "! grep -iE 'migration .* failed|command failed to execute' /var/log/pacman.log"
+    check "updated: theme tokens, window look and panel look in place" "test -s ~/.config/$id/theme/tokens.json && test -s ~/.config/$id/hypr/look.lua && test -s ~/.config/noctalia/00-$id-look.toml && ! test -e ~/.config/hypr/noctalia.lua"
+  fi
   # Simulate an update that ships one new user and one new system migration.
   "$here/ssh" "$vm" "$user" -- "echo '$password' | sudo -S -p '' sh -c 'echo \"touch \\\$HOME/user-migration-ran\" > /usr/share/$id/migrations/user/29990101-0000-test.sh; echo \"touch /var/lib/$id/system-migration-ran\" > /usr/share/$id/migrations/system/29990101-0000-test.sh'" || true
   check "new user migration runs once"   "$id migrate --user >/dev/null && test -f ~/user-migration-ran && rm ~/user-migration-ran && $id migrate --user >/dev/null && ! test -f ~/user-migration-ran"
@@ -348,7 +453,8 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     check "CLI lists its commands"        "$id help | grep -q theme"
     check "first-login setup ran"         "test -f ~/.local/state/$id/first-login-done"
     # The setup window opens once at first login: welcome, then backups.
-    check "setup window opens at first login" "$hypr for i in \$(seq 20); do hyprctl clients -j | jq -e '.[] | select(.class == \"$id.setup\")' >/dev/null && exit 0; sleep 1; done; exit 1"
+    # (An updated install had its first login before the update.)
+    (( upgraded )) || check "setup window opens at first login" "$hypr for i in \$(seq 20); do hyprctl clients -j | jq -e '.[] | select(.class == \"$id.setup\")' >/dev/null && exit 0; sleep 1; done; exit 1"
     screenshot setup-welcome
     check "setup goes on to backups"      "$hypr hyprctl dispatch 'hl.dsp.focus({ window = \"class:^$id.setup\$\" })' >/dev/null; sleep 0.5; wtype -k Return; sleep 1.5; true"
     screenshot setup-backups
@@ -631,6 +737,10 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
         check "keyring needs no password"  "$hypr export DBUS_SESSION_BUS_ADDRESS=unix:path=\$XDG_RUNTIME_DIR/bus; test -f ~/.local/share/keyrings/login.keyring && echo s3cret | timeout 10 secret-tool store --label=install-test app install-test && timeout 10 secret-tool lookup app install-test | grep -qx s3cret && ! hyprctl clients -j | jq -e '.[] | select(.class == \"gcr-prompter\")' >/dev/null"
       else
         check "no passwordless keyring"    "! test -e ~/.local/share/keyrings/login.keyring || ! grep -q '^\[keyring\]' ~/.local/share/keyrings/login.keyring"
+        # Decision record 0047: made at install with the login password, so
+        # never a new-keyring prompt; locked until that password unlocks it.
+        # (Not on an install updated from before it: no password to make it with.)
+        (( upgraded )) || check "keyring: made at install, the login password unlocks it" "$(sed -e "s/@PW@/$password/g" "$here/checks/keyring.sh")"
       fi
       check "plugins: per-version dir behind one link" "t=\$(readlink /usr/share/$id/noctalia-plugins) && [[ \$t == noctalia-plugins.d/* ]] && [ -f /usr/share/$id/noctalia-plugins/utilities/plugin.toml ] && [ ! -e /usr/share/$id/default/noctalia-plugins ] && [ -f /usr/share/libalpm/hooks/$id-shell-reload.hook ]"
       # The menu (SUPER+Space; decision record 0043), driven with real keys
@@ -1188,6 +1298,9 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
   vm_type "$password"; virsh send-key "$vm" KEY_ENTER >/dev/null
   check "logging in from the login screen" 'for i in $(seq 60); do pgrep -u "$USER" -x Hyprland >/dev/null && ! pgrep -u greeter -xf "/usr/bin/noctalia-greeter( .*)?" >/dev/null && exit 0; sleep 1; done; exit 1'
   check "...into the uwsm-run desktop" 'for i in $(seq 30); do systemctl --user is-active --quiet graphical-session.target && exit 0; sleep 1; done; exit 1'
+  # The password login unlocked the keyring (greetd's PAM stack): apps store
+  # and read secrets without any prompt.
+  check "password login: keyring unlocked, no prompt" "$hypr export DBUS_SESSION_BUS_ADDRESS=unix:path=\$XDG_RUNTIME_DIR/bus; sleep 3; test -s ~/.local/share/keyrings/login.keyring && echo s3cret2 | timeout 10 secret-tool store --label=install-test app install-test-2 && [ \"\$(timeout 10 secret-tool lookup app install-test-2)\" = s3cret2 ] && ! hyprctl clients -j | jq -e '.[] | select(.class | test(\"gcr-prompter\"; \"i\"))' >/dev/null && ! pgrep -x gcr-prompter >/dev/null"
 fi
 
 # Optional: start the snapshot taken before the `tree` install from the boot

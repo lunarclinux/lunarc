@@ -179,7 +179,7 @@ Moving to a new computer: `lunarc app export apps.txt` lists what you've install
 
 At the end it says what changed, which snapshot to go back to, and whether to restart for a new kernel.
 
-A newer Hyprland release than the one Lunarc's settings were tested with is held back (with its libraries) until a Lunarc update says it's tested; `lunarc update --all` takes it anyway. `lunarc update check` lists what's waiting without installing. `lunarc update auto-check on` checks once a day by itself (off by default).
+A newer Hyprland release than the one Lunarc's settings were tested with is held back (with its libraries) until a Lunarc update says it's tested; `lunarc update --all` takes it anyway. `lunarc update check` lists what's waiting without installing. `lunarc update auto-check on` checks once a day by itself (off by default). pacman's output is in colour; `lunarc update candy on` draws its progress bars as Pac-Man eating dots (`off` to stop).
 
 If an update breaks something: `lunarc update snapshots` lists the snapshots, and `lunarc update rollback <number>` puts the system back as it was in that snapshot, then you restart. Your files, `/home` and logs are not touched. The replaced system is kept until `lunarc update rollback --clean`.
 
@@ -259,5 +259,5 @@ The first click downloads the speech model once (base.en, about 148 MB, from hug
 ## Passwords, lock-outs and staying awake
 
 - Wrong passwords: after 10 wrong tries in a row (lock screen, sudo), the account waits 2 minutes before accepting the password again.
-- Saved passwords (browsers, editors, mail) live in the desktop keyring. Logging in with a password unlocks it. With automatic login on an encrypted disk it has no password of its own (the disk encryption protects it); on an unencrypted disk it asks for its own password once per login.
+- Saved passwords (browsers, editors, mail) live in the desktop keyring, locked with your login password. Logging in with your password unlocks it. With automatic login on an encrypted disk it has no password of its own (the disk encryption protects it); on an unencrypted disk it asks for your login password the first time something needs it after each start.
 - The screensaver, lock and screen-off wait while a video plays or a game runs: apps that ask the system to stay awake are honoured, as is the stay-awake button in the bar.

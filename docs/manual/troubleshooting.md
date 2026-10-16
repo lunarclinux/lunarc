@@ -68,11 +68,17 @@ themselves; finding them needs the firewall's mDNS opening (`lunarc firewall all
 mdns` if you closed it). Older printers may need a driver: `sudo pacman -S gutenprint`
 or `hplip` (HP), then add the printer in Print Settings.
 
+**A window asks to choose a password for a new keyring.** The keyring holds saved
+passwords. Installs from before 2026-10-16 with automatic login on an unencrypted disk
+don't have one yet: type your login password there (twice), and from then on it asks
+for that password once after each start. Newer installs create it with your login
+password, so they only ever ask to unlock it.
+
 **Something on the network can't reach this computer.** Incoming connections are
 refused by default. `lunarc firewall allow <app or port>` opens one (`localsend`,
 `kdeconnect`, `syncthing`, `ssh`, `8080/tcp`…).
 
 ## Getting help
 
-The menu's **System** group has this manual, `lunarc help`, and links to the Arch
+The menu's **System** group has this manual (each page), `lunarc help`, and links to the Arch
 Wiki, the Hyprland Wiki and the Noctalia docs. Most of the Arch Wiki applies to Lunarc.

@@ -35,11 +35,11 @@ jobs:
           su builder -c 'pkg/build'
       - name: Name epoch packages without ':' (artifact names can't hold it)
         run: |
-          for f in pkg/out/repo/*:*; do
+          for f in pkg/out-test/repo/*:*; do
             [ -e "$f" ] && mv "$f" "$(echo "$f" | tr : .)"
           done
           true
       - uses: actions/upload-artifact@v4
         with:
           name: packages
-          path: pkg/out/repo/
+          path: pkg/out-test/repo/

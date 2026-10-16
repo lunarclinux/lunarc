@@ -14,7 +14,10 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 source "$root/distro.conf"
 out=${1:-$root/iso/out}
+# A release build (pkg/out, from pkg/build --chroot), else a test build
+# (pkg/out-test, from pkg/build). vm/build-iso puts the one it uses in pkg/out.
 repo=$root/pkg/out/repo
+if [[ ! -f $repo/$DISTRO_REPO.db ]]; then repo=$root/pkg/out-test/repo; fi
 [[ -f $repo/$DISTRO_REPO.db ]] || { echo "iso/build: build the packages first (pkg/build)" >&2; exit 1; }
 
 work=$(mktemp -d /var/tmp/$DISTRO_ID-iso.XXXXXX)
@@ -166,7 +169,7 @@ if git -C "$root" rev-parse --git-dir >/dev/null 2>&1; then
   git -C "$root" archive HEAD | tar -C "$dest" -xf -
 else
   # An unpacked `git archive` (e.g. copied into a build VM) has nothing else in it.
-  tar -C "$root" --exclude=./iso/out --exclude=./pkg/out -cf - . | tar -C "$dest" -xf -
+  tar -C "$root" --exclude=./iso/out --exclude=./pkg/out --exclude=./pkg/out-test -cf - . | tar -C "$dest" -xf -
 fi
 mkdir -p "$dest/pkg/out" && cp -r "$repo" "$dest/pkg/out/repo"
 
