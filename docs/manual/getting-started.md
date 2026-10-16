@@ -209,7 +209,7 @@ nano is installed as well, with colours, line numbers and Ctrl+S to save. Prefer
 - Crash captures and AI diagnoses: `~/.local/state/lunarc/crashes/`.
 - Screensaver effects: the distro's in `/usr/share/lunarc/default/screensaver/effects/`; add your own as `~/.config/terminaltexteffects/effects/<name>.py` and they join the rotation.
 - The system's name: `/etc/os-release` (`ID=lunarc`, `ID_LIKE=arch`), rewritten by a pacman hook whenever Arch's `filesystem` package updates.
-- Package signing: Lunarc's packages are signed; `lunarc-keyring` holds the key pacman checks them against (`pacman-key --list-keys 798A81A89261BC4E49D0784BFD4EE07A81DE46AE`). Lunarc's own repository isn't hosted yet, so for now its packages come from the installer only.
+- Package signing: Lunarc's packages are signed; `lunarc-keyring` holds the key pacman checks them against (`pacman-key --list-keys 798A81A89261BC4E49D0784BFD4EE07A81DE46AE`). Installed systems get Lunarc's packages from pkgs.lunarclinux.com; pacman checks every one against that key.
 
 ## The login screen
 After a restart (unless you chose automatic login) and after logging out, the
