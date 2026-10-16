@@ -179,7 +179,7 @@ Moving to a new computer: `lunarc app export apps.txt` lists what you've install
 
 At the end it says what changed, which snapshot to go back to, and whether to restart for a new kernel.
 
-A newer Hyprland release than the one Lunarc's settings were tested with is held back (with its libraries) until a Lunarc update says it's tested; `lunarc update --all` takes it anyway. `lunarc update check` lists what's waiting without installing. `lunarc update auto-check on` checks once a day by itself (off by default).
+A newer Hyprland release than the one Lunarc's settings were tested with is held back (with its libraries) until a Lunarc update says it's tested; `lunarc update --all` takes it anyway. `lunarc update check` lists what's waiting without installing. `lunarc update auto-check on` checks once a day by itself (off by default). pacman's output is in colour; `lunarc update candy on` draws its progress bars as Pac-Man eating dots (`off` to stop).
 
 If an update breaks something: `lunarc update snapshots` lists the snapshots, and `lunarc update rollback <number>` puts the system back as it was in that snapshot, then you restart. Your files, `/home` and logs are not touched. The replaced system is kept until `lunarc update rollback --clean`.
 
