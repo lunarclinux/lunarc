@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# Uploads an installer ISO, its checksum and its signature to the download
+# storage (Cloudflare R2, served at its download address, base_url in site/releases.json), then
+# points site/releases.json at it. The site goes live with the next deploy
+# (site/README.md).
+#
+#   tools/publish-iso <file.iso>          needs <file.iso>.sig (gpg --detach-sign)
+#   tools/publish-iso --dry-run <file.iso>
+#   tools/publish-iso --stage <file.iso>  upload just the ISO now (no signature
+#                                         needed); the full run later skips it
+#
+# Credentials: the Cloudflare API token in ~/.config/cloudflare-<id>-token
+# (Workers R2 Storage: Edit). R2's S3 interface takes the token's id as the
+# access key and the SHA-256 of the token as the secret; nothing else is stored.
+set -euo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd)
+# shellcheck source=/dev/null
+source "$root/distro.conf"
+account=2dde7234199ae2ccde54cc72ee26242b
+bucket=$DISTRO_ID-downloads
+downloads=$(jq -r .base_url "$root/site/releases.json")  # https://downloads.<domain>/
+token_file=${CLOUDFLARE_TOKEN_FILE:-$HOME/.config/cloudflare-$DISTRO_ID-token}
+fail() { echo "publish-iso: $*" >&2; exit 1; }
+
+dry=0 stage=0
+case ${1:-} in --dry-run) dry=1; shift ;; --stage) stage=1; shift ;; esac
+iso=${1:-}
+[[ -f $iso && $iso == *.iso ]] || fail "usage: tools/publish-iso [--dry-run | --stage] <file.iso>"
+(( stage )) || [[ -f $iso.sig ]] || fail "$(basename "$iso").sig is missing; sign it first: gpg --homedir ~/.local/share/<id>-signing/gnupg --detach-sign -u <fingerprint> $iso"
+fpr=$(<"$root/pkg/keyring/fingerprint")
+(( stage )) || GNUPGHOME=${SIGNING_GNUPGHOME:-$HOME/.local/share/$DISTRO_ID-signing/gnupg} \
+  gpg --batch --status-fd 1 --verify "$iso.sig" "$iso" 2>/dev/null | grep -q "VALIDSIG $fpr" \
+  || fail "the signature isn't a valid signature by $fpr"
+
+name=$(basename "$iso")
+sum=$(sha256sum "$iso" | cut -d' ' -f1)
+work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
+printf '%s  %s\n' "$sum" "$name" > "$work/$name.sha256"
+
+[[ -r $token_file ]] || fail "no Cloudflare token in $token_file"
+token=$(<"$token_file")
+key_id=$(curl -fsS -H "Authorization: Bearer $token" https://api.cloudflare.com/client/v4/user/tokens/verify | jq -r .result.id)
+[[ -n $key_id && $key_id != null ]] || fail "the Cloudflare token isn't valid"
+secret=$(printf '%s' "$token" | sha256sum | cut -d' ' -f1)
+
+put() { # put <local file> <object name>
+  echo "publish-iso: uploading $2 ($(du -h "$1" | cut -f1))"
+  (( dry )) && return 0
+  curl -fsS --retry 3 -o /dev/null --aws-sigv4 "aws:amz:auto:s3" --user "$key_id:$secret" \
+    -H "x-amz-content-sha256: UNSIGNED-PAYLOAD" -T "$1" \
+    "https://$account.r2.cloudflarestorage.com/$bucket/$2"
+}
+# The ISO already up (an earlier --stage)? A single-part upload's ETag is its MD5.
+etag=$(curl -sSI "$downloads$name" | tr -d '\r"' | awk 'tolower($1) == "etag:" { print $2 }')
+if [[ -n $etag && $etag == "$(md5sum "$iso" | cut -d' ' -f1)" ]]; then
+  echo "publish-iso: $name is already uploaded"
+else
+  put "$iso" "$name"
+fi
+if (( stage )); then echo "publish-iso: staged; sign it, then run tools/publish-iso $iso"; exit 0; fi
+put "$iso.sig" "$name.sig"
+put "$work/$name.sha256" "$name.sha256"
+
+if (( ! dry )); then
+  # Check what's served matches before the site points at it.
+  got=$(curl -fsSI "$downloads$name" | tr -d '\r' | awk 'tolower($1) == "content-length:" { print $2 }')
+  [[ $got == "$(stat -c %s "$iso")" ]] || fail "the served file's size ($got) doesn't match"
+  "$root/tools/make-site" --set-release "$iso"
+  echo "publish-iso: done; deploy the site to show it (site/README.md)"
+fi
