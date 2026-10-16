@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{title}}</title>
+<meta name="description" content="{{description}}">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#070b17" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f7f5f0" media="(prefers-color-scheme: light)">
+<link rel="canonical" href="https://lunarclinux.com{{path}}">
+<link rel="icon" href="{{asset:img/logo.svg}}" type="image/svg+xml">
+<link rel="apple-touch-icon" href="{{asset:img/apple-touch-icon.png}}">
+<link rel="preload" href="{{asset:fonts/GeistMono.woff2}}" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="{{asset:fonts/Geist.woff2}}" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="{{asset:style.css}}">
+<script src="{{asset:site.js}}" defer></script>
+</head>
+<body class="{{body_class}}">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <nav class="topbar-inner" aria-label="Main">
+    <a class="brand" href="/">
+      <span class="brand-tile" aria-hidden="true"><svg viewBox="0 0 80 100" width="12" height="15" focusable="false"><path d="M 75.4 11.7 A 46 46 0 1 0 75.4 88.3 A 40 40 0 1 1 75.4 11.7 Z"/></svg></span>
+      <span class="brand-name">Lunarc</span>
+    </a>
+    <ul class="nav">{{raw:nav}}</ul>
+  </nav>
+</header>
+<main id="main">
+{{raw:content}}
+</main>
+<footer class="footer">
+  <div class="footer-inner">
+    <ul class="footer-links">
+      <li><a href="/download">Download</a></li>
+      <li><a href="/docs">Docs</a></li>
+      <li><a href="/docs/privacy">Privacy</a></li>
+      <li><a href="/about">About</a></li>
+    </ul>
+    <p>Lunarc is free software under the GNU GPL, version 3 or later. Fonts: Geist and Geist Mono, <a href="/licenses/geist-ofl.txt">SIL Open Font License</a>.</p>
+    <p>This site has no tracking: no cookies, no analytics, and nothing is loaded from other servers.</p>
+  </div>
+</footer>
+</body>
+</html>

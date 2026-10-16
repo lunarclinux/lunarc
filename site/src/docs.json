@@ -1,0 +1,46 @@
+{
+  "note": "Docs pages, in order. Each page is made of parts of docs/manual/*.md: a whole file, or one '## section' of it. heading:false drops the section's own heading (the page title replaces it); demote:true keeps a whole file's title as a section heading. tools/make-site stops if a section or a manual file isn't on any page.",
+  "pages": [
+    {"slug": "installing", "title": "Installing", "description": "Starting from the USB stick, installing, next to Windows, graphics drivers, encryption.",
+     "parts": [{"file": "docs/manual/getting-started.md", "section": "Installing", "heading": false}]},
+    {"slug": "first-steps", "title": "First steps", "description": "Keys, the SUPER+Space menu, the bar, logging in and locking.",
+     "parts": [
+       {"file": "docs/manual/getting-started.md", "section": "Keys"},
+       {"file": "docs/manual/getting-started.md", "section": "The menu"},
+       {"file": "docs/manual/getting-started.md", "section": "Opening apps"},
+       {"file": "docs/manual/getting-started.md", "section": "The bar"},
+       {"file": "docs/manual/getting-started.md", "section": "The login screen"},
+       {"file": "docs/manual/getting-started.md", "section": "Locking the screen"},
+       {"file": "docs/manual/getting-started.md", "section": "Passwords, lock-outs and staying awake"}
+     ]},
+    {"slug": "updates", "title": "Updates and snapshots", "description": "Updating, rolling back, starting a snapshot from the boot menu.",
+     "parts": [{"file": "docs/manual/getting-started.md", "section": "Updating", "heading": false}]},
+    {"slug": "look", "title": "The look", "description": "Themes, dark and light, wallpapers, shape, blur and the bar's options.",
+     "parts": [{"file": "docs/manual/look.md"}]},
+    {"slug": "apps", "title": "Apps", "description": "What's installed, the app catalog, installing and removing, editing files, dictation.",
+     "parts": [
+       {"file": "docs/manual/getting-started.md", "section": "What's installed"},
+       {"file": "docs/manual/apps.md"},
+       {"file": "docs/manual/getting-started.md", "section": "Editing files in the terminal"},
+       {"file": "docs/manual/getting-started.md", "section": "Dictation"}
+     ]},
+    {"slug": "displays", "title": "Displays and laptops", "description": "Screen size and arrangement, docking, battery, lid and hibernation.",
+     "parts": [
+       {"file": "docs/manual/getting-started.md", "section": "Displays"},
+       {"file": "docs/manual/getting-started.md", "section": "Laptop power"}
+     ]},
+    {"slug": "backups", "title": "Backups", "description": "Pika Backup, backing up to a NAS, moving to a new computer.",
+     "parts": [{"file": "docs/manual/getting-started.md", "section": "Backups", "heading": false}]},
+    {"slug": "privacy", "title": "Privacy and security", "description": "Every connection a fresh install makes, the firewall, the defaults, checking downloads.",
+     "parts": [{"file": "docs/manual/privacy.md"}, {"file": "docs/manual/verify.md", "demote": true}]},
+    {"slug": "printing", "title": "Printing", "description": "Driverless network printers, other printers, how printing is set up.",
+     "parts": [{"file": "docs/manual/getting-started.md", "section": "Printing", "heading": false}]},
+    {"slug": "command", "title": "The lunarc command", "description": "Every subcommand, and where settings and files are kept.",
+     "parts": [
+       {"file": "docs/manual/getting-started.md", "section": "The `lunarc` command", "heading": false},
+       {"file": "docs/manual/getting-started.md", "section": "Where things are"}
+     ]},
+    {"slug": "troubleshooting", "title": "Troubleshooting", "description": "When installing, starting up, updating or something on the desktop goes wrong.",
+     "parts": [{"file": "docs/manual/troubleshooting.md"}]}
+  ]
+}

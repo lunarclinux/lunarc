@@ -1,48 +1,92 @@
-const page = `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lunarc</title>
-<meta name="description" content="Lunarc is an Arch-based Linux desktop. Coming soon.">
-<meta name="theme-color" content="#0B1020">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 100'%3E%3Cpath fill='%23EBC77A' d='M 75.4 11.7 A 46 46 0 1 0 75.4 88.3 A 40 40 0 1 1 75.4 11.7 Z'/%3E%3C/svg%3E">
-<style>
-  :root { color-scheme: dark; }
-  html, body { height: 100%; margin: 0; }
-  body {
-    background: #0B1020; color: #E6E2D6;
-    font-family: "Sora", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-    display: flex; align-items: center; justify-content: center; text-align: center;
-    padding: 0 16px;
+// The website's Cloudflare Worker (lunarc-site). tools/make-site replaces the
+// import below with the built files and writes the result to site/dist/worker.js,
+// one self-contained module: deploy that file, not this one (site/README.md).
+import { FILES, ROUTES } from "./files.js";
+
+const SECURITY_HEADERS = {
+  "content-security-policy":
+    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; " +
+    "connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+  "strict-transport-security": "max-age=63072000; includeSubDomains",
+  "x-content-type-options": "nosniff",
+  "referrer-policy": "no-referrer",
+  "permissions-policy":
+    "accelerometer=(), browsing-topics=(), camera=(), display-capture=(), geolocation=(), gyroscope=(), " +
+    "magnetometer=(), microphone=(), midi=(), payment=(), usb=()",
+  "x-frame-options": "DENY",
+  "cross-origin-opener-policy": "same-origin",
+  "cross-origin-resource-policy": "same-origin",
+};
+
+// Old or alternative addresses.
+const REDIRECTS = {
+  "/index": "/",
+  "/downloads": "/download",
+  "/manual": "/docs",
+  "/privacy": "/docs/privacy",
+  "/docs/getting-started": "/docs/installing",
+};
+
+const decoded = new Map();
+
+function body(path, file) {
+  if (file.s !== undefined) return file.s;
+  let bytes = decoded.get(path);
+  if (!bytes) {
+    const bin = atob(file.b);
+    bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    decoded.set(path, bytes);
   }
-  main { display: flex; flex-direction: column; align-items: center; gap: 18px; }
-  svg { width: 72px; height: 90px; }
-  h1 { margin: 8px 0 0; font-weight: 300; font-size: 56px; letter-spacing: 2px; }
-  p { margin: 0; font-size: 18px; line-height: 1.5; }
-  .muted { color: #A3ABC4; font-size: 15px; }
-</style>
-</head>
-<body>
-<main>
-  <svg viewBox="0 0 80 100" role="img" aria-label="Lunarc crescent mark"><path fill="#EBC77A" d="M 75.4 11.7 A 46 46 0 1 0 75.4 88.3 A 40 40 0 1 1 75.4 11.7 Z"/></svg>
-  <h1>Lunarc</h1>
-  <p>An Arch-based Linux desktop.</p>
-  <p class="muted">Coming soon.</p>
-</main>
-</body>
-</html>`;
+  return bytes;
+}
+
+function redirect(location, status = 301) {
+  return new Response(null, { status, headers: { location, ...SECURITY_HEADERS } });
+}
+
+function serve(request, path, status = 200) {
+  const file = FILES[path];
+  const headers = {
+    "content-type": file.t,
+    "cache-control": status === 200 ? file.c : "public, max-age=60",
+    etag: file.e,
+    ...SECURITY_HEADERS,
+  };
+  if (status === 200 && request.headers.get("if-none-match") === file.e) {
+    return new Response(null, { status: 304, headers });
+  }
+  return new Response(request.method === "HEAD" ? null : body(path, file), { status, headers });
+}
 
 export default {
-  async fetch() {
-    return new Response(page, {
-      headers: {
-        "content-type": "text/html; charset=utf-8",
-        "cache-control": "public, max-age=300",
-        "x-content-type-options": "nosniff",
-        "referrer-policy": "no-referrer",
-        "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; img-src data:",
-      },
-    });
+  async fetch(request) {
+    const url = new URL(request.url);
+    if (url.protocol === "http:" && url.hostname !== "localhost" && url.hostname !== "127.0.0.1") {
+      url.protocol = "https:";
+      return redirect(url.toString());
+    }
+    if (request.method !== "GET" && request.method !== "HEAD") {
+      return new Response("Method not allowed\n", {
+        status: 405,
+        headers: { allow: "GET, HEAD", "content-type": "text/plain; charset=utf-8", ...SECURITY_HEADERS },
+      });
+    }
+
+    let path = url.pathname;
+    try {
+      path = decodeURIComponent(path);
+    } catch {
+      return serve(request, ROUTES["/404"], 404);
+    }
+    // One address per page: no trailing slash, no .html, no index.html.
+    let clean = path.replace(/\/index\.html$/, "/").replace(/\.html$/, "");
+    if (clean.length > 1) clean = clean.replace(/\/+$/, "");
+    if (REDIRECTS[clean]) return redirect(REDIRECTS[clean] + url.search);
+    if (clean !== path && ROUTES[clean]) return redirect(clean + url.search);
+
+    if (ROUTES[path] && path !== "/404") return serve(request, ROUTES[path]);
+    if (FILES[path] && !path.endsWith(".html")) return serve(request, path);
+    return serve(request, ROUTES["/404"], 404);
   },
 };
