@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Previews the website in a Podman container, through the same Worker code
+# that's deployed (site/serve.mjs answers through site/dist/worker.js).
+#
+#   tools/preview-site [--lan] [port]   build, then serve on http://localhost:<port> (8080)
+#   tools/preview-site --stop
+#
+# --lan also serves it to other computers on the network (the address is
+# printed); without it only this computer can open it. Rootless: the
+# container runs as you, with the site folder mounted read-only.
+set -euo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd)
+# shellcheck source=/dev/null
+source "$root/distro.conf"
+name=$DISTRO_ID-site-preview
+image=docker.io/library/node:22-alpine
+fail() { echo "preview-site: $*" >&2; exit 1; }
+command -v podman >/dev/null || fail "needs podman: sudo pacman -S podman"
+
+if [[ ${1:-} == --stop ]]; then podman rm -f "$name" >/dev/null 2>&1 || true; echo "preview-site: stopped"; exit 0; fi
+bind=127.0.0.1
+if [[ ${1:-} == --lan ]]; then bind=0.0.0.0; shift; fi
+port=${1:-8080}
+[[ $port =~ ^[0-9]+$ ]] || fail "port must be a number"
+
+"$root/tools/make-site" >/dev/null
+podman rm -f "$name" >/dev/null 2>&1 || true
+podman run -d --name "$name" --replace --read-only --cap-drop all --security-opt no-new-privileges \
+  -e HOST=0.0.0.0 -p "$bind:$port:$port" -v "$root/site:/site:ro,Z" \
+  "$image" node /site/serve.mjs "$port" >/dev/null
+for _ in $(seq 30); do curl -fsS -o /dev/null "http://127.0.0.1:$port/" 2>/dev/null && break; sleep 1; done
+curl -fsS -o /dev/null "http://127.0.0.1:$port/" || { podman logs "$name" >&2; fail "the preview didn't start"; }
+echo "preview-site: http://localhost:$port"
+if [[ $bind == 0.0.0.0 ]]; then
+  for ip in $(ip -4 -o addr show scope global | awk '{ print $4 }' | cut -d/ -f1); do echo "preview-site: http://$ip:$port (other computers; the firewall must allow the port)"; done
+fi
+echo "preview-site: stop it with tools/preview-site --stop"

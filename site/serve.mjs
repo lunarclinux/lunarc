@@ -1,6 +1,7 @@
 // Local preview: serves site/dist through the built worker.js, so the routes,
 // redirects and headers are the ones Cloudflare will send. Run by
-// `tools/make-site --serve [port]` (needs Node.js 18 or newer). Listens on 127.0.0.1 only.
+// `tools/make-site --serve [port]` (needs Node.js 18 or newer). Listens on 127.0.0.1 only, or
+// on $HOST (tools/preview-site sets 0.0.0.0 inside its container).
 import http from "node:http";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
@@ -15,4 +16,4 @@ http.createServer(async (req, res) => {
   res.writeHead(response.status, Object.fromEntries(response.headers));
   res.end(response.body ? Buffer.from(await response.arrayBuffer()) : undefined);
   console.log(response.status, req.method, req.url);
-}).listen(port, "127.0.0.1", () => console.log(`http://localhost:${port}`));
+}).listen(port, process.env.HOST || "127.0.0.1", () => console.log(`http://localhost:${port}`));
