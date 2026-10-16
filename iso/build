@@ -76,6 +76,13 @@ sed -i 's/^timeout .*/timeout 5/' "$profile/efiboot/loader/loader.conf"
     networkmanager pipewire-jack noto-fonts \
     mesa vulkan-radeon vulkan-intel vulkan-nouveau intel-media-driver
 } >> "$profile/packages.x86_64"
+# A package named here is taken from the first repository that has it, and
+# Arch's repositories come first: one this distro builds itself (noctalia,
+# with its patches and epoch) is named <repo>/<name> so it comes from ours.
+mapfile -t ours < <(tar -tzf "$repo/$DISTRO_REPO.db.tar.gz" | sed -n 's#^\(.*\)-[^-]*-[^-]*/$#\1#p' | sort -u)
+for name in "${ours[@]}"; do
+  sed -i "s|^$name\$|$DISTRO_REPO/$name|" "$profile/packages.x86_64"
+done
 
 # The distro's packages come from the built repository. Signatures are checked
 # against a keyring made just for this build (GPGDir), so the build machine's
