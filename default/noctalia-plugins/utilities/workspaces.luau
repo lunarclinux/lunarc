@@ -38,7 +38,7 @@ local function cell(it)
   local isActive = it.id == active
   local occupied = it.windows > 0
   local children = { ui.label({ text = string.format("%02d", it.id), fontSize = seg.TEXT,
-    fontWeight = isActive and "semibold" or nil,
+    fontWeight = isActive and "semibold" or "normal",
     color = isActive and seg.amberLight() or (occupied and seg.MUTED or seg.FAINT) }) }
   if isActive then
     table.insert(children, ui.label({ text = phase(it.id), fontFamily = MOON_FONT, fontSize = 13, color = "primary" }))

@@ -7,7 +7,7 @@ local toggle = require("./toggle.luau").new(barWidget, "stay-awake")
 local on = false
 
 local function render()
-  toggle.show({ ui.glyph({ name = on and "eye" or "eye-off", size = 15, color = on and "primary" or nil }) }, on)
+  toggle.show({ ui.glyph({ name = on and "eye" or "eye-off", size = 15, color = on and "primary" or "on_surface_variant" }) }, on)
   barWidget.setTooltip(on and "Staying awake" or "Stay awake")
 end
 

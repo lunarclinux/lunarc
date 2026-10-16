@@ -12,7 +12,7 @@ local function render()
     barWidget.setTooltip("Listening. Click to stop and type.")
   else
     -- Setting up (the first click downloads the speech model) counts as on.
-    toggle.show({ ui.glyph({ name = "microphone", color = state == "setting up" and "primary" or nil }) }, state == "setting up")
+    toggle.show({ ui.glyph({ name = "microphone", color = state == "setting up" and "primary" or "on_surface_variant" }) }, state == "setting up")
     if state == "ready" then
       barWidget.setTooltip("Dictate")
     elseif state == "setting up" then
