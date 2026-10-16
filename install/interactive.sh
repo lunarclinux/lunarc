@@ -202,7 +202,7 @@ styled_questions() {
     summary_line "Encryption" "$( ((ENCRYPT)) && echo on || echo off)"
     summary_line "Log in automatically" "$( ((AUTOLOGIN)) && echo yes || echo no)"
     if (( AUTOLOGIN && ! ENCRYPT )); then
-      summary_line "" "a keyring password is asked for once at each login"
+      summary_line "" "saved passwords: your password is asked for once after each start"
     fi
     printf '\n'
     if [[ $INSTALL_MODE == alongside ]]; then

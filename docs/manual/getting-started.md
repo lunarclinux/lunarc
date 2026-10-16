@@ -259,5 +259,5 @@ The first click downloads the speech model once (base.en, about 148 MB, from hug
 ## Passwords, lock-outs and staying awake
 
 - Wrong passwords: after 10 wrong tries in a row (lock screen, sudo), the account waits 2 minutes before accepting the password again.
-- Saved passwords (browsers, editors, mail) live in the desktop keyring. Logging in with a password unlocks it. With automatic login on an encrypted disk it has no password of its own (the disk encryption protects it); on an unencrypted disk it asks for its own password once per login.
+- Saved passwords (browsers, editors, mail) live in the desktop keyring, locked with your login password. Logging in with your password unlocks it. With automatic login on an encrypted disk it has no password of its own (the disk encryption protects it); on an unencrypted disk it asks for your login password the first time something needs it after each start.
 - The screensaver, lock and screen-off wait while a video plays or a game runs: apps that ask the system to stay awake are honoured, as is the stay-awake button in the bar.

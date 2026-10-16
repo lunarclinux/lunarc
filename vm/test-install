@@ -618,6 +618,9 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
         check "keyring needs no password"  "$hypr export DBUS_SESSION_BUS_ADDRESS=unix:path=\$XDG_RUNTIME_DIR/bus; test -f ~/.local/share/keyrings/login.keyring && echo s3cret | timeout 10 secret-tool store --label=install-test app install-test && timeout 10 secret-tool lookup app install-test | grep -qx s3cret && ! hyprctl clients -j | jq -e '.[] | select(.class == \"gcr-prompter\")' >/dev/null"
       else
         check "no passwordless keyring"    "! test -e ~/.local/share/keyrings/login.keyring || ! grep -q '^\[keyring\]' ~/.local/share/keyrings/login.keyring"
+        # Decision record 0047: made at install with the login password, so
+        # never a new-keyring prompt; locked until that password unlocks it.
+        check "keyring: made at install, the login password unlocks it" "$(sed -e "s/@PW@/$password/g" "$here/checks/keyring.sh")"
       fi
       check "plugins: per-version dir behind one link" "t=\$(readlink /usr/share/$id/noctalia-plugins) && [[ \$t == noctalia-plugins.d/* ]] && [ -f /usr/share/$id/noctalia-plugins/utilities/plugin.toml ] && [ ! -e /usr/share/$id/default/noctalia-plugins ] && [ -f /usr/share/libalpm/hooks/$id-shell-reload.hook ]"
       # The menu (SUPER+Space; decision record 0043), driven with real keys
@@ -1170,6 +1173,9 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
   vm_type "$password"; virsh send-key "$vm" KEY_ENTER >/dev/null
   check "logging in from the login screen" 'for i in $(seq 60); do pgrep -u "$USER" -x Hyprland >/dev/null && ! pgrep -u greeter -xf "/usr/bin/noctalia-greeter( .*)?" >/dev/null && exit 0; sleep 1; done; exit 1'
   check "...into the uwsm-run desktop" 'for i in $(seq 30); do systemctl --user is-active --quiet graphical-session.target && exit 0; sleep 1; done; exit 1'
+  # The password login unlocked the keyring (greetd's PAM stack): apps store
+  # and read secrets without any prompt.
+  check "password login: keyring unlocked, no prompt" "$hypr export DBUS_SESSION_BUS_ADDRESS=unix:path=\$XDG_RUNTIME_DIR/bus; sleep 3; test -s ~/.local/share/keyrings/login.keyring && echo s3cret2 | timeout 10 secret-tool store --label=install-test app install-test-2 && [ \"\$(timeout 10 secret-tool lookup app install-test-2)\" = s3cret2 ] && ! hyprctl clients -j | jq -e '.[] | select(.class | test(\"gcr-prompter\"; \"i\"))' >/dev/null && ! pgrep -x gcr-prompter >/dev/null"
 fi
 
 # Optional: start the snapshot taken before the `tree` install from the boot
