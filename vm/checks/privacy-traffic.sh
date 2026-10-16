@@ -30,10 +30,11 @@ timesync=$(id -u systemd-timesync 2>/dev/null || echo -1)
 allowed_ips=" $(getent ahosts ping.archlinux.org archlinux.org 2>/dev/null | awk '{print $1}' | sort -u | tr '\n' ' ') "
 allowed_names='^((.+\.)?archlinux\.org|([0-9]+\.)?arch\.pool\.ntp\.org)$'
 idle=120
+work=$(mktemp -d /tmp/privacy-check.XXXXXX)
 
 # Every DNS question leaving through a network interface (not loopback), one
 # name per line, until the stop file appears.
-cat > /tmp/privacy-dns.py <<'PY'
+cat > "$work/dns.py" <<'PY'
 import os, socket, struct, sys
 out = open(sys.argv[1], "a", buffering=1)
 s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(3))
@@ -63,10 +64,11 @@ while not os.path.exists(sys.argv[2]):
     if labels:
         out.write(".".join(labels).lower() + "\n")
 PY
-names_file=/tmp/privacy-dns.names stop_file=/tmp/privacy-dns.stop
-rm -f "$names_file" "$stop_file"
+names_file=$work/names stop_file=$work/stop
+: > "$names_file"
 
-sudo nft -f - <<'NFT'
+# A file, not stdin: sudo() feeds the password on stdin.
+cat > "$work/log.nft" <<'NFT'
 table inet privacy_check {
   chain out {
     type filter hook output priority 0; policy accept;
@@ -74,6 +76,8 @@ table inet privacy_check {
   }
 }
 NFT
+sudo nft -f "$work/log.nft" || { echo "couldn't add the logging rule"; exit 1; }
+sudo nft list table inet privacy_check >/dev/null || { echo "the logging rule isn't there"; exit 1; }
 since=$(date '+%Y-%m-%d %H:%M:%S')
 cleanup() {
   touch "$stop_file"
@@ -83,10 +87,17 @@ cleanup() {
   noctalia msg panel-close >/dev/null 2>&1
 }
 trap cleanup EXIT
-sudo python3 /tmp/privacy-dns.py "$names_file" "$stop_file" &
+sudo python3 "$work/dns.py" "$names_file" "$stop_file" &
 sniffer=$!
 for _ in $(seq 20); do [[ -s $names_file ]] && break; sleep 0.5; done
 [[ -s $names_file ]] || { echo "the DNS reader didn't start"; exit 1; }
+
+# The log must work: a lookup and connection of our own (as root, so it is
+# allowed) has to show up in it.
+sudo curl -s -o /dev/null -m 10 http://ping.archlinux.org/nm-check.txt
+for _ in $(seq 10); do sudo journalctl -k --since "$since" --no-pager -o cat | grep -q 'privacy-check: .*DPT=80 ' && break; sleep 1; done
+sudo journalctl -k --since "$since" --no-pager -o cat | grep -q 'privacy-check: .*DPT=80 ' || { echo "the connection log records nothing"; exit 1; }
+grep -qx 'ping.archlinux.org' "$names_file" || { echo "the DNS reader records nothing"; exit 1; }
 
 # 1. The shell's start-up; a player with remote art; a remote notification icon.
 systemctl --user restart noctalia
