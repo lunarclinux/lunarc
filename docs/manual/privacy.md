@@ -20,7 +20,11 @@ install yourself are yours to configure. (Project rule: decision record 0031.)
 
 Nothing else runs in the background: no update checks (unless you turn on
 the daily one, below), no weather, no location lookups, no plugin catalogs,
-no exchange-rate downloads.
+no exchange-rate downloads, no colour-palette or template catalogs, no
+public-IP lookup, no cover art or notification icons fetched from the web, and
+no usage ping from the desktop shell (Noctalia). The desktop itself (the
+shell, the bar, the menu) makes no connection until you use one of the
+features below.
 
 ## Only when you use something
 
@@ -28,7 +32,7 @@ no exchange-rate downloads.
 |---|---|---|
 | Updates | your Arch mirrors, `pkgs.lunarclinux.com` (GitHub releases), the AUR for AUR apps | `lunarc update` (and `update check`) |
 | Firmware updates | the Linux Vendor Firmware Service (fwupd.org) | `lunarc update firmware` |
-| Weather in the bar (off by default) | `api.noctalia.dev` (your city name, from the time zone) and `api.open-meteo.com` (coordinates) | after `lunarc privacy weather on` or choosing it at first login |
+| Weather in the bar (off by default) | `api.noctalia.dev` (your city name, from the time zone) and `api.open-meteo.com` (coordinates) | after `lunarc privacy weather on` or choosing it at first login; the forecast then every 30 minutes |
 | Encrypted DNS (off by default) | the provider you pick: Quad9, Mullvad or Cloudflare (DNS over TLS) | after `lunarc privacy dns <provider>` |
 | Installing apps | Arch mirrors, the AUR, the app's own site (web apps) | `lunarc app install`, `lunarc package install`, the menu's Install |
 | Daily update check (off by default) | your Arch mirrors and `pkgs.lunarclinux.com` (the package lists only; the AUR isn't asked) | once a day, after `lunarc update auto-check on`, choosing it at first login, or System › Check for updates daily in the menu |
@@ -41,7 +45,16 @@ no exchange-rate downloads.
 | Backups | where you point Pika Backup | once you set it up |
 | Finding printers | mDNS questions on your local network only (never past your router); this computer never announces itself | when a print dialog or Print Settings is open, or something prints |
 | Printer drivers | openprinting.org (the printer's make and model) | adding a printer in Print Settings when no installed driver matches |
-| Noctalia community palettes, templates, plugins, calendars | noctalia.dev, GitHub, your calendar provider | only when you open or add them in Noctalia's settings |
+| Community colour palettes | `api.noctalia.dev` (the palette list, then the palette you pick) | while Community is the Palette Source (Settings › Appearance): when you choose it, and at each start of the shell and theme change after that |
+| Community templates | `api.noctalia.dev` (the template list and the templates you pick) | while Enable Community Templates is on (Settings › Templates; off by default): at each start of the shell and theme change |
+| Plugins from Noctalia's catalogs | GitHub (`noctalia-dev/official-plugins`, `community-plugins`) | only after you add those plugin sources; the plugins that come with Lunarc are on this computer |
+| Calendars | your calendar provider (Google through Noctalia's sign-in relay at `api.noctalia.dev`, iCloud, your CalDAV server or calendar link) | once you add an account in Settings › Calendar |
+| Your public IP address in the network tab (off by default) | `api.noctalia.dev` | when you turn on Settings › Security › Show WAN IP: then at each network or VPN change |
+| Locating by IP address (off by default) | `api.noctalia.dev` | only if you turn on Settings › Location › Auto-Locate (IP); Lunarc's weather uses your city instead |
+| Cover art from the web (off by default) | the address the music player gives (YouTube thumbnails from `i.ytimg.com`) | after setting `remote_art = true` under `[shell.mpris]`; until then only art the player saved on this computer shows |
+| Notification icons from the web (off by default) | the address in the notification | after setting `remote_icons = true` under `[notification]` |
+| Currency rates in the launcher's calculator (off by default) | the European Central Bank, Coinbase, FloatRates, mycurrency.net and currency-api (libqalculate's sources) | after setting `fetch_exchange_rates = true` under `[shell.launcher]` |
+| Noctalia's usage ping (off by default) | `api.noctalia.dev` (a random install id, Noctalia's version, compositor, distribution, memory size, screen sizes) | once per start of the shell, only if you turn on Settings › Security › Anonymous Startup Ping |
 
 ## Defaults that protect you
 
