@@ -35,11 +35,16 @@ warn() { printf '  warn  %s\n' "$1"; [[ -z ${2:-} ]] || printf '        %s\n' "$
 
 check_firewall() {
   local zone allowed
-  if ! command -v firewall-cmd >/dev/null || [[ $(firewall-cmd --state 2>/dev/null) != running ]]; then
+  if ! systemctl is-active --quiet firewalld 2>/dev/null; then
     warn "the firewall is off" "turn it on: sudo systemctl enable --now firewalld"
     return
   fi
-  zone=$(firewall-cmd --get-default-zone 2>/dev/null)
+  # firewalld answers queries only for the desktop session (polkit), not over
+  # SSH: then just say it's on.
+  if ! zone=$(firewall-cmd --get-default-zone 2>/dev/null); then
+    ok "firewall on"
+    return
+  fi
   allowed=$(printf '%s %s' "$(firewall-cmd --zone="$zone" --list-services 2>/dev/null)" \
     "$(firewall-cmd --zone="$zone" --list-ports 2>/dev/null)" | xargs -n1 | grep -vxE 'dhcpv6-client|mdns' | xargs || true)
   if [[ -z $allowed ]]; then
