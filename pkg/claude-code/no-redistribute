@@ -1,0 +1,4 @@
+Claude Code's license ("All rights reserved") doesn't allow redistribution, so
+pkg/build skips this folder and the repository never carries the program. The
+PKGBUILD is a recipe: it is built on the user's machine, downloading from
+Anthropic and checking Anthropic's signature.

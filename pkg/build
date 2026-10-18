@@ -134,6 +134,9 @@ for dir in "$work"/src/pkg/*/; do
   name=$(basename "$dir")
   case $name in main|settings|keyring|out|out-test) continue ;; esac
   [[ -f $dir/PKGBUILD ]] || continue
+  # Software whose license doesn't allow passing it on: only the recipe is
+  # ours, built on the user's machine (see the folder's README).
+  [[ -f $dir/no-redistribute ]] && continue
   mkdir -p "$work/$name"
   cp -r "$dir." "$work/$name/"
   vendored+=("$name")
