@@ -91,7 +91,14 @@ done
 # against a keyring made just for this build (GPGDir), so the build machine's
 # own keyring is left alone. The live system trusts the key at boot: the
 # keyring package is installed and pacman-init populates every keyring.
-cp -r "$repo" "$work/repo"; chmod 755 "$work/repo"; chmod 644 "$work/repo"/*
+# Packages only for later (pkg/online-only) aren't put on the ISO.
+mkdir -p "$work/repo"
+mapfile -t online_only < <(grep -sv '^#' "$root/pkg/online-only")
+for f in "$repo"/*; do
+  for n in "${online_only[@]}"; do [[ ${f##*/} == "$n"-[0-9]* ]] && continue 2; done
+  cp -a "$f" "$work/repo"/
+done
+chmod 755 "$work/repo"; chmod 644 "$work/repo"/*
 # mkarchiso uses the build machine's package cache; an older build of one of
 # these packages with the same version would fail its checksum there.
 for pkg in "$work/repo"/*.pkg.tar.*; do
@@ -171,7 +178,7 @@ else
   # An unpacked `git archive` (e.g. copied into a build VM) has nothing else in it.
   tar -C "$root" --exclude=./iso/out --exclude=./pkg/out --exclude=./pkg/out-test -cf - . | tar -C "$dest" -xf -
 fi
-mkdir -p "$dest/pkg/out" && cp -r "$repo" "$dest/pkg/out/repo"
+mkdir -p "$dest/pkg/out" && cp -r "$work/repo" "$dest/pkg/out/repo"
 
 cat > "$airootfs/usr/local/bin/install-$DISTRO_ID" <<SCRIPT
 #!/usr/bin/env bash

@@ -36,7 +36,7 @@ Where an app comes from:
 | per GPU | Ollama: the build for your graphics card (ROCm, CUDA or CPU) |
 | coding agent | Claude Code, Codex CLI, Gemini CLI, opencode: `lunarc agent install` |
 | mise | language runtimes for your user (Node.js, Python, Go, Rust, Ruby, Java, Bun): `lunarc dev lang` |
-| dev | Docker, and PostgreSQL, MariaDB or Redis in Docker: `lunarc dev docker`, `lunarc dev db add postgres` |
+| dev | Containers (Podman, rootless, with the `docker` and `docker compose` commands), and PostgreSQL, MariaDB or Redis in a container: `lunarc dev docker`, `lunarc dev db add postgres` |
 
 ## Moving to another computer
 

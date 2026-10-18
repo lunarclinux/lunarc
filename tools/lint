@@ -49,5 +49,16 @@ while read -r f; do
   grep -IqiE "$blocked" "$f" && problem "$f mentions a blocked reference"
 done < <(git ls-files)
 
+# Nothing runs a downloaded script straight through a shell: software comes
+# from packages, or from a download checked against a pinned checksum or
+# signature before it runs (decision record 0048).
+pipe='(curl|wget)[^|]*\|[[:space:]]*(sudo[[:space:]]+)?(ba|z|da)?sh\b|(ba|z)?sh[[:space:]]+(-c[[:space:]]+)?["'\'']?<?\$\((curl|wget)\b|(ba|z)?sh[[:space:]]+<\((curl|wget)\b'
+while read -r f; do
+  # (vm/checks/security.sh types such commands to test the install watch.)
+  case $f in docs/*|site/*|tools/lint|vm/checks/security.sh) continue ;; esac
+  [[ -f $f ]] || continue
+  grep -IqE "$pipe" "$f" && problem "$f pipes a download into a shell: $(grep -nIE "$pipe" "$f" | head -1)"
+done < <(git ls-files)
+
 (( fail )) && exit 1
 echo "lint: ok (${#scripts[@]} shell scripts)"

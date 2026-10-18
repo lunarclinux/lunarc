@@ -8,7 +8,7 @@
 #   web       a web app: opens the URL in its own Chromium window
 #   agent     a coding agent, installed by `<id> agent install`
 #   mise      a language runtime for your user, installed with mise (`<id> dev lang`)
-#   dev       a setup done by `<id> dev`: docker, or db:<postgres|mariadb|redis>
+#   dev       a setup done by `<id> dev`: docker (rootless containers), or db:<postgres|mariadb|redis>
 # Defaults (installed with the system) are in packages/apps.packages; they are
 # marked "default" in the note so `<id> app list` can show them.
 
@@ -47,13 +47,13 @@ rust             | dev       | Rust (via mise)        | mise     | rust@latest  
 ruby             | dev       | Ruby (via mise)        | mise     | ruby@latest                 |
 java             | dev       | Java 21 LTS (via mise) | mise     | java@21                     |
 bun              | dev       | Bun (via mise)         | mise     | bun@latest                  |
-docker           | dev       | Docker (with Compose and Buildx) | dev | docker                  |
+docker           | dev       | Containers (Podman, rootless, with docker and Compose) | dev | docker |
 lazydocker       | dev       | lazydocker (Docker in the terminal) | repo | lazydocker         |
 lazygit          | dev       | lazygit (git in the terminal) | repo | lazygit                   |
 github-cli       | dev       | GitHub CLI (gh)        | repo     | github-cli                  |
-postgres         | dev       | PostgreSQL (in Docker) | dev      | db:postgres                 |
-mariadb          | dev       | MariaDB (in Docker)    | dev      | db:mariadb                  |
-redis            | dev       | Redis (in Docker)      | dev      | db:redis                    |
+postgres         | dev       | PostgreSQL (in a container) | dev      | db:postgres                 |
+mariadb          | dev       | MariaDB (in a container)    | dev      | db:mariadb                  |
+redis            | dev       | Redis (in a container)      | dev      | db:redis                    |
 zsh              | dev       | zsh (then: @DISTRO_ID@ shell set zsh) | repo | zsh             |
 fish             | dev       | fish (then: @DISTRO_ID@ shell set fish) | repo | fish          |
 

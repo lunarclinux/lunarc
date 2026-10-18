@@ -89,29 +89,34 @@ held_back() { # held_back <pending lines>
   awk '{ print $1 }' <<<"$1" | grep -E "$hypr_family" || true
 }
 
-# The shell is the distro repository's patched build of Noctalia (epoch 1, so
-# Arch's package of the same name never replaces it; decision record 0043).
-# Arch's version, when it is newer than the release that build is made from:
-# it waits until the distro repository has a build of it.
-noctalia_waiting() {
+# Packages the distro repository builds with its own patches under Arch's
+# names: the shell and the login screen (epoch 1, so Arch's package of the same
+# name never replaces them; decision records 0043 and 0048).
+ours_over_arch=(noctalia noctalia-greeter)
+
+# Arch's version of <pkg>, when it is newer than the release our build is made
+# from: it waits until the distro repository has a build of it.
+arch_waiting() { # arch_waiting <pkg>
   local ours arch
-  ours=$(pacman -Q noctalia 2>/dev/null | awk '{ print $2 }')
+  ours=$(pacman -Q "$1" 2>/dev/null | awk '{ print $2 }')
   [[ $ours == 1:* ]] || return 0
-  arch=$(pacman -Sl 2>/dev/null | awk -v r="$DISTRO_REPO" '$2 == "noctalia" && $1 != r { print $3; exit }')
+  arch=$(pacman -Sl 2>/dev/null | awk -v r="$DISTRO_REPO" -v p="$1" '$2 == p && $1 != r { print $3; exit }')
   if [[ -n $arch ]] && (( $(vercmp "${arch#*:}" "${ours#1:}") > 0 )); then printf '%s\n' "$arch"; fi
 }
 
-# True when the installed build is the distro repository's newest. pacman then
-# skips noctalia, rather than warning on every update that the installed one is
-# newer than Arch's. A newer build in the repository is not skipped: the distro
-# package depends on it and pulls it in.
-noctalia_current() {
+# True when the installed build of <pkg> is the distro repository's newest.
+# pacman then skips it, rather than warning on every update that the installed
+# one is newer than Arch's. A newer build in the repository is not skipped: the
+# distro package depends on it and pulls it in.
+ours_current() { # ours_current <pkg>
   local ours repo
-  ours=$(pacman -Q noctalia 2>/dev/null | awk '{ print $2 }')
+  ours=$(pacman -Q "$1" 2>/dev/null | awk '{ print $2 }')
   [[ $ours == 1:* ]] || return 1
-  repo=$(pacman -Sl "$DISTRO_REPO" 2>/dev/null | awk '$2 == "noctalia" { print $3; exit }')
+  repo=$(pacman -Sl "$DISTRO_REPO" 2>/dev/null | awk -v p="$1" '$2 == p { print $3; exit }')
   [[ -z $repo ]] || (( $(vercmp "$repo" "$ours") <= 0 ))
 }
+
+pretty() { case $1 in noctalia) echo Noctalia ;; noctalia-greeter) echo "The login screen (Noctalia Greeter)" ;; *) echo "$1" ;; esac; }
 
 # The number of updates waiting, as last seen by `update check` (0 after an
 # update): "<count> <unix time>". The menu's Update shows it ("12 ready")
@@ -197,7 +202,8 @@ network_check() {
 }
 
 # The time the package server reports (epoch seconds), only as a hint for the
-# message below; never applied without asking. -k: a wrong clock makes TLS fail.
+# message below; never applied without asking. -k: a wrong clock makes TLS fail,
+# so this time isn't verified: anyone on the network path could fake it.
 server_epoch() {
   local repo date
   repo=$(repo_url); [[ -n $repo ]] || return 0
@@ -234,7 +240,11 @@ clock_check() { # clock_check <interactive 0|1>
     info "The clock says $(date '+%Y-%m-%d %H:%M'), which can't be right."
   fi
   info "Package signatures can't be checked until it's right."
-  if [[ -n $real ]] && (( interactive )); then
+  # Offered only when the clock is before clock_floor (so it's surely
+  # wrong) and the unverified time isn't: a faked time can never move the clock
+  # back before that floor, where expired keys and certificates look valid.
+  if [[ -n $real ]] && (( interactive && now < clock_floor && real >= clock_floor )); then
+    info "(That time comes from the package server over a connection that can't be checked yet.)"
     read -rp "Set the clock to the package server's time now? [y/N] " answer
     if [[ $answer == [yY]* ]]; then
       sudo date -s "@$real" >/dev/null && sudo hwclock --systohc 2>/dev/null || true
@@ -346,10 +356,12 @@ update_all() { # update_all [1 = take held-back Hyprland too]
     info "a $DISTRO_NAME update takes the new release once it's tested. '$DISTRO_ID update --all'"
     info "takes it now (terminal windows lose their header strip until then)."
   fi
-  p=$(noctalia_waiting)
-  if [[ -n $p ]]; then info "Noctalia $p from Arch waits for $DISTRO_NAME's build of it; the shell stays as it is."; fi
+  for o in "${ours_over_arch[@]}"; do
+    p=$(arch_waiting "$o")
+    if [[ -n $p ]]; then info "$(pretty "$o") $p from Arch waits for $DISTRO_NAME's build of it; it stays as it is."; fi
+    if ours_current "$o"; then ignore+=(--ignore "$o"); fi
+  done
   for p in "${held[@]}"; do ignore+=(--ignore "$p"); done
-  if noctalia_current; then ignore+=(--ignore noctalia); fi
   before=$(pacman -Q)
   snap_before=$(latest_snapshot)
   # pacman asks its questions on stderr. sudo relays stdout through its own
@@ -423,8 +435,10 @@ check() { # check [--background]: --background is the daily timer's (no AUR)
   if [[ -n $held ]]; then
     info "(held back until tested: $(tr '\n' ' ' <<<"$held")- '$DISTRO_ID update --all' takes them)"
   fi
-  held=$(noctalia_waiting)
-  if [[ -n $held ]]; then info "(Noctalia $held from Arch waits for $DISTRO_NAME's build of it)"; fi
+  for o in "${ours_over_arch[@]}"; do
+    held=$(arch_waiting "$o")
+    if [[ -n $held ]]; then info "($(pretty "$o") $held from Arch waits for $DISTRO_NAME's build of it)"; fi
+  done
   if (( ! background )) && command -v yay >/dev/null && [[ -n $(pacman -Qqm) ]]; then aur=$(yay -Qua 2>/dev/null || true); fi
   if [[ -n $aur ]]; then sed 's/^/aur: /' <<<"$aur"; fi
   n=$(( $(grep -c . <<<"$pend" || true) + $(grep -c . <<<"$aur" || true) ))

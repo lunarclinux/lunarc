@@ -117,7 +117,8 @@ Items are in `/usr/share/lunarc/default/menu/menu`; copy it to `~/.config/lunarc
 | `lunarc agent usage` | Tokens per day and model; also in the bar (✦) |
 | `lunarc crash list` / `show` / `diagnose` / `resolve` | The crash list; also the bug icon in the bar |
 | `lunarc shell defaults on\|off` / `shell set bash\|zsh\|fish` | Shell defaults (prompt, `z`, `ll`, Ctrl+R search) and your login shell |
-| `lunarc dev docker` / `dev lang node` / `dev db add postgres` | Docker, language runtimes (mise) and local databases |
+| `lunarc dev docker` / `dev lang node` / `dev db add postgres` | Containers, language runtimes (mise) and local databases |
+| `lunarc security` | Check the security settings, and see software installed outside the package manager |
 | `lunarc display size` / `scale 125%` | How big things look on screen |
 | `lunarc display edit` / `list` / `save <name>` | Screens: resolution, scale, arrangement, docked/undocked profiles |
 | `lunarc share list` / `add` / `test <name>` / `remove <name>` | Network shares (NAS), mounted on demand |

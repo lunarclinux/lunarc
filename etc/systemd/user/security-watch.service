@@ -1,0 +1,8 @@
+# The daily look, when turned on (`@DISTRO_ID@ security watch on`): notifies
+# about software that appeared outside the package manager. Local only.
+[Unit]
+Description=Look for software installed outside the package manager
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/@DISTRO_ID@ security unmanaged --notify-new

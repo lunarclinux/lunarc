@@ -7,7 +7,8 @@ usage() {
   cat <<USAGE
 Usage: $DISTRO_ID dev <command>
 
-  docker                 install Docker (with Compose and Buildx), start it, add you to the docker group
+  docker                 install rootless containers: Podman with the docker command and Compose
+  docker --rootful       install Docker itself and add you to the docker group (gives root; asks first)
   lang <tool[@version]>  install a language runtime with mise, e.g. node, python, go@1.23
   db list                databases this command manages, and whether they run
   db add <name>          start a database in Docker: postgres, mariadb or redis
@@ -15,18 +16,56 @@ Usage: $DISTRO_ID dev <command>
   status <thing>         exit 0 if docker / lang:<tool> / db:<name> is set up (used by '$DISTRO_ID app')
 
 Databases listen on localhost only, restart with the computer and keep their
-data in a named Docker volume. Passwords are in ~/.config/$DISTRO_ID/databases.
+data in a named volume. Passwords are in ~/.config/$DISTRO_ID/databases.
 USAGE
 }
 
 as_root() { if [[ -t 0 ]]; then sudo "$@"; else pkexec "$@"; fi; }
 
-docker_ready() { pacman -Q docker >/dev/null 2>&1 && id -nG "$USER" | tr ' ' '\n' | grep -qx docker; }
+in_docker_group() { id -nG "$USER" | tr ' ' '\n' | grep -qx docker; }
+rootless() { pacman -Q podman-docker >/dev/null 2>&1; }
+# Docker itself (podman-docker provides "docker" too, so pacman -Q docker can't tell).
+real_docker() { [[ $(pacman -Qq docker 2>/dev/null) == docker ]]; }
+docker_ready() { rootless || { real_docker && in_docker_group; }; }
 
-setup_docker() {
+# Containers run as you, not as root (decision record 0048): Podman, with the
+# docker command and a Docker-compatible socket for Compose and other tools.
+# Membership of the docker group is the same as root access, so it's only
+# done when asked for with --rootful.
+setup_rootless() {
+  if real_docker; then
+    info "Docker is installed and runs as root; keeping it ($DISTRO_ID dev docker --rootful)"
+    return
+  fi
+  install_packages podman podman-docker crun docker-compose
+  # The docker command would print "Emulate Docker CLI using podman" each time.
+  as_root install -Dm644 /dev/null /etc/containers/nodocker
+  # Rootless containers need a range of user ids; new accounts get one.
+  if ! grep -q "^$USER:" /etc/subuid 2>/dev/null || ! grep -q "^$USER:" /etc/subgid 2>/dev/null; then
+    local start; start=$(( 100000 + 65536 * $(cat /etc/subuid /etc/subgid 2>/dev/null | wc -l) ))
+    as_root usermod --add-subuids "$start-$((start + 65535))" --add-subgids "$start-$((start + 65535))" "$USER"
+    podman system migrate
+  fi
+  local envd=${XDG_CONFIG_HOME:-$HOME/.config}/environment.d
+  mkdir -p "$envd"
+  printf '# Written by `%s dev docker`: Compose and other Docker tools use Podman.\nDOCKER_HOST=unix://${XDG_RUNTIME_DIR}/podman/podman.sock\n' \
+    "$DISTRO_ID" > "$envd/50-$DISTRO_ID-containers.conf"
+  # The socket, and restarting containers marked "always" when you log in.
+  systemctl --user enable --now podman.socket podman-restart.service
+  export DOCKER_HOST=unix://${XDG_RUNTIME_DIR:-/run/user/$UID}/podman/podman.sock
+  info "rootless containers are ready: docker and docker compose work as usual (new terminals pick up Compose's socket)"
+}
+
+setup_rootful() {
+  local answer
+  info "Members of the docker group can take full control of this computer (root) through Docker."
+  [[ -t 0 ]] || die "run '$DISTRO_ID dev docker --rootful' in a terminal; it asks first"
+  read -rp "Install Docker and add $USER to the docker group anyway? [y/N] " answer
+  [[ $answer == [yY]* ]] || { info "nothing changed; '$DISTRO_ID dev docker' sets up rootless containers"; return; }
+  if rootless; then as_root pacman -Rns --noconfirm podman-docker; fi
   install_packages docker docker-compose docker-buildx
   as_root systemctl enable --now docker.socket
-  if ! id -nG "$USER" | tr ' ' '\n' | grep -qx docker; then
+  if ! in_docker_group; then
     as_root usermod -aG docker "$USER"
     info "added $USER to the docker group: log out and back in before using docker without sudo"
   fi
@@ -56,15 +95,17 @@ db_add() {
   local name=$1 row image port envvar data pass args
   row=$(db_row "$name") || die "unknown database: $name (postgres, mariadb, redis)"
   IFS='|' read -r name image port envvar data <<<"$row"
-  if ! pacman -Q docker >/dev/null 2>&1; then setup_docker; fi
+  if ! docker_ready; then setup_rootless; fi
   if db_exists "$name"; then info "$name is already set up ($(container "$name"))"; return; fi
-  args=(run -d --name "$(container "$name")" --restart unless-stopped
+  # Podman restarts "always" containers at login (podman-restart.service).
+  args=(run -d --name "$(container "$name")" --restart "$(if rootless; then echo always; else echo unless-stopped; fi)"
         -p "127.0.0.1:$port:$port" -v "$(container "$name")-data:$data")
   if [[ -n $envvar ]]; then
     mkdir -p "$secrets_dir"; chmod 700 "$secrets_dir"
     pass=$(head -c 18 /dev/urandom | base64 | tr -dc 'A-Za-z0-9')
-    (umask 077; printf '%s\n' "$pass" > "$secrets_dir/$name")
-    args+=(-e "$envvar=$pass")
+    # From a file, not the command line, where every process could read it.
+    (umask 077; printf '%s\n' "$pass" > "$secrets_dir/$name"; printf '%s=%s\n' "$envvar" "$pass" > "$secrets_dir/$name.env")
+    args+=(--env-file "$secrets_dir/$name.env")
   fi
   docker_cmd "${args[@]}" "$image" >/dev/null
   info "$name is running on localhost:$port"
@@ -79,7 +120,7 @@ db_remove() {
   [[ $answer == [yY]* ]] || { info "kept $name"; return; }
   docker_cmd rm -f "$(container "$name")" >/dev/null
   docker_cmd volume rm "$(container "$name")-data" >/dev/null || true
-  rm -f "$secrets_dir/$name"
+  rm -f "$secrets_dir/$name" "$secrets_dir/$name.env"
   info "removed $name"
 }
 
@@ -88,7 +129,7 @@ db_list() {
   for r in "${databases[@]}"; do
     name=${r%%|*}
     state="not set up"
-    if pacman -Q docker >/dev/null 2>&1 && db_exists "$name"; then
+    if command -v docker >/dev/null && db_exists "$name"; then
       state=$(docker_cmd inspect -f '{{.State.Status}}' "$(container "$name")" 2>/dev/null || echo unknown)
     fi
     printf '  %-8s %s\n' "$name" "$state"
@@ -96,7 +137,7 @@ db_list() {
 }
 
 case ${1:-} in
-  docker) setup_docker ;;
+  docker) if [[ ${2:-} == --rootful ]]; then setup_rootful; else setup_rootless; fi ;;
   lang)
     [[ -n ${2:-} ]] || die "which language? e.g. $DISTRO_ID dev lang node"
     ensure_mise

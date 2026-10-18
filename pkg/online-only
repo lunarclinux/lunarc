@@ -1,0 +1,5 @@
+# Packages built into the distro's repository for `<id> agent install` and
+# `<id> app install`, but left out of the ISO and of the installer's local copy
+# of the repository: they're large and no install needs them. Installed
+# systems download them from the online repository when asked. One name a line.
+claude-code

@@ -1,0 +1,11 @@
+# Off unless turned on: `@DISTRO_ID@ security watch on` enables it.
+[Unit]
+Description=Look for software installed outside the package manager once a day
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

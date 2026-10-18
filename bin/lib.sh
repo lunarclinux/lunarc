@@ -37,13 +37,17 @@ setting() { # setting <key> [fallback]
 }
 
 set_setting() { # set_setting <key> <value>
-  local key=$1 value=$2
+  local key=$1 value=$2 tmp
+  [[ $key =~ ^[a-z0-9_.-]+$ ]] || die "not a setting name: $key"
+  [[ $value != *$'\n'* ]] || die "a setting is one line"
   mkdir -p "$CONFIG_DIR"; touch "$SETTINGS"
-  if grep -q "^$key *=" "$SETTINGS"; then
-    sed -i "s|^$key *=.*|$key = $value|" "$SETTINGS"
-  else
-    printf '%s = %s\n' "$key" "$value" >> "$SETTINGS"
-  fi
+  # The value goes through the environment, never into a sed or awk program.
+  tmp=$(mktemp "$SETTINGS.XXXXXX")
+  K=$key V=$value awk -F' *= *' '
+    $1 == ENVIRON["K"] && !done { print ENVIRON["K"] " = " ENVIRON["V"]; done = 1; next }
+    { print }
+    END { if (!done) print ENVIRON["K"] " = " ENVIRON["V"] }' "$SETTINGS" > "$tmp"
+  mv "$tmp" "$SETTINGS"
 }
 
 # The current theme's design tokens (docs/design/frosted-terminal): its
@@ -73,9 +77,16 @@ shell_ready() {
 
 # Install packages, asking for the password in the terminal if there is one,
 # otherwise through the desktop's password prompt.
+# Package and Flatpak app names: never anything pacman, yay or flatpak would
+# read as an option.
+valid_pkg() { [[ $1 =~ ^[a-z0-9@._+][a-z0-9@._+-]*$ && ${#1} -le 128 ]]; }
+valid_app() { [[ $1 =~ ^[A-Za-z0-9_][A-Za-z0-9._-]*$ && ${#1} -le 255 ]]; }
+
 install_packages() {
-  if [[ -t 0 ]]; then pacman_tx "install $*" -S --needed "$@"
-  else pkexec pacman -S --needed --noconfirm "$@"
+  local p
+  for p in "$@"; do valid_pkg "$p" || die "\"$p\" isn't a package name"; done
+  if [[ -t 0 ]]; then pacman_tx "install $*" -S --needed -- "$@"
+  else pkexec pacman -S --needed --noconfirm -- "$@"
   fi
 }
 

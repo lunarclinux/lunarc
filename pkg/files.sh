@@ -94,6 +94,8 @@ case $part in
     put "$src/etc/systemd/user/setup-reminder.timer" "$units/$id-setup-reminder.timer"
     put "$src/etc/systemd/user/update-check.service" "$units/$id-update-check.service"
     put "$src/etc/systemd/user/update-check.timer" "$units/$id-update-check.timer"
+    put "$src/etc/systemd/user/security-watch.service" "$units/$id-security-watch.service"
+    put "$src/etc/systemd/user/security-watch.timer" "$units/$id-security-watch.timer"
     put "$src/etc/systemd/user/battery-watch.service" "$units/$id-battery-watch.service"
     put "$src/etc/systemd/user/workspace-watch.service" "$units/$id-workspace-watch.service"
     put "$src/etc/systemd/user/idle-watch.service" "$units/$id-idle-watch.service"

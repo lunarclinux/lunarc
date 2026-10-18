@@ -1,7 +1,12 @@
 # The login screen: a greetd greeter in Noctalia's look, which draws its own
 # screen with a small bundled wlroots compositor (no Hyprland or cage needed).
-# Not in Arch's official repositories, so the distro's repository carries it.
-# Built from the tagged release, checksum-pinned. It never connects anywhere.
+# Built from the tagged release, checksum-pinned, with the patches below. It
+# never connects anywhere.
+#
+# epoch=1, as for noctalia: Arch's extra carries noctalia-greeter too (from
+# 2026-10), and its repository comes first, so without the epoch new installs
+# took Arch's unpatched build and showed Hyprland's own sessions. The distro
+# package depends on this build's version (pkg/main reads it from here).
 #
 # no-hold.patch (ours): with NOCTALIA_GREETER_NO_HOLD set, a greeter that
 # can't start exits instead of holding an empty screen forever, so the
@@ -18,6 +23,7 @@
 # installed: in the clean chroot that publishing uses they are never used, and
 # using them there is an error (as in pkg/noctalia).
 pkgname=noctalia-greeter
+epoch=1
 pkgver=1.6.0
 pkgrel=3
 pkgdesc="greetd login greeter in Noctalia's look, with a bundled wlroots compositor"

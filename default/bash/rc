@@ -41,4 +41,18 @@ if has mise; then eval "$(mise activate bash)"; fi
 
 if has starship; then eval "$(starship init bash)"; fi
 
+# `@DISTRO_ID@ security watch on`: install commands that bypass the package
+# manager (a script piped into a shell, npm -g, pip, cargo install, ...) are
+# noted in a private log on this computer, never sent anywhere.
+if grep -qsx 'security.watch = on' "${XDG_CONFIG_HOME:-$HOME/.config}/@DISTRO_ID@/settings"; then
+  __install_watch() {
+    local cmd re='(^|[[:space:];|&(])(curl|wget|npm|pnpm|yarn|bun|pip3?|pipx|uv|cargo|go|gem|make)[[:space:]]|\.[Aa]pp[Ii]mage'
+    cmd=$(HISTTIMEFORMAT='' history 1 | sed 's/^ *[0-9]* *//')
+    [[ $cmd != "${__install_watch_last:-}" ]] || return 0
+    __install_watch_last=$cmd
+    if [[ $cmd =~ $re ]]; then (@DISTRO_ID@ security noted -- "$cmd" >/dev/null 2>&1 &); fi
+  }
+  PROMPT_COMMAND+=('__install_watch')
+fi
+
 unset -f has

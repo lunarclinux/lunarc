@@ -3,18 +3,21 @@
 set -euo pipefail
 source "$DISTRO_LIB/lib.sh"
 
-# name | command | install (pkg:<package> or script:<url>) | interactive with prompt | one-shot, read-only
+# name | command | install (pkg:<package>) | interactive with prompt | one-shot, read-only | interactive, read-only
 # One-shot runs happen unattended (background crash diagnosis), so they must not
 # be able to change anything: "-" means the agent has no mode we trust for that.
+# The read-only interactive mode is for prompts built from untrusted text (crash
+# captures hold whatever the crashed program printed): the agent can read and
+# explain, and asks before running or changing anything.
 known=(
-  "claude|claude|script:https://claude.ai/install.sh|claude {}|claude -p --permission-mode plan {}"
-  "codex|codex|pkg:openai-codex|codex {}|codex exec --sandbox read-only {}"
-  "gemini|gemini|pkg:gemini-cli|gemini -i {}|gemini -p {}"
-  "opencode|opencode|pkg:opencode|opencode --prompt {}|-"
+  "claude|claude|pkg:claude-code|claude {}|claude -p --permission-mode plan {}|claude --permission-mode plan {}"
+  "codex|codex|pkg:openai-codex|codex {}|codex exec --sandbox read-only {}|codex --sandbox read-only {}"
+  "gemini|gemini|pkg:gemini-cli|gemini -i {}|gemini --approval-mode default -p {}|gemini --approval-mode default -i {}"
+  "opencode|opencode|pkg:opencode|opencode --prompt {}|-|-"
 )
 row() { local r; for r in "${known[@]}"; do [[ ${r%%|*} == "$1" ]] && { echo "$r"; return; }; done; return 1; }
 field() { cut -d'|' -f"$2" <<<"$(row "$1")"; }
-# Installers like Claude Code's put the command in ~/.local/bin.
+# Earlier installs of Claude Code (its own installer) put the command in ~/.local/bin.
 find_cmd() { command -v "$1" 2>/dev/null || { [[ -x $HOME/.local/bin/$1 ]] && echo "$HOME/.local/bin/$1"; }; }
 current() { setting agent claude; }
 
@@ -29,19 +32,16 @@ Usage: $DISTRO_ID agent <command>
   launch                  open the default agent in a terminal
   prompt <text>           open the default agent in a terminal, starting with <text>
   usage [--json]          tokens per day and per model over the last week, and plan limits where the agent records them
-  run [--headless] [--cwd DIR] -- <prompt>
-                          run the default agent here (headless prints the answer and exits)
+  run [--headless] [--read-only] [--cwd DIR] -- <prompt>
+                          run the default agent here (headless prints the answer and exits;
+                          read-only asks before running or changing anything)
 USAGE
 }
 
 install_agent() {
   local how; how=$(field "$1" 3) || die "unknown agent: $1"
-  case $how in
-    pkg:*) install_packages "${how#pkg:}" ;;
-    script:*)
-      info "Installing $1 with its official installer (${how#script:})"
-      curl -fsSL "${how#script:}" | bash ;;
-  esac
+  # Only packages: never a downloaded script run through a shell (decision record 0048).
+  install_packages "${how#pkg:}"
 }
 
 # Usage records, one JSON object per line (see agent-usage.jq for the shape).
@@ -109,9 +109,12 @@ case ${1:-} in
   launch) exec "/usr/bin/$DISTRO_ID" terminal launch -- "/usr/bin/$DISTRO_ID" agent run -- "" ;;
   prompt) shift; exec "/usr/bin/$DISTRO_ID" terminal launch -- "/usr/bin/$DISTRO_ID" agent run -- "$*" ;;
   run)
-    shift; headless=0 cwd=$HOME
+    shift; headless=0 read_only=0 cwd=$HOME
     while [[ $# -gt 0 ]]; do
-      case $1 in --headless) headless=1; shift ;; --cwd) cwd=$2; shift 2 ;; --) shift; break ;; *) break ;; esac
+      case $1 in
+        --headless) headless=1; shift ;; --read-only) read_only=1; shift ;;
+        --cwd) cwd=$2; shift 2 ;; --) shift; break ;; *) break ;;
+      esac
     done
     prompt=${*:-}
     name=$(current); cmd=$(find_cmd "$(field "$name" 2)")
@@ -121,8 +124,11 @@ case ${1:-} in
       [[ ${yn,,} == n* ]] && exit 1
       install_agent "$name"; cmd=$(find_cmd "$(field "$name" 2)") || die "install failed"
     fi
-    template=$(field "$name" $(( headless ? 5 : 4 )))
-    [[ $template == "-" ]] && die "$name has no read-only one-shot mode; use crash.diagnose_all = terminal"
+    template=$(field "$name" $(( headless ? 5 : read_only ? 6 : 4 )))
+    if [[ $template == "-" ]]; then
+      (( headless )) && die "$name has no read-only one-shot mode; use crash.diagnose_all = terminal"
+      die "$name has no read-only mode; choose another agent for this ($DISTRO_ID agent set <name>)"
+    fi
     read -ra parts <<<"$template"
     argv=("$cmd")
     for p in "${parts[@]:1}"; do

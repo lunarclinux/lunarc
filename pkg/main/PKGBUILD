@@ -11,12 +11,17 @@ pkgdesc="$DISTRO_NAME desktop: Hyprland, Noctalia, themes and tools"
 arch=(any)
 license=(GPL-3.0-or-later)
 mapfile -t depends < <(sed -e 's/#.*//' -e '/^[[:space:]]*$/d' "$DISTRO_SRC"/packages/{desktop,shell}.packages)
-# The shell is the distro repository's own build of Noctalia (pkg/noctalia,
-# epoch 1): depending on its version or newer makes pacman take it, not Arch's
-# package of the same name, on installs and updates (decision record 0043).
-_noctalia=$(source "$DISTRO_SRC/pkg/noctalia/PKGBUILD" >/dev/null 2>&1; printf '%s:%s-%s' "$epoch" "$pkgver" "$pkgrel")
+# The shell and the login screen are the distro repository's own builds of
+# Noctalia and Noctalia Greeter (pkg/noctalia, pkg/noctalia-greeter, epoch 1):
+# depending on their version or newer makes pacman take them, not Arch's
+# packages of the same names, on installs and updates (decision records 0043
+# and 0048).
 for _i in "${!depends[@]}"; do
-  if [[ ${depends[_i]} == noctalia ]]; then depends[_i]="noctalia>=$_noctalia"; fi
+  case ${depends[_i]} in
+    noctalia|noctalia-greeter)
+      _v=$(source "$DISTRO_SRC/pkg/${depends[_i]}/PKGBUILD" >/dev/null 2>&1; printf '%s:%s-%s' "$epoch" "$pkgver" "$pkgrel")
+      depends[_i]="${depends[_i]}>=$_v" ;;
+  esac
 done
 depends+=("$DISTRO_ID-settings")
 
