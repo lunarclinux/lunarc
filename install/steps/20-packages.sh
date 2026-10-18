@@ -10,9 +10,16 @@ if [[ ! -f $repo/$DISTRO_REPO.db && -f $root/pkg/out-test/repo/$DISTRO_REPO.db ]
 # The live system needs the local repository to resolve the distro packages.
 # pacman downloads as an unprivileged user, so the repository must be readable
 # by everyone: copy it out of wherever the source was unpacked (often /root).
+# Packages only for later (pkg/online-only) stay behind: the live system's
+# space is in memory.
 local_repo=/var/cache/$DISTRO_ID-install-repo
 rm -rf "$local_repo"; install -d -m755 "$local_repo"
-cp -L "$repo"/* "$local_repo"/; chmod 644 "$local_repo"/*
+mapfile -t online_only < <(grep -sv '^#' "$root/pkg/online-only")
+for f in "$repo"/*; do
+  for n in "${online_only[@]}"; do [[ ${f##*/} == "$n"-[0-9]* ]] && continue 2; done
+  cp -L "$f" "$local_repo"/
+done
+chmod 644 "$local_repo"/*
 repo=$local_repo
 sed -i 's/^#\?ParallelDownloads.*/ParallelDownloads = 8/' /etc/pacman.conf
 

@@ -83,6 +83,9 @@ cleanup() {
 trap cleanup EXIT
 install_ref=$ref
 if [[ -n $upgrade_from ]]; then install_ref=$upgrade_from; fi
+# Packages only for later (pkg/online-only) aren't copied to the live system.
+online_only_excludes=()
+while read -r n; do online_only_excludes+=("--exclude=repo/$n-[0-9]*"); done < <(grep -sv '^#' "$repo/pkg/online-only")
 if [[ -z $iso ]]; then
   tarball=$(mktemp)
   git -C "$repo" archive --format=tar.gz -o "$tarball" "$install_ref"
@@ -104,12 +107,12 @@ if [[ -z $iso ]]; then
     done
     old_out=$old_tree/pkg/out-test
     if [[ ! -d $old_out/repo ]]; then old_out=$old_tree/pkg/out; fi
-    tar -C "$old_out" -czf - repo | "$here/ssh" "$vm" -- 'mkdir -p /root/src/pkg/out && tar -xzf - -C /root/src/pkg/out'
+    tar -C "$old_out" "${online_only_excludes[@]}" -czf - repo | "$here/ssh" "$vm" -- 'mkdir -p /root/src/pkg/out && tar -xzf - -C /root/src/pkg/out'
   elif [[ -x $repo/pkg/build ]] && git -C "$repo" cat-file -e "$ref:pkg/build" 2>/dev/null; then
     log "building packages"
     "$repo/pkg/build" "$ref" >/dev/null
     # A test build (pkg/out-test), where the installer looks for packages.
-    tar -C "$repo/pkg/out-test" -czf - repo | "$here/ssh" "$vm" -- 'mkdir -p /root/src/pkg/out && tar -xzf - -C /root/src/pkg/out'
+    tar -C "$repo/pkg/out-test" "${online_only_excludes[@]}" -czf - repo | "$here/ssh" "$vm" -- 'mkdir -p /root/src/pkg/out && tar -xzf - -C /root/src/pkg/out'
   fi
   "$here/ssh" "$vm" -- 'cat > /root/tester.pub' < "$key.pub"
 
