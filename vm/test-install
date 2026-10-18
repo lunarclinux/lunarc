@@ -323,6 +323,9 @@ if "$here/ssh" "$vm" "$user" -- "pacman -Q $id >/dev/null 2>&1"; then
   check "firmware checks only on request" "pacman -Q fwupd >/dev/null && ! systemctl is-enabled --quiet fwupd-refresh.timer"
   check "home folder private"           "[ \$(stat -c %a ~) = 700 ]"
   check "privacy switches report"       "$id privacy | grep -qE '^weather in the bar +off' && $id firewall apps | grep -q localsend"
+  # Security pass (decision record 0048).
+  check "security check, install watch, rootless containers" "$(sed -e "s/@ID@/$id/g" -e "s/@PW@/$password/g" "$here/checks/security.sh")"
+  check "nothing pipes a download into a shell" "! grep -rIlE '(curl|wget)[^|]*\\|[[:space:]]*(sudo[[:space:]]+)?(ba|z)?sh\\b' /usr/lib/$id /usr/share/$id/default 2>/dev/null | grep -q ."
   # DNS (decision record 0046): resolved only for encrypted DNS, never LLMNR
   # or mDNS; on and off both coherent; printing discovery unaffected.
   check "DNS: no LLMNR or mDNS from resolved; encrypted on and off" "$(sed -e "s/@ID@/$id/g" -e "s/@PW@/$password/g" "$here/checks/dns.sh")"

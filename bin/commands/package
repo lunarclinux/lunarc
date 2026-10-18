@@ -25,8 +25,6 @@ USAGE
 
 # Package names and words: what pacman, the AUR and Flathub use, nothing a
 # shell or a regular expression would read as more.
-valid_pkg() { [[ $1 =~ ^[a-z0-9@._+][a-z0-9@._+-]*$ && ${#1} -le 128 ]]; }
-valid_app() { [[ $1 =~ ^[A-Za-z0-9_][A-Za-z0-9._-]*$ && ${#1} -le 255 ]]; }
 valid_word() { [[ $1 =~ ^[a-z0-9@._+-]+$ && ${#1} -le 64 ]]; }
 
 flathub() { command -v flatpak >/dev/null && flatpak remotes --columns=name 2>/dev/null | grep -qx flathub; }

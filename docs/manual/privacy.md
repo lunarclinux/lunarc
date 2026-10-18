@@ -67,6 +67,28 @@ features below.
 - **Printing:** the print service answers only this computer and never shares its printers; Avahi looks for printers but never announces this computer's name, address or services.
 - **Name lookups:** nothing answers name questions from the local network (no LLMNR or multicast DNS from the system's resolver). With encrypted DNS off, the system resolver doesn't run at all; lookups go to the network's DNS server.
 - **Lock:** SUPER+L, idle and before sleep; wrong-password lockouts are short (10 tries, 2 minutes).
+- **Software:** everything Lunarc installs comes from signed packages; nothing runs a script downloaded from the internet. Claude Code comes from Lunarc's repository, checked against Anthropic's release signature. Containers (`lunarc dev docker`) run as you with Podman, not as root; Docker itself with the `docker` group, which amounts to root access, only with `lunarc dev docker --rootful`.
+
+## Security check
+
+`lunarc security` lists anything that weakens these defaults, with the command
+that changes it: the firewall and what it lets in, programs listening on the
+network, remote login, disk encryption, package signature checks, the `docker`
+group, password-free sudo, SSH keys without a passphrase, and software
+installed outside the package manager.
+
+`lunarc security unmanaged` lists that software: programs in `~/.local/bin`
+and `/usr/local`, folders in `/opt`, and what npm, pip, pipx, cargo, go and
+bun installed for you, plus AppImages. These don't update with the system, and
+nothing checked where they came from.
+
+`lunarc security watch on` also notes install commands you type that bypass
+the package manager (a script piped into a shell, `npm -g`, `pip install`,
+`cargo install`, ...) and looks once a day for new software, with a
+notification when there is some. It's off by default. The notes stay on this
+computer (`~/.local/state/lunarc/installs.log`) and hold the kind of install
+and what was installed, with web addresses cut at the `?`, never the whole
+command. `lunarc security watch off` stops it.
 
 ## Changing your mind
 
@@ -77,3 +99,5 @@ features below.
 | encrypt DNS / stop | `lunarc privacy dns quad9` (or `mullvad`, `cloudflare`) / `off` |
 | stop the connectivity check | `lunarc privacy connectivity off` |
 | let something in / close it | `lunarc firewall allow <app or port>` / `deny` |
+| check the security settings | `lunarc security` |
+| note installs outside the package manager / stop | `lunarc security watch on` / `off` |

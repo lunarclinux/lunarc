@@ -115,7 +115,7 @@ case ${1:-} in
     # Run by the reminder's timer.
     [[ -f $store/${2:-}.json ]] || exit 0
     text=$(jq -r .text "$store/$2.json")
-    notify-send -a "$DISTRO_NAME" -i alarm-symbolic -u critical "Reminder" "$text" || true
+    notify-send -a "$DISTRO_NAME" -i alarm-symbolic -u critical -- "Reminder" "$text" || true
     remove_units "$2"; refresh_bar ;;
   -h|--help|"") usage ;;
   *)

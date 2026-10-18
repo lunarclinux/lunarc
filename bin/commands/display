@@ -614,7 +614,9 @@ menu_items() {
     printf '%s\t%s\t%s\t%s\n' "Save as profile" "${profile:+In use: $profile. }Remember this arrangement for these screens" \
       "term: read -rp 'Profile name (e.g. docked, desk): ' n; [ -n \"\$n\" ] && $DISTRO_ID display save \"\$n\"" "device-floppy"
   fi
-  load | jq -r --arg cli "$DISTRO_ID" '.layouts[] | select(.name) | [("Use profile: " + .name), "Apply this arrangement", ($cli + " display apply " + .name), "layout-board"] | @tsv'
+  # The command is run by a shell: only names `save` would accept (a hand-edited
+  # file could hold anything).
+  load | jq -r --arg cli "$DISTRO_ID" '.layouts[] | select(.name | strings | test("^[A-Za-z0-9._-]+$")) | [("Use profile: " + .name), "Apply this arrangement", ($cli + " display apply " + .name), "layout-board"] | @tsv'
   if [[ $(setting display.auto on) == on ]]; then
     printf '%s\t%s\t%s\t%s\n' "Switch automatically: on" "Rearrange when screens are plugged in" "$DISTRO_ID display auto off" "toggle-right"
   else

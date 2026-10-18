@@ -98,7 +98,9 @@ lib32_driver() {
 aur_install() {
   if ! command -v yay >/dev/null; then install_packages yay; fi
   info "building from the AUR (community packages; review what you install)"
-  if [[ -t 0 ]]; then system_tx "install $*" yay -S --needed "$@"; else yay -S --needed "$@"; fi
+  local p
+  for p in "$@"; do valid_pkg "$p" || die "\"$p\" isn't a package name"; done
+  if [[ -t 0 ]]; then system_tx "install $*" yay -S --needed -- "$@"; else yay -S --needed -- "$@"; fi
 }
 
 web_install() { # web_install <id> <name> <url>
@@ -264,19 +266,20 @@ import_apps() { # import_apps <file> [--dry-run] [--yes]
     IFS='|' read -r _ _ _ src target _ <<<"$r"
     if ! is_installed "$app" "$src" "$target"; then catalog+=("$app"); fi
   done < <(section "$file" catalog)
+  # The file may come from someone else: names only, never options.
   while read -r pkg; do
-    if ! pacman -Q "$pkg" >/dev/null 2>&1; then packages+=("$pkg"); fi
+    if ! valid_pkg "$pkg"; then info "skipping \"$pkg\": not a package name"; continue; fi
+    if ! pacman -Q -- "$pkg" >/dev/null 2>&1; then packages+=("$pkg"); fi
   done < <(section "$file" packages)
   while read -r pkg; do
-    if ! pacman -Q "$pkg" >/dev/null 2>&1; then aur+=("$pkg"); fi
+    if ! valid_pkg "$pkg"; then info "skipping \"$pkg\": not a package name"; continue; fi
+    if ! pacman -Q -- "$pkg" >/dev/null 2>&1; then aur+=("$pkg"); fi
   done < <(section "$file" aur)
-  if command -v flatpak >/dev/null; then
-    while read -r app; do
-      if ! flatpak info "$app" >/dev/null 2>&1; then flatpaks+=("$app"); fi
-    done < <(section "$file" flatpak)
-  else
-    mapfile -t flatpaks < <(section "$file" flatpak)
-  fi
+  while read -r app; do
+    if ! valid_app "$app"; then info "skipping \"$app\": not a Flatpak app id"; continue; fi
+    if command -v flatpak >/dev/null && flatpak info "$app" >/dev/null 2>&1; then continue; fi
+    flatpaks+=("$app")
+  done < <(section "$file" flatpak)
   while IFS= read -r arg; do
     key=$(trim "${arg%%=*}") value=$(trim "${arg#*=}")
     if [[ " ${export_keys[*]} " == *" $key "* && $(setting "$key") != "$value" ]]; then settings+=("$key = $value"); fi
@@ -299,7 +302,7 @@ import_apps() { # import_apps <file> [--dry-run] [--yes]
   if (( ${#aur[@]} )); then aur_install "${aur[@]}"; fi
   if (( ${#flatpaks[@]} )); then
     if ! command -v flatpak >/dev/null; then install_packages flatpak; fi
-    flatpak install -y --noninteractive flathub "${flatpaks[@]}"
+    flatpak install -y --noninteractive flathub -- "${flatpaks[@]}"
   fi
   for arg in "${settings[@]}"; do
     key=${arg%% = *} value=${arg#* = }

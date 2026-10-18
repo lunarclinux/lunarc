@@ -197,7 +197,8 @@ network_check() {
 }
 
 # The time the package server reports (epoch seconds), only as a hint for the
-# message below; never applied without asking. -k: a wrong clock makes TLS fail.
+# message below; never applied without asking. -k: a wrong clock makes TLS fail,
+# so this time isn't verified: anyone on the network path could fake it.
 server_epoch() {
   local repo date
   repo=$(repo_url); [[ -n $repo ]] || return 0
@@ -234,7 +235,11 @@ clock_check() { # clock_check <interactive 0|1>
     info "The clock says $(date '+%Y-%m-%d %H:%M'), which can't be right."
   fi
   info "Package signatures can't be checked until it's right."
-  if [[ -n $real ]] && (( interactive )); then
+  # Offered only when the clock is before clock_floor (so it's surely
+  # wrong) and the unverified time isn't: a faked time can never move the clock
+  # back before that floor, where expired keys and certificates look valid.
+  if [[ -n $real ]] && (( interactive && now < clock_floor && real >= clock_floor )); then
+    info "(That time comes from the package server over a connection that can't be checked yet.)"
     read -rp "Set the clock to the package server's time now? [y/N] " answer
     if [[ $answer == [yY]* ]]; then
       sudo date -s "@$real" >/dev/null && sudo hwclock --systohc 2>/dev/null || true

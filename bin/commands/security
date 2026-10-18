@@ -1,0 +1,342 @@
+#!/usr/bin/env bash
+# summary: Security check, and software installed outside the package manager
+set -euo pipefail
+source "$DISTRO_LIB/lib.sh"
+
+# Read-only. Each line is "ok", "note" (worth knowing, often deliberate) or
+# "warn" (weaker than the default, with how to change it). Exits 1 when
+# anything warns. Decision record 0048.
+usage() {
+  cat <<USAGE
+Usage: $DISTRO_ID security [command]
+
+  check            list anything that weakens the defaults, and how to change it (the default)
+  unmanaged        software installed outside the package manager, and the
+                   install commands noted while the watch is on
+  watch on|off     note install commands that bypass the package manager (a
+                   script piped into a shell, npm -g, pip, cargo install, ...)
+                   and look for new software once a day; off by default
+
+Checks: firewall and what it lets in, programs listening on the network,
+remote login, disk encryption, package signatures, the docker group,
+password-free sudo, SSH keys without a passphrase, and software installed
+outside the package manager.
+
+The watch keeps its notes in $STATE_DIR/installs.log, on this computer only:
+the kind of install and what was installed (web addresses without their
+query part), never the whole command.
+USAGE
+}
+
+warned=0
+ok()   { printf '  ok    %s\n' "$1"; }
+note() { printf '  note  %s\n' "$1"; [[ -z ${2:-} ]] || printf '        %s\n' "$2"; }
+warn() { printf '  warn  %s\n' "$1"; [[ -z ${2:-} ]] || printf '        %s\n' "$2"; warned=1; }
+
+check_firewall() {
+  local zone allowed
+  if ! command -v firewall-cmd >/dev/null || [[ $(firewall-cmd --state 2>/dev/null) != running ]]; then
+    warn "the firewall is off" "turn it on: sudo systemctl enable --now firewalld"
+    return
+  fi
+  zone=$(firewall-cmd --get-default-zone 2>/dev/null)
+  allowed=$(printf '%s %s' "$(firewall-cmd --zone="$zone" --list-services 2>/dev/null)" \
+    "$(firewall-cmd --zone="$zone" --list-ports 2>/dev/null)" | xargs -n1 | grep -vxE 'dhcpv6-client|mdns' | xargs || true)
+  if [[ -z $allowed ]]; then
+    ok "firewall on; nothing is let in beyond the defaults"
+  else
+    note "firewall on; also lets in: $allowed" "close one with: $DISTRO_ID firewall deny <name>"
+  fi
+}
+
+# TCP ports listening on an address other than this computer's own, and UDP
+# ports open on every address (other UDP sockets are a program's own outgoing
+# traffic). DHCP and mDNS replies (5353, the printer lookup, decision record
+# 0045) are expected.
+check_listening() {
+  local open
+  open=$(ss -Hlntu 2>/dev/null | awk '
+    { addr = $5; port = addr; sub(/.*:/, "", port); host = substr(addr, 1, length(addr) - length(port) - 1) }
+    host ~ /^(127\.|\[::1\]|\[::ffff:127\.)/ || host ~ /%lo$/ { next }
+    $1 == "udp" && (host !~ /^(0\.0\.0\.0|\*|\[::\])(%.*)?$/ || port ~ /^(5353|546|68)$/) { next }
+    { print port "/" $1 }' | sort -u -t/ -k1,1n | xargs || true)
+  if [[ -z $open ]]; then
+    ok "no programs are listening for connections from the network"
+  else
+    note "programs listening on the network: $open" "the firewall still decides what gets in; see which with: sudo ss -ltnup"
+  fi
+}
+
+check_ssh() {
+  if systemctl is-active --quiet sshd 2>/dev/null; then
+    warn "remote login (sshd) is running" "stop it when you don't need it: sudo systemctl disable --now sshd"
+  elif systemctl is-enabled --quiet sshd 2>/dev/null; then
+    warn "remote login (sshd) starts with the computer" "sudo systemctl disable sshd"
+  else
+    ok "remote login (sshd) is off"
+  fi
+}
+
+check_encryption() {
+  local src
+  src=$(findmnt -no SOURCE / 2>/dev/null | sed 's/\[.*//')
+  if [[ -n $src ]] && lsblk -sno TYPE "$src" 2>/dev/null | grep -qx crypt; then
+    ok "the system disk is encrypted"
+  else
+    note "the system disk isn't encrypted" "anyone with the computer in hand can read it; encryption is chosen when installing"
+  fi
+}
+
+check_signatures() {
+  local weak
+  # Arch's own default, "Required DatabaseOptional", is fine: package files
+  # are what must be signed.
+  weak=$(grep -nE '^[[:space:]]*SigLevel[[:space:]]*=(.*[[:space:]=])?(Package)?(Never|TrustAll|Optional)([[:space:]]|$)' /etc/pacman.conf 2>/dev/null || true)
+  if [[ -z $weak ]]; then
+    ok "packages must carry a valid signature"
+  else
+    warn "pacman accepts packages without a valid signature" "/etc/pacman.conf: $(tr '\n' ' ' <<<"$weak")"
+  fi
+}
+
+check_docker_group() {
+  if id -nG "$USER" | tr ' ' '\n' | grep -qx docker; then
+    warn "you're in the docker group, which can take full control of this computer" \
+      "remove it with: sudo gpasswd -d $USER docker (then '$DISTRO_ID dev docker' for rootless containers)"
+  else
+    ok "not in the docker group"
+  fi
+}
+
+# The sudoers files are readable by root only: checked when run in a terminal.
+check_sudo() {
+  local found
+  if (( EUID != 0 )) && [[ ! -t 0 ]]; then
+    note "password-free sudo not checked (run this in a terminal)"
+    return
+  fi
+  found=$( (( EUID == 0 )) && grep -rhsE '^[^#]*NOPASSWD' /etc/sudoers /etc/sudoers.d \
+    || sudo grep -rhsE '^[^#]*NOPASSWD' /etc/sudoers /etc/sudoers.d || true)
+  if [[ -z $found ]]; then
+    ok "sudo always asks for your password"
+  else
+    warn "some commands run with sudo without a password" "$(head -3 <<<"$found" | tr -s ' \t' ' ' | paste -sd ';' -) (sudo visudo, or /etc/sudoers.d)"
+  fi
+}
+
+check_ssh_keys() {
+  local key bare=()
+  for key in "$HOME"/.ssh/id_*; do
+    [[ -f $key && $key != *.pub ]] || continue
+    if ssh-keygen -y -P '' -f "$key" >/dev/null 2>&1; then bare+=("${key##*/}"); fi
+  done
+  if (( ${#bare[@]} )); then
+    warn "SSH keys without a passphrase: ${bare[*]}" "add one with: ssh-keygen -p -f ~/.ssh/<key>"
+  else
+    ok "SSH keys have a passphrase (or there are none)"
+  fi
+}
+
+# Software that no package installed, one "kind<TAB>name<TAB>where" line each.
+# It doesn't update with the system, and nothing checked where it came from.
+short() { printf '%s' "${1/#$HOME/\~}"; }
+rust_proxies=" cargo cargo-clippy cargo-fmt cargo-miri clippy-driver rls rust-analyzer rust-gdb rust-gdbgui rust-lldb rustc rustdoc rustfmt rustup "
+unmanaged_items() {
+  local dir f name target
+  for dir in /usr/local/bin /usr/local/sbin "$HOME/.local/bin" "$HOME/bin"; do
+    [[ -d $dir ]] || continue
+    for f in "$dir"/*; do
+      [[ -f $f && -x $f ]] || continue
+      if [[ $dir == /usr/local/* ]] && pacman -Qoq "$f" >/dev/null 2>&1; then continue; fi
+      target=""
+      if [[ -L $f ]]; then target=$(readlink -f "$f"); target=" -> ${target/#$HOME/\~}"; fi
+      printf 'program\t%s\t%s%s\n' "${f##*/}" "${dir/#$HOME/\~}" "$target"
+    done
+  done
+  for f in /opt/*; do
+    [[ -e $f ]] || continue
+    pacman -Qoq "$f" >/dev/null 2>&1 || printf 'folder\t%s\t/opt\n' "${f##*/}"
+  done
+  for f in "${CARGO_HOME:-$HOME/.cargo}"/bin/* "${GOBIN:-${GOPATH:-$HOME/go}/bin}"/* "$HOME"/.bun/bin/* "$HOME"/.deno/bin/*; do
+    [[ -f $f && -x $f ]] || continue
+    name=${f##*/}
+    case $f in
+      */.cargo/bin/*) [[ $rust_proxies == *" $name "* ]] && continue; printf 'cargo\t%s\t%s\n' "$name" "$(short "${f%/*}")" ;;
+      */.bun/bin/*) [[ $name == bun || $name == bunx ]] && continue; printf 'bun\t%s\t%s\n' "$name" "$(short "${f%/*}")" ;;
+      */.deno/bin/*) [[ $name == deno ]] && continue; printf 'deno\t%s\t%s\n' "$name" "$(short "${f%/*}")" ;;
+      *) printf 'go\t%s\t%s\n' "$name" "$(short "${f%/*}")" ;;
+    esac
+  done
+  for f in "$HOME"/.local/share/pipx/venvs/* "$HOME"/.local/share/uv/tools/*; do
+    if [[ -d $f ]]; then printf 'python tool\t%s\t%s\n' "${f##*/}" "$(short "${f%/*}")"; fi
+  done
+  for f in "$HOME"/.local/lib/python3*/site-packages/*.dist-info; do
+    [[ -d $f ]] || continue
+    name=${f##*/}; name=${name%.dist-info}
+    printf 'pip --user\t%s\t%s\n' "${name%-*}" "$(short "${f%/*}")"
+  done
+  if command -v npm >/dev/null; then
+    dir=$(npm root -g 2>/dev/null || true)
+    for f in "$dir"/* "$dir"/@*/*; do
+      [[ -d $f && ${f##*/} != @* ]] || continue
+      name=${f#"$dir"/}
+      [[ $name == npm || $name == corepack ]] && continue
+      printf 'npm -g\t%s\t%s\n' "$name" "${dir/#$HOME/\~}"
+    done
+  fi
+  while IFS= read -r -d '' f; do
+    printf 'AppImage\t%s\t%s\n' "${f##*/}" "$(dirname "${f/#$HOME/\~}")"
+  done < <(find "$HOME" -maxdepth 3 -path "$HOME/.cache" -prune -o -iname '*.appimage' -type f -print0 2>/dev/null)
+}
+
+check_unmanaged() {
+  local items count
+  items=$(unmanaged_items | sort -u)
+  count=$(grep -c . <<<"$items" || true)
+  if (( count )); then
+    note "$count programs or tools installed outside the package manager: $(cut -f2 <<<"$items" | head -6 | paste -sd ' ')$( (( count > 6 )) && echo " ...")" \
+      "they update themselves or not at all; see them with: $DISTRO_ID security unmanaged"
+  else
+    ok "no programs installed outside the package manager"
+  fi
+  local foreign
+  foreign=$(pacman -Qqm 2>/dev/null | wc -l)
+  if (( foreign )); then
+    note "$foreign packages are from the AUR or elsewhere (pacman -Qm), not from Arch or $DISTRO_NAME"
+  fi
+}
+
+# --- The watch (decision record 0048) -------------------------------------
+
+log=$STATE_DIR/installs.log
+seen=$STATE_DIR/unmanaged.seen
+pipe_re='(curl|wget)[^|]*\|[[:space:]]*(sudo[[:space:]]+)?(ba|z|da)?sh\b|(ba|z)?sh[[:space:]]+(-c[[:space:]]+)?["'\'']?<?\$\((curl|wget)\b|(ba|z)?sh[[:space:]]+<\((curl|wget)\b'
+
+# The non-option words after a verb: "npm i -g foo bar" -> "foo bar".
+words_after() { # words_after <command> <verb regex>
+  local w on=0 out=() ws=()
+  read -ra ws <<<"$1"
+  for w in "${ws[@]}"; do
+    if (( on )); then
+      [[ $w == [\;\|\&]* ]] && break
+      [[ $w == -* ]] || out+=("$w")
+    elif [[ $w =~ ^($2)$ ]]; then on=1
+    fi
+  done
+  printf '%s' "${out[*]}"
+}
+
+# What a command installed, as "kind<TAB>what", or nothing if it isn't an
+# install that bypasses the package manager.
+classify() { # classify <command>
+  local c=$1 url
+  if [[ $c =~ $pipe_re ]]; then
+    url=$(grep -oE 'https?://[^[:space:]"'\''|)]+' <<<"$c" | head -1)
+    url=${url%%[?#]*}
+    printf 'piped script\t%s\n' "${url:-(a downloaded script)}"
+  elif [[ $c =~ (^|[[:space:];&|])(npm|pnpm)[[:space:]].*(^|[[:space:]])(-g|--global)([[:space:]]|$) && $c =~ [[:space:]](i|install|add)[[:space:]] ]]; then
+    printf 'npm -g\t%s\n' "$(words_after "$c" 'i|install|add')"
+  elif [[ $c =~ (^|[[:space:];&|])bun[[:space:]]+(add|install|i)[[:space:]].*(-g|--global) ]]; then
+    printf 'bun -g\t%s\n' "$(words_after "$c" 'add|install|i')"
+  elif [[ $c =~ (^|[[:space:];&|])yarn[[:space:]]+global[[:space:]]+add[[:space:]] ]]; then
+    printf 'npm -g\t%s\n' "$(words_after "$c" 'add')"
+  elif [[ $c =~ (^|[[:space:];&|])(pipx[[:space:]]+install|uv[[:space:]]+tool[[:space:]]+install)[[:space:]] ]]; then
+    printf 'python tool\t%s\n' "$(words_after "$c" 'install')"
+  elif [[ -z ${VIRTUAL_ENV:-} && $c =~ (^|[[:space:];&|])(pip3?|python3?[[:space:]]+-m[[:space:]]+pip)[[:space:]]+install[[:space:]] ]]; then
+    printf 'pip\t%s\n' "$(words_after "$c" 'install')"
+  elif [[ $c =~ (^|[[:space:];&|])cargo[[:space:]]+install[[:space:]] ]]; then
+    printf 'cargo\t%s\n' "$(words_after "$c" 'install')"
+  elif [[ $c =~ (^|[[:space:];&|])go[[:space:]]+install[[:space:]] ]]; then
+    printf 'go\t%s\n' "$(words_after "$c" 'install')"
+  elif [[ $c =~ (^|[[:space:];&|])gem[[:space:]]+install[[:space:]] ]]; then
+    printf 'gem\t%s\n' "$(words_after "$c" 'install')"
+  elif [[ $c =~ (^|[[:space:];&|])make[[:space:]]+([^;|&]*[[:space:]])?install([[:space:]]|$) ]]; then
+    printf 'make install\t%s\n' "${PWD/#$HOME/\~}"
+  elif [[ $c =~ [^[:space:]]+\.[Aa]pp[Ii]mage ]]; then
+    printf 'AppImage\t%s\n' "${BASH_REMATCH[0]##*/}"
+  fi
+}
+
+noted() { # noted <command>: called by the shell hook
+  local what
+  [[ $(setting security.watch off) == on ]] || return 0
+  what=$(classify "$1") || true
+  [[ -n $what ]] || return 0
+  mkdir -p "$STATE_DIR"
+  (umask 077; printf '%s\t%s\n' "$(date +%Y-%m-%d)" "$what" >> "$log")
+}
+
+unmanaged() {
+  local items
+  items=$(unmanaged_items | sort -u)
+  echo "Software outside the package manager"
+  if [[ -n $items ]]; then
+    awk -F'\t' '{ printf "  %-12s %-28s %s\n", $1, $2, $3 }' <<<"$items"
+  else
+    echo "  (none)"
+  fi
+  if [[ -s $log ]]; then
+    echo
+    echo "Install commands noted by the watch (newest first)"
+    tac "$log" | awk -F'\t' '!seen[$2 FS $3]++ { printf "  %s  %-12s %s\n", $1, $2, $3 }' | head -40
+  elif [[ $(setting security.watch off) != on ]]; then
+    echo
+    echo "To also note install commands as you type them: $DISTRO_ID security watch on"
+  fi
+}
+
+# The daily look: notify about software that wasn't there last time.
+notify_new() {
+  local now new
+  [[ $(setting security.watch off) == on ]] || return 0
+  mkdir -p "$STATE_DIR"
+  now=$(unmanaged_items | cut -f1,2 | sort -u)
+  if [[ -f $seen ]]; then
+    new=$(comm -13 "$seen" <(printf '%s\n' "$now") | cut -f2 | paste -sd ' ')
+    if [[ -n $new ]]; then
+      notify-send -a "$DISTRO_NAME" -i security-medium -- "New software outside the package manager" \
+        "$new. See: $DISTRO_ID security unmanaged" 2>/dev/null || true
+    fi
+  fi
+  printf '%s\n' "$now" > "$seen"
+}
+
+watch() { # watch on|off
+  case ${1:-} in
+    on)
+      set_setting security.watch on
+      mkdir -p "$STATE_DIR"
+      unmanaged_items | cut -f1,2 | sort -u > "$seen"
+      systemctl --user enable --now "$DISTRO_ID-security-watch.timer" >/dev/null 2>&1 || true
+      info "watch: on (new terminals note install commands; a daily look notifies about new software)" ;;
+    off)
+      set_setting security.watch off
+      systemctl --user disable --now "$DISTRO_ID-security-watch.timer" >/dev/null 2>&1 || true
+      info "watch: off (notes so far stay in $log; delete it if you like)" ;;
+    "") info "watch: $(setting security.watch off)" ;;
+    *) die "watch on or off?" ;;
+  esac
+}
+
+check() {
+  echo "$DISTRO_NAME security check"
+  check_firewall
+  check_listening
+  check_ssh
+  check_encryption
+  check_signatures
+  check_docker_group
+  check_sudo
+  check_ssh_keys
+  check_unmanaged
+  return "$warned"
+}
+
+case ${1:-check} in
+  check) check ;;
+  unmanaged) if [[ ${2:-} == --notify-new ]]; then notify_new; else unmanaged; fi ;;
+  watch) watch "${2:-}" ;;
+  noted) [[ ${2:-} == -- ]] && shift; noted "${2:-}" ;;
+  -h|--help) usage ;;
+  *) die "unknown security command: $1" ;;
+esac

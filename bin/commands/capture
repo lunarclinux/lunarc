@@ -26,7 +26,13 @@ $videos.
 USAGE
 }
 
-note() { notify-send -a "$DISTRO_NAME" "$@" 2>/dev/null || true; }
+# note [-i icon | -u urgency]… <summary> [body]: the text after the options
+# can come from a QR code or a screenshot, so it's never read as an option.
+note() {
+  local opts=()
+  while [[ ${1:-} == -[iu] ]]; do opts+=("$1" "$2"); shift 2; done
+  notify-send -a "$DISTRO_NAME" "${opts[@]}" -- "$@" 2>/dev/null || true
+}
 
 # A region chosen with the mouse, or empty if cancelled.
 pick_region() { slurp -d 2>/dev/null || true; }

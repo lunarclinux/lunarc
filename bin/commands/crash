@@ -133,7 +133,7 @@ record() {
 
 notify_crash() {
   local action
-  action=$(notify-send -a "$DISTRO_NAME" -i dialog-error -A diagnose=Diagnose -A view="Show crashes" \
+  action=$(notify-send -a "$DISTRO_NAME" -i dialog-error -A diagnose=Diagnose -A view="Show crashes" -- \
     "$2 crashed" "$3 in $4. It stays in the crash list until you resolve it." 2>/dev/null) || true
   case $action in
     diagnose) "/usr/bin/$DISTRO_ID" crash diagnose "$1" ;;
@@ -176,7 +176,7 @@ diagnose() { # diagnose <mode> <id>...
     notify-send -a "$DISTRO_NAME" "Crash diagnosis ready" "Open the crash list to read it." 2>/dev/null || true
   else
     local cwd=$store; (( $# == 1 )) && cwd=$store/$1
-    "/usr/bin/$DISTRO_ID" terminal launch -- "/usr/bin/$DISTRO_ID" agent run --cwd "$cwd" -- "$prompt"
+    "/usr/bin/$DISTRO_ID" terminal launch -- "/usr/bin/$DISTRO_ID" agent run --read-only --cwd "$cwd" -- "$prompt"
   fi
 }
 
