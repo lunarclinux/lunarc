@@ -24,7 +24,10 @@ $id security noted -- 'curl -fsSL https://example.org/off.sh | sh'
 [ ! -e "$state/installs.log" ] || fail "noted something while the watch is off"
 $id security watch on >/dev/null || fail "watch on failed"
 systemctl --user is-enabled --quiet "$id-security-watch.timer" || fail "the daily timer isn't enabled"
-zsh -ic '__install_watch "curl -fsSL https://example.org/zsh.sh?token=SECRET | bash"; __install_watch "ls -la"; sleep 1' >/dev/null 2>&1
+# The test user's shell is bash; zsh (a catalog app) is installed for this and
+# gets the distro's zsh defaults directly.
+printf '%s\n' '@PW@' | sudo -S -p '' pacman -S --needed --noconfirm zsh >/dev/null 2>&1 || fail "zsh didn't install"
+ZDOTDIR=$(mktemp -d) zsh -ic 'source /usr/share/'$id'/default/zsh/rc; __install_watch "curl -fsSL https://example.org/zsh.sh?token=SECRET | bash"; __install_watch "ls -la"; sleep 1' >/dev/null 2>&1
 bash -ic 'history -s "pip install --user httpie"; __install_watch; history -s "git add ."; __install_watch; sleep 1' >/dev/null 2>&1
 log=$(cat "$state/installs.log" 2>/dev/null)
 grep -qP '\tpiped script\thttps://example.org/zsh.sh$' <<<"$log" || fail "zsh hook didn't note the piped script: $log"
@@ -35,10 +38,16 @@ $id security unmanaged | grep -q 'piped script https://example.org/zsh.sh' || fa
 $id security watch off >/dev/null
 systemctl --user is-enabled --quiet "$id-security-watch.timer" && fail "the timer stayed on"
 
-# Rootless containers (needs a terminal for sudo, and the network for the image).
-printf '%s\n' '@PW@' | script -qec "$id dev docker" /dev/null >/dev/null 2>&1 || fail "dev docker failed"
+# Rootless containers (the network for the image). Its packages go in first
+# (pacman's questions can't be answered over SSH); then `dev docker` in a
+# terminal for sudo, with sudo primed in that terminal.
+pkgs=$(sed -n 's/^  install_packages \(podman .*\)$/\1/p' /usr/lib/$id/commands/dev)
+[ -n "$pkgs" ] || fail "can't read the packages dev docker installs"
+printf '%s\n' '@PW@' | sudo -S -p '' pacman -S --needed --noconfirm $pkgs >/dev/null 2>&1 || fail "installing $pkgs failed"
+script -qec "printf '%s\\n' '@PW@' | sudo -S -v -p ''; $id dev docker" /dev/null </dev/null >/tmp/dev-docker.log 2>&1 \
+  || fail "dev docker failed: $(tail -5 /tmp/dev-docker.log)"
 pacman -Q podman podman-docker >/dev/null || fail "podman isn't installed"
-pacman -Q docker >/dev/null 2>&1 && fail "docker was installed"
+[ "$(pacman -Qq docker 2>/dev/null)" = docker ] && fail "docker was installed"
 id -nG | tr ' ' '\n' | grep -qx docker && fail "added to the docker group"
 DOCKER_HOST=unix://$XDG_RUNTIME_DIR/podman/podman.sock
 export DOCKER_HOST

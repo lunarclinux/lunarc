@@ -24,14 +24,16 @@ as_root() { if [[ -t 0 ]]; then sudo "$@"; else pkexec "$@"; fi; }
 
 in_docker_group() { id -nG "$USER" | tr ' ' '\n' | grep -qx docker; }
 rootless() { pacman -Q podman-docker >/dev/null 2>&1; }
-docker_ready() { rootless || { pacman -Q docker >/dev/null 2>&1 && in_docker_group; }; }
+# Docker itself (podman-docker provides "docker" too, so pacman -Q docker can't tell).
+real_docker() { [[ $(pacman -Qq docker 2>/dev/null) == docker ]]; }
+docker_ready() { rootless || { real_docker && in_docker_group; }; }
 
 # Containers run as you, not as root (decision record 0048): Podman, with the
 # docker command and a Docker-compatible socket for Compose and other tools.
 # Membership of the docker group is the same as root access, so it's only
 # done when asked for with --rootful.
 setup_rootless() {
-  if pacman -Q docker >/dev/null 2>&1; then
+  if real_docker; then
     info "Docker is installed and runs as root; keeping it ($DISTRO_ID dev docker --rootful)"
     return
   fi
