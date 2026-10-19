@@ -5,4 +5,4 @@ for _ in $(seq 60); do
   sleep 0.5
 done
 notify-send -a "@DISTRO_NAME@" -t 0 -i @DISTRO_ID@-logo "This is the live system." \
-  "Nothing is installed until you open Install @DISTRO_NAME@ from the launcher (SUPER+Space)."
+  "Nothing is installed until you open Install @DISTRO_NAME@ from the launcher (SUPER+Space). To delete or resize partitions first, open GParted or Disks there."

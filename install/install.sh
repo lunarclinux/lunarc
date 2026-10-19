@@ -8,6 +8,10 @@
 #   --disk DEV            disk to install to (required); erased unless --alongside
 #   --alongside           keep what's on the disk (e.g. Windows) and install into
 #                         its largest stretch of free space (at least 40 GB)
+#   --replace-linux       with --alongside: first delete the other Linux on the
+#                         disk (its system, swap and Linux-only EFI partitions)
+#   --remove-old-boot     set aside boot loaders another Linux left on the disk's
+#                         EFI partitions, and remove their firmware boot entries
 #   --user NAME           admin user to create (required)
 #   --password-file FILE  file holding the user's password; prompted for if omitted
 #   --hostname NAME       default: the distro ID from distro.conf
@@ -31,7 +35,7 @@ trap on_exit EXIT
 DRY_RUN=${INSTALL_DRY_RUN:-0}
 
 DISK='' USERNAME='' PASSWORD_FILE='' SSH_KEY='' ASSUME_YES=0 AUTOLOGIN=0 ENCRYPT_FILE='' ENCRYPT=0
-INSTALL_MODE=erase WINDOWS_ESP=''
+INSTALL_MODE=erase WINDOWS_ESP='' REPLACE_LINUX=0 REPLACE_PARTS='' CLEAN_BOOT=0
 HOSTNAME_NEW=$DISTRO_ID TIMEZONE=UTC
 
 while [[ $# -gt 0 ]]; do
@@ -46,7 +50,9 @@ while [[ $# -gt 0 ]]; do
     --encrypt) ENCRYPT=1; ENCRYPT_FILE=$2; shift 2 ;;
     --yes) ASSUME_YES=1; shift ;;
     --alongside) INSTALL_MODE=alongside; shift ;;
-    -h|--help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --replace-linux) INSTALL_MODE=alongside REPLACE_LINUX=1; shift ;;
+    --remove-old-boot) CLEAN_BOOT=1; shift ;;
+    -h|--help) sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) die "unknown option: $1" ;;
   esac
 done
@@ -69,7 +75,16 @@ fi
 if [[ $INSTALL_MODE == alongside ]]; then
   (( DRY_RUN )) || [[ $(blkid -p -o value -s PTTYPE "$DISK" 2>/dev/null) == gpt ]] \
     || die "$DISK doesn't have a GPT partition table; installing alongside needs one (UEFI systems use GPT)"
-  free=$(disk_free_bytes "$DISK")
+  if (( REPLACE_LINUX )) && [[ -z $REPLACE_PARTS ]]; then
+    REPLACE_PARTS=$(disk_linux_parts "$DISK" | paste -sd' ' -)
+    [[ -n $REPLACE_PARTS ]] || die "--replace-linux: there's no Linux on $DISK to replace"
+  fi
+  if [[ -n $REPLACE_PARTS ]]; then
+    # shellcheck disable=SC2086 # device names, one word each
+    free=$(disk_free_after "$DISK" $REPLACE_PARTS)
+  else
+    free=$(disk_free_bytes "$DISK")
+  fi
   (( free >= ALONGSIDE_MIN_BYTES )) \
     || die "$DISK has $(human_gb "$free") of free space; installing alongside needs at least $(human_gb "$ALONGSIDE_MIN_BYTES")"
   if [[ -z $WINDOWS_ESP ]]; then WINDOWS_ESP=$(disk_windows_esp "$DISK"); fi
@@ -86,7 +101,9 @@ fi
 
 if (( ! ASSUME_YES )); then
   lsblk "$DISK" || true
-  if [[ $INSTALL_MODE == alongside ]]; then
+  if [[ -n $REPLACE_PARTS ]]; then
+    read -rp "Delete $REPLACE_PARTS (the other Linux) and install there, keeping the rest of $DISK? Type yes: " answer
+  elif [[ $INSTALL_MODE == alongside ]]; then
     read -rp "Install into the free space on $DISK, keeping everything on it? Type yes: " answer
   else
     read -rp "Erase everything on $DISK? Type yes: " answer
@@ -95,7 +112,7 @@ if (( ! ASSUME_YES )); then
 fi
 
 export root DISK USERNAME PASSWORD SSH_KEY HOSTNAME_NEW TIMEZONE AUTOLOGIN ENCRYPT ENCRYPT_FILE MNT=/mnt
-export INSTALL_MODE WINDOWS_ESP
+export INSTALL_MODE WINDOWS_ESP REPLACE_PARTS CLEAN_BOOT
 
 # On the live ISO the pacman keyring is set up by a service at boot; installing
 # before it finishes fails with "keyring is not writable".

@@ -4,6 +4,29 @@
 umount -R "$MNT" 2>/dev/null || true
 cryptsetup close system 2>/dev/null || true
 
+# Firmware boot entries that point at partitions about to go are removed in the
+# boot step, so the computer doesn't try a system that's gone first. Their
+# partition GUIDs are only known now.
+GONE_PARTUUIDS=''
+if [[ $INSTALL_MODE == erase ]]; then gone_parts=$(lsblk -lnpo NAME,TYPE "$DISK" | awk '$2 == "part" { print $1 }')
+else gone_parts=$REPLACE_PARTS; fi
+for part in $gone_parts; do
+  GONE_PARTUUIDS+=" $(blkid -s PARTUUID -o value "$part" 2>/dev/null || true)"
+done
+
+# Replacing another Linux: delete its partitions, leaving free space for ours.
+if [[ -n $REPLACE_PARTS ]]; then
+  nums=()
+  for part in $REPLACE_PARTS; do
+    swapoff "$part" 2>/dev/null || true
+    wipefs -aq "$part"
+    nums+=("$(lsblk -no PARTN "$part" | tr -d ' ')")
+  done
+  sfdisk -q --delete "$DISK" "${nums[@]}"
+  partprobe "$DISK"; udevadm settle
+  info "deleted the other Linux: $REPLACE_PARTS"
+fi
+
 if [[ $INSTALL_MODE == alongside ]]; then
   # Keep every existing partition (decision record 0035). Our own EFI system
   # partition and the system partition go into the largest stretch of free
@@ -54,4 +77,4 @@ mount -o "$opts,subvol=@log" "$SYSTEM" "$MNT/var/log"
 mount -o "$opts,subvol=@pkg" "$SYSTEM" "$MNT/var/cache/pacman/pkg"
 mount -o "$opts,subvol=@snapshots" "$SYSTEM" "$MNT/.snapshots"
 mount "$ESP" "$MNT/boot"
-export ESP SYSTEM LUKS_UUID boot_num
+export ESP SYSTEM LUKS_UUID boot_num GONE_PARTUUIDS
