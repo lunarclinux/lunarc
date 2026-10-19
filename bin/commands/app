@@ -96,6 +96,8 @@ lib32_driver() {
 }
 
 aur_install() {
+  # base-devel is in the base package list; installs from before it was get it here.
+  if ! pacman -Qq base-devel >/dev/null 2>&1; then install_packages base-devel; fi
   if ! command -v yay >/dev/null; then install_packages yay; fi
   info "building from the AUR (community packages; review what you install)"
   local p

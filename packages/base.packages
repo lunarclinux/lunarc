@@ -18,6 +18,8 @@ man-db
 man-pages
 less
 nano
+# Building packages: the AUR (yay, `<id> app install` for AUR apps) needs makepkg's tools.
+base-devel
 
 # Snapshots before and after every pacman transaction (rollback: `<id> update rollback`)
 snapper
