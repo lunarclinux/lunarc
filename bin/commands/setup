@@ -52,8 +52,13 @@ open_pika_setup() {
   if gapplication launch org.gnome.World.PikaBackup >/dev/null 2>&1; then
     sleep 1
     gapplication action org.gnome.World.PikaBackup setup >/dev/null 2>&1 || true
-    # In front of the setup window (both float), so its dialog isn't hidden.
-    hyprctl dispatch 'hl.dsp.focus({ window = "class:^org\\.gnome\\.World\\.PikaBackup$" })' >/dev/null 2>&1 || true
+    # In front of the setup window, so its dialog isn't hidden: floating, at the
+    # size it had when a window rule floated it always (it tiles otherwise).
+    local pika='class:^org\\.gnome\\.World\\.PikaBackup$'
+    hyprctl dispatch "hl.dsp.window.float({ action = \"enable\", window = \"$pika\" })" >/dev/null 2>&1 || true
+    hyprctl dispatch "hl.dsp.window.resize({ x = 960, y = 720, window = \"$pika\" })" >/dev/null 2>&1 || true
+    hyprctl dispatch "hl.dsp.window.center({ window = \"$pika\" })" >/dev/null 2>&1 || true
+    hyprctl dispatch "hl.dsp.focus({ window = \"$pika\" })" >/dev/null 2>&1 || true
   else
     setsid -f pika-backup >/dev/null 2>&1
   fi

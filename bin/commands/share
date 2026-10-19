@@ -149,22 +149,31 @@ device_folder() { # device_folder <name> <folder> → path
   printf '%s\n' "$mp/$folder"
 }
 
-# Where the setup screen looks for the backup location to show and copy.
+# Where the setup screen looks for the backup location to show and copy. Run
+# through sudo, it's written into the owner's home, as them.
 remember_backup_location() {
-  local file=${XDG_STATE_HOME:-$HOME/.local/state}/$DISTRO_ID/setup/backup-location
-  if (( EUID == 0 )) && [[ -n ${SUDO_USER:-} ]]; then return 0; fi
-  mkdir -p "${file%/*}"; printf '%s\n' "$1" > "$file"
-  bookmark "$1" "NAS backups"
+  local state config home
+  if (( EUID == 0 )) && [[ -n ${SUDO_USER:-} ]]; then
+    home=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+    state=$home/.local/state config=$home/.config
+  else
+    state=${XDG_STATE_HOME:-$HOME/.local/state} config=${XDG_CONFIG_HOME:-$HOME/.config}
+  fi
+  as_user mkdir -p "$state/$DISTRO_ID/setup"
+  printf '%s\n' "$1" | as_user tee "$state/$DISTRO_ID/setup/backup-location" >/dev/null
+  bookmark "$config/gtk-3.0/bookmarks" "$1" "NAS backups"
 }
 
 # A sidebar entry in every GTK file picker (Pika's included) and in Files.
 # The path is one of ours (/mnt/nas/<user>/<name>/<folder>, all from the safe
 # character set), so it needs no URL escaping.
-bookmark() { # bookmark <path> <label>
-  local file=${XDG_CONFIG_HOME:-$HOME/.config}/gtk-3.0/bookmarks uri="file://$1"
-  [[ $1 =~ ^/[A-Za-z0-9._/-]+$ ]] || return 0
-  mkdir -p "${file%/*}"; touch "$file"
-  if ! awk -v u="$uri" '$1 == u { found = 1 } END { exit !found }' "$file"; then printf '%s %s\n' "$uri" "$2" >> "$file"; fi
+bookmark() { # bookmark <bookmarks file> <path> <label>
+  local file=$1 uri="file://$2"
+  [[ $2 =~ ^/[A-Za-z0-9._/-]+$ ]] || return 0
+  as_user mkdir -p "${file%/*}"; as_user touch "$file"
+  if ! awk -v u="$uri" '$1 == u { found = 1 } END { exit !found }' "$file"; then
+    printf '%s %s\n' "$uri" "$3" | as_user tee -a "$file" >/dev/null
+  fi
 }
 
 # --- adding ------------------------------------------------------------------
