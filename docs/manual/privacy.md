@@ -67,7 +67,7 @@ features below.
 - **Printing:** the print service answers only this computer and never shares its printers; Avahi looks for printers but never announces this computer's name, address or services.
 - **Name lookups:** nothing answers name questions from the local network (no LLMNR or multicast DNS from the system's resolver). With encrypted DNS off, the system resolver doesn't run at all; lookups go to the network's DNS server.
 - **Lock:** SUPER+L, idle and before sleep; wrong-password lockouts are short (10 tries, 2 minutes).
-- **Software:** everything Lunarc installs comes from signed packages; nothing runs a script downloaded from the internet. Claude Code comes from Lunarc's repository, checked against Anthropic's release signature. Containers (`lunarc dev docker`) run as you with Podman, not as root; Docker itself with the `docker` group, which amounts to root access, only with `lunarc dev docker --rootful`.
+- **Software:** everything Lunarc installs comes from signed packages; nothing runs a script downloaded from the internet. Claude Code is checked against Anthropic's release signature before it's installed. Containers (`lunarc dev docker`) run as you with Podman, not as root; Docker itself with the `docker` group, which amounts to root access, only with `lunarc dev docker --rootful`.
 
 ## Security check
 
