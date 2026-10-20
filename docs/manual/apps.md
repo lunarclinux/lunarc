@@ -51,8 +51,8 @@ Lunarc sets up a few things for games out of the box:
   and the memory-map limit that some games need.
 
 To run a game with the CPU at full speed, put
-`powerprofilesctl launch -p performance %command%` in its Steam launch options; the
-power profile returns to what it was when the game exits. MangoHud (`lunarc app install
+`powerprofilesctl launch -p performance -- %command%` in its Steam launch options (the `--` matters: without it Steam's own
+launcher gets its arguments mangled and the game won't start); the power profile returns to what it was when the game exits. MangoHud (`lunarc app install
 mangohud`, then `mangohud %command%`) shows frame rate, frame times and GPU load,
 the way to tell whether a change helped. ProtonUp-Qt installs GE-Proton for games
 that misbehave on Valve's Proton.
