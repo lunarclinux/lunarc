@@ -35,6 +35,7 @@ SUPER is the Windows key. SUPER+K lists every shortcut, searchable; Return on on
 | SUPER+ALT+Space | The same |
 | SUPER+K | The menu's Keybinds: every shortcut, and changing one |
 | SUPER+Return | Terminal |
+| SUPER+A | Your coding agent in a terminal; with several installed, pick one (Return keeps the default) |
 | SUPER+S | Quick settings (Wi-Fi, Bluetooth, sound) |
 | SUPER+comma | Settings |
 | SUPER+V | Clipboard history |
@@ -115,7 +116,8 @@ Items are in `/usr/share/lunarc/default/menu/menu`; copy it to `~/.config/lunarc
 | `lunarc theme wallpaper next` / `prev` / `set <n>` | Cycle the current theme's wallpapers (each theme remembers its pick) |
 | `lunarc terminal set ghostty\|alacritty\|kitty\|wezterm\|foot` | Change the terminal (installs it if needed) |
 | `lunarc agent set claude\|codex\|gemini\|opencode` | Choose the AI coding agent |
-| `lunarc agent launch` / `prompt "<text>"` | Open the agent in a terminal |
+| `lunarc agent open` (SUPER+A) | Open your agent in a terminal: the one installed, or a choice when several are |
+| `lunarc agent launch` / `prompt "<text>"` | Open the default agent in a terminal |
 | `lunarc agent usage` | Tokens per day and model; also in the bar (✦) |
 | `lunarc crash list` / `show` / `diagnose` / `resolve` | The crash list; also the bug icon in the bar |
 | `lunarc shell defaults on\|off` / `shell set bash\|zsh\|fish` | Shell defaults (prompt, `z`, `ll`, Ctrl+R search) and your login shell |

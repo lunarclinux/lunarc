@@ -21,6 +21,7 @@ Install  | | apps and packages      | menu: install | +
 Remove   | |                        | menu: remove  | −
 | Update | | term: @DISTRO_ID@ update | ↑
 System   | | lock, reboot, power off |              | !
+| Coding agent | SUPER+A | @DISTRO_ID@ agent open | ◇
 
 Style | Theme | colours for everything | menu: theme
 Style | Dark mode | the theme's dark colours | @DISTRO_ID@ theme mode dark

@@ -20,6 +20,19 @@ field() { cut -d'|' -f"$2" <<<"$(row "$1")"; }
 # Claude Code's own installer puts the command in ~/.local/bin.
 find_cmd() { command -v "$1" 2>/dev/null || { [[ -x $HOME/.local/bin/$1 ]] && echo "$HOME/.local/bin/$1"; }; }
 current() { setting agent claude; }
+# Installed agents, the default first.
+installed() {
+  local r name cur
+  cur=$(current)
+  if [[ -n $(find_cmd "$(field "$cur" 2 2>/dev/null)") ]]; then echo "$cur"; fi
+  for r in "${known[@]}"; do
+    name=${r%%|*}
+    if [[ $name != "$cur" && -n $(find_cmd "$(field "$name" 2)") ]]; then echo "$name"; fi
+  done
+}
+title() { # title <name>: what people call it
+  case $1 in claude) echo "Claude Code" ;; codex) echo "Codex" ;; gemini) echo "Gemini CLI" ;; *) echo "$1" ;; esac
+}
 
 usage() {
   cat <<USAGE
@@ -29,11 +42,13 @@ Usage: $DISTRO_ID agent <command>
   current                 the default agent
   set <name>              make <name> the default (installs it first if needed)
   install <name>          install <name>
+  open                    open your agent in a terminal (SUPER+A): the one installed,
+                          or a choice when several are, the default first
   launch                  open the default agent in a terminal
   prompt <text>           open the default agent in a terminal, starting with <text>
   usage [--json]          tokens per day and per model over the last week, and plan limits where the agent records them
-  run [--headless] [--read-only] [--cwd DIR] -- <prompt>
-                          run the default agent here (headless prints the answer and exits;
+  run [--agent NAME] [--headless] [--read-only] [--cwd DIR] -- <prompt>
+                          run the default agent (or NAME) here (headless prints the answer and exits;
                           read-only asks before running or changing anything)
 USAGE
 }
@@ -125,18 +140,46 @@ case ${1:-} in
     row "$2" >/dev/null || die "unknown agent: $2"
     [[ -n $(find_cmd "$(field "$2" 2)") ]] || install_agent "$2"
     set_setting agent "$2"; info "default agent: $2" ;;
+  open)
+    mapfile -t have < <(installed)
+    if (( ${#have[@]} > 1 )); then
+      exec "/usr/bin/$DISTRO_ID" terminal launch -- "/usr/bin/$DISTRO_ID" agent pick
+    elif (( ${#have[@]} == 1 )); then
+      exec "/usr/bin/$DISTRO_ID" terminal launch -- "/usr/bin/$DISTRO_ID" agent run --agent "${have[0]}" -- ""
+    fi
+    # None yet: the default, which offers to install itself.
+    exec "/usr/bin/$DISTRO_ID" terminal launch -- "/usr/bin/$DISTRO_ID" agent run -- "" ;;
+  pick)
+    # In the terminal `open` started: choose, then the agent takes the terminal over.
+    mapfile -t have < <(installed)
+    (( ${#have[@]} )) || die "no coding agent is installed; see '$DISTRO_ID agent list'"
+    labels=()
+    for name in "${have[@]}"; do
+      label=$(title "$name"); [[ $name == "$(current)" ]] && label+="  (default)"
+      labels+=("$label")
+    done
+    if command -v gum >/dev/null; then
+      choice=$(gum choose --header "Open which agent?" --selected "${labels[0]}" "${labels[@]}") || exit 0
+    else
+      PS3="Open which agent? "; select choice in "${labels[@]}"; do [[ -n $choice ]] && break; done
+    fi
+    for i in "${!labels[@]}"; do
+      if [[ ${labels[i]} == "$choice" ]]; then exec "/usr/bin/$DISTRO_ID" agent run --agent "${have[i]}" -- ""; fi
+    done
+    exit 0 ;;
   launch) exec "/usr/bin/$DISTRO_ID" terminal launch -- "/usr/bin/$DISTRO_ID" agent run -- "" ;;
   prompt) shift; exec "/usr/bin/$DISTRO_ID" terminal launch -- "/usr/bin/$DISTRO_ID" agent run -- "$*" ;;
   run)
-    shift; headless=0 read_only=0 cwd=$HOME
+    shift; headless=0 read_only=0 cwd=$HOME name=$(current)
     while [[ $# -gt 0 ]]; do
       case $1 in
+        --agent) row "$2" >/dev/null || die "unknown agent: $2"; name=$2; shift 2 ;;
         --headless) headless=1; shift ;; --read-only) read_only=1; shift ;;
         --cwd) cwd=$2; shift 2 ;; --) shift; break ;; *) break ;;
       esac
     done
     prompt=${*:-}
-    name=$(current); cmd=$(find_cmd "$(field "$name" 2)")
+    cmd=$(find_cmd "$(field "$name" 2)")
     if [[ -z $cmd ]]; then
       (( headless )) && die "$name is not installed; run '$DISTRO_ID agent install $name'"
       read -rp "$name is not installed. Install it now? [Y/n] " yn

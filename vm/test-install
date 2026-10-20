@@ -1253,6 +1253,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       "$here/ssh" "$vm" "$user" -- "echo '$password' | sudo -S -p '' mv /usr/bin/swaylock-plugin.off /usr/bin/swaylock-plugin" || true
     fi
     check "agent list knows claude"       "$id agent list | grep -qE '^\\* claude'"
+    check "SUPER+A opens the coding agent" "$hypr $id keys --list --json | jq -e 'any(.[]; .chord == \"SUPER + A\" and (.description | test(\"coding agent\")))' >/dev/null"
     check "update check runs"             "$id update check >/dev/null"
     # The daily update check is opt-in: off by default; on enables a user timer
     # whose run writes the waiting count the menu and the bar read.
