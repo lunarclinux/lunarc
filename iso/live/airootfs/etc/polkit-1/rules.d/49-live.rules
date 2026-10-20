@@ -1,0 +1,7 @@
+// Live system only: the live user (no password, sudo without one) may do
+// admin tasks without being asked, so GParted and Disks work right away.
+polkit.addRule(function (action, subject) {
+    if (subject.user == "live") {
+        return polkit.Result.YES;
+    }
+});

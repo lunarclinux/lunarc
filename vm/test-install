@@ -3,7 +3,7 @@
 # with the live ISO), installs a git ref over SSH, reboots into the installed
 # system and runs checks.
 #
-#   vm/test-install [--vm distro-clean] [--from l0-complete] [--ref HEAD] [--keep] [--iso VOLUME] [--encrypt] [--rollback] [--bootsnap] [--alongside] [--upgrade-from REF|default]
+#   vm/test-install [--vm distro-clean] [--from l0-complete] [--ref HEAD] [--keep] [--iso VOLUME] [--encrypt] [--rollback] [--bootsnap] [--alongside] [--replace] [--upgrade-from REF|default]
 #
 # --encrypt installs onto LUKS and types the passphrase at boot (virsh send-key).
 # --bootsnap starts the pre-update snapshot of a package install from the boot
@@ -13,6 +13,10 @@
 # --alongside first lays out a pretend Windows (EFI partition with Windows Boot
 # Manager files, an NTFS partition, a firmware entry), installs into the free
 # space beside it and checks none of it changed (decision record 0035).
+# --replace adds an old Linux to that layout (a Linux partition, its Limine,
+# kernel and menu on Windows' EFI partition, and a firmware entry that comes
+# first), installs with --replace-linux --remove-old-boot, and checks the old
+# Linux is gone, its boot files are set aside and only Windows' entry is kept.
 #
 # --upgrade-from installs an older ref instead (its own installer, and packages
 # built by its own pkg/build in a temporary worktree), logs in once, then
@@ -28,7 +32,7 @@
 set -euo pipefail
 export LIBVIRT_DEFAULT_URI=qemu:///system
 here=$(cd "$(dirname "$0")" && pwd); repo=$(dirname "$here")
-vm=distro-clean from=l0-complete ref=HEAD keep=0 iso="" encrypt=0 rollback=0 bootsnap=0 alongside=0 upgrade_from=""
+vm=distro-clean from=l0-complete ref=HEAD keep=0 iso="" encrypt=0 rollback=0 bootsnap=0 alongside=0 replace=0 upgrade_from=""
 while [[ $# -gt 0 ]]; do
   case $1 in
     --vm) vm=$2; shift 2 ;; --from) from=$2; shift 2 ;;
@@ -38,6 +42,7 @@ while [[ $# -gt 0 ]]; do
     --rollback) rollback=1; shift ;;
     --bootsnap) bootsnap=1; shift ;;
     --alongside) alongside=1; shift ;;
+    --replace) alongside=1 replace=1; shift ;;
     --upgrade-from) upgrade_from=$2; shift 2 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
@@ -141,11 +146,16 @@ fi
 name=$(. "$repo/distro.conf"; echo "$DISTRO_NAME")
 along_args=""
 windows_fingerprint='sfdisk --dump /dev/vda | grep -E "^/dev/vda[123] "; sha256sum < /dev/vda1; head -c 268435456 /dev/vda3 | sha256sum'
+# Replacing moves the old Linux's files on Windows' EFI partition, so compare
+# Windows' own files there instead of the whole partition.
+if (( replace )); then
+  windows_fingerprint='sfdisk --dump /dev/vda | grep -E "^/dev/vda[123] "; mkdir -p /tmp/fp; mount -o ro /dev/vda1 /tmp/fp; (cd /tmp/fp/EFI && find Microsoft Boot -type f -exec sha256sum {} + | sort); umount /tmp/fp; head -c 268435456 /dev/vda3 | sha256sum'
+fi
 if (( alongside )); then
   log "laying out a pretend Windows"
-  "$here/ssh" "$vm" -- bash -s -- "$name" <<'WINDOWS' || { log "WINDOWS LAYOUT FAILED"; exit 1; }
+  "$here/ssh" "$vm" -- bash -s -- "$name" "$replace" <<'WINDOWS' || { log "WINDOWS LAYOUT FAILED"; exit 1; }
 set -euo pipefail
-name=$1 d=/dev/vda
+name=$1 replace=$2 d=/dev/vda
 wipefs -af "$d" >/dev/null; sgdisk --zap-all "$d" >/dev/null
 sgdisk -n1:0:+260M -t1:ef00 -c1:"EFI system partition" \
        -n2:0:+16M -t2:0c01 -c2:"Microsoft reserved partition" \
@@ -171,12 +181,27 @@ mount -t ntfs3 "${d}3" /tmp/win 2>/dev/null || mount -t ntfs-3g "${d}3" /tmp/win
 echo "not to be touched" > /tmp/win/marker.txt
 umount /tmp/win
 # Windows' firmware entry; entries left by earlier runs go first.
-efibootmgr | sed -n "s/^Boot\([0-9A-Fa-f]\{4\}\)\*\{0,1\} \(Windows Boot Manager\|$name\)\b.*/\1/p" \
+efibootmgr | sed -n "s/^Boot\([0-9A-Fa-f]\{4\}\)\*\{0,1\} \(Windows Boot Manager\|Old Linux\|$name\)\b.*/\1/p" \
   | while read -r n; do efibootmgr -q -b "$n" -B; done
 efibootmgr -q --create --disk "$d" --part 1 --label "Windows Boot Manager" --loader '\EFI\Microsoft\Boot\bootmgfw.efi'
+if [ "$replace" = 1 ]; then
+  # An old Linux: its partition, and its Limine, kernel and menu on Windows'
+  # EFI partition, with a firmware entry placed first (as its installer left it).
+  sgdisk -n4:0:+8G -t4:8300 -c4:"Old Linux" "$d" >/dev/null
+  partprobe "$d"; udevadm settle
+  mkfs.ext4 -q -L oldlinux "${d}4"
+  mount "${d}1" /tmp/win
+  mkdir -p /tmp/win/EFI/limine
+  cp "$efi" /tmp/win/EFI/limine/limine_x64.efi
+  printf 'timeout: 3\n/Old Linux\n    protocol: linux\n' > /tmp/win/limine.conf
+  echo "old kernel" > /tmp/win/vmlinuz-linux
+  umount /tmp/win
+  efibootmgr -q --create --disk "$d" --part 1 --label "Old Linux" --loader '\EFI\limine\limine_x64.efi'
+fi
 WINDOWS
   windows_before=$("$here/ssh" "$vm" -- "$windows_fingerprint")
   along_args="--alongside"
+  if (( replace )); then along_args="--replace-linux --remove-old-boot"; fi
 fi
 
 log "installing"
@@ -293,6 +318,11 @@ if (( alongside )); then
   check "alongside: installed into the free space" "lsblk -lno PARTN,PARTLABEL /dev/vda | grep -qx ' *4 $name boot' && lsblk -lno PARTN,PARTLABEL /dev/vda | grep -qx ' *5 $name system' && findmnt -no SOURCE /boot | grep -qx /dev/vda4"
   check "alongside: firmware starts us first, Windows kept" "o=\$($sudo_pw efibootmgr); printf '%s\\n' \"\$o\"; first=\$(sed -n 's/^BootOrder: \\([0-9A-F]*\\).*/\\1/p' <<<\"\$o\"); grep -q \"^Boot\$first\\*\\{0,1\\} $name\" <<<\"\$o\" && grep -q 'Windows Boot Manager' <<<\"\$o\" && cur=\$(sed -n 's/^BootCurrent: //p' <<<\"\$o\") && [ \"\$cur\" = \"\$first\" ]"
   check "alongside: boot menu has Windows" "$sudo_pw sh -c 'grep -q \"^entry: Windows Boot Manager\\|^ *entry: Windows Boot Manager\" /boot/limine.conf && grep -q \"guid(.*):/EFI/Microsoft/Boot/bootmgfw.efi\" /boot/limine.conf'"
+  if (( replace )); then
+    check "replace: old Linux partition deleted" "! lsblk -lno PARTLABEL /dev/vda | grep -qx 'Old Linux'"
+    check "replace: old boot files set aside" "$sudo_pw sh -c 'mkdir -p /tmp/esp && mount -o ro /dev/vda1 /tmp/esp; r=1; [ ! -e /tmp/esp/EFI/limine ] && [ ! -e /tmp/esp/limine.conf ] && [ ! -e /tmp/esp/vmlinuz-linux ] && ls -d /tmp/esp/$id-removed/*/EFI/limine >/dev/null && [ -f /tmp/esp/EFI/Boot/bootx64.efi ] && r=0; umount /tmp/esp; exit \$r'"
+    check "replace: old firmware entry removed" "! $sudo_pw efibootmgr | grep -q 'Old Linux'"
+  fi
   check "alongside: Limine copies kept up to date" "$sudo_pw sh -c 'cmp -s /usr/share/limine/BOOTX64.EFI /boot/EFI/$id/BOOTX64.EFI && cmp -s /usr/share/limine/BOOTX64.EFI /boot/EFI/BOOT/BOOTX64.EFI && grep -q \"/boot/EFI/$id/BOOTX64.EFI\" /usr/share/libalpm/hooks/$id-limine-update.hook && grep -qx BOOT_MODE=alongside /etc/$id/boot.conf'"
 fi
 check "NetworkManager connected"       'nmcli -t -f STATE general | grep -q "^connected"'
@@ -1350,7 +1380,7 @@ fi
 # The pretend Windows' and our firmware entries would outlive the disk they
 # point at; remove them (not with --keep, which leaves everything as it is).
 if (( alongside && ! keep )); then
-  "$here/ssh" "$vm" "$user" -- "echo '$password' | sudo -S -p '' sh -c 'efibootmgr | sed -n \"s/^Boot\\([0-9A-Fa-f]\\{4\\}\\)\\*\\{0,1\\} \\(Windows Boot Manager\\|$name\\)\\b.*/\\1/p\" | while read -r n; do efibootmgr -q -b \$n -B; done'" || true
+  "$here/ssh" "$vm" "$user" -- "echo '$password' | sudo -S -p '' sh -c 'efibootmgr | sed -n \"s/^Boot\\([0-9A-Fa-f]\\{4\\}\\)\\*\\{0,1\\} \\(Windows Boot Manager\\|Old Linux\\|$name\\)\\b.*/\\1/p\" | while read -r n; do efibootmgr -q -b \$n -B; done'" || true
 fi
 if (( keep )); then log "leaving $vm running"; else "$here/ssh" "$vm" "$user" -- "echo '$password' | sudo -S -p '' poweroff" || true; fi
 (( fail )) && { log "FAILED"; exit 1; }

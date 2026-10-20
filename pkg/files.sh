@@ -81,6 +81,9 @@ case $part in
       # Programs that open a terminal ($TERMINAL -e cmd), the launcher's
       # Terminal=true apps among them, get the one chosen with `terminal set`.
       printf 'TERMINAL=/usr/lib/%s/terminal-exec\n' "$id"
+      # SSH keys: the keyring's SSH agent (enabled below) asks for a key's
+      # passphrase once and can keep it in the login keyring.
+      printf 'SSH_AUTH_SOCK=${XDG_RUNTIME_DIR}/gcr/ssh\n'
     } > "$dest/usr/lib/environment.d/50-$id.conf"
 
     # User services, enabled for every user through static wants links.
@@ -106,6 +109,10 @@ case $part in
       "$id-workspace-watch.service"; do
       ln -s "../$unit" "$units/graphical-session.target.wants/$unit"
     done
+    # The SSH agent (gcr-4's socket; SSH_AUTH_SOCK above points at it). Without
+    # one, a key with a passphrase can't be used by git or anything unattended.
+    install -d "$units/sockets.target.wants"
+    ln -s /usr/lib/systemd/user/gcr-ssh-agent.socket "$units/sockets.target.wants/gcr-ssh-agent.socket"
 
     # Battery charge limit: re-applied at boot and after sleep (`power charge-limit`).
     put "$src/etc/systemd/system/charge-limit.service" "$dest/usr/lib/systemd/system/$id-charge-limit.service"

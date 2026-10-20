@@ -11,10 +11,17 @@ while it installs. Plug in a network cable, or connect to Wi-Fi from the bar's n
 menu (on the console: `iwctl`).
 
 **There's no "Keep Windows" choice.** Keeping Windows needs a GPT disk with at least
-40 GB of free (unpartitioned) space. Make room in Windows first (Disk Management,
-Shrink Volume); see Installing.
+40 GB of free (unpartitioned) space, or another Linux on it to replace. Make room in
+Windows first (Disk Management, Shrink Volume), or delete partitions with GParted or
+Disks from the live system's launcher; see Installing.
 
 ## Starting up
+
+**The old system's boot menu opens instead of Lunarc's** (after installing over another
+Linux without removing its boot loader). Its firmware entry is still first. In Lunarc,
+`sudo efibootmgr` lists the entries: delete the old one with `sudo efibootmgr -b XXXX -B`
+(its number) and put Lunarc first with `sudo efibootmgr -o` (Lunarc's number, then the
+rest). The installer offers to do this when it finds the old boot loader.
 
 **Windows starts instead of Lunarc** (often after a Windows update). Pick Lunarc in
 the computer's boot menu at power-on (often F12, F11 or Esc), or put it first in the

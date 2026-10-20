@@ -1,3 +1,8 @@
 # Extra packages on the live ISO for the installer itself (added to releng's
 # list by iso/build). The installer works without them, just plainer.
 gum
+# Partitions: GParted to delete, resize or move partitions before installing
+# (GNOME Disks is already there from the default apps). xhost lets GParted,
+# which runs as root, open its window on the live desktop.
+gparted
+xorg-xhost

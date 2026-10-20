@@ -70,10 +70,133 @@ disk_windows_esp() { # disk_windows_esp <disk>
   done < <(lsblk -lnpo NAME,PARTTYPE "$1" | awk 'NF == 2')
 }
 
+# Whether the disk has an NTFS partition (Windows itself, not just its boot files).
+disk_has_ntfs() { # disk_has_ntfs <disk>
+  if [[ ${INSTALL_DRY_RUN:-0} == 1 ]]; then [[ $1 == *nvme0n1 ]]; return; fi
+  lsblk -lno FSTYPE "$1" | grep -qix ntfs
+}
+
+# How many partitions the disk has.
+disk_part_count() { # disk_part_count <disk>
+  if [[ ${INSTALL_DRY_RUN:-0} == 1 ]]; then if [[ $1 == *nvme0n1 ]]; then echo 4; else echo 0; fi; return; fi
+  lsblk -lno TYPE "$1" | grep -cx part || true
+}
+
 # Whether any partition on the disk is BitLocker-encrypted.
 disk_has_bitlocker() { # disk_has_bitlocker <disk>
   if [[ ${INSTALL_DRY_RUN:-0} == 1 ]]; then return 1; fi
   lsblk -lno FSTYPE "$1" | grep -qix bitlocker
+}
+
+# ---------------------------------------------------------------------------
+# Another Linux on the disk (replacing it, and the boot menu it leaves behind).
+# Nothing here writes to the disk.
+
+# GPT types that belong to a Linux system: filesystem data, swap, LVM, RAID,
+# root (x86-64), home, XBOOTLDR and LUKS.
+LINUX_TYPES=" 0fc63daf-8483-4772-8e79-3d69d8477de4 0657fd6d-a4ab-43c4-84e5-0933c84b4f4f e6d6d379-f507-44c2-a23c-238f2a3df928 a19d880f-05fc-4d3b-a006-743f0f84911e 4f68bce3-e8cd-4db1-96e7-fbcaf984b709 933ac7e1-2eb4-4f13-b844-0e14e2aef915 bc13c2ff-59e6-4262-a352-b275fd6f7172 ca7d7ccb-63ed-4c53-861c-1742536059cc "
+
+# Mount an EFI partition read-only at a new folder and print the folder.
+esp_mount_ro() { # esp_mount_ro <part>
+  local dir
+  dir=$(mktemp -d)
+  if mount -o ro "$1" "$dir" 2>/dev/null; then printf '%s\n' "$dir"; return 0; fi
+  rmdir "$dir"; return 1
+}
+esp_unmount() { umount "$1" 2>/dev/null || true; rmdir "$1" 2>/dev/null || true; }
+
+# The disk's EFI partitions, one per line.
+disk_esps() { # disk_esps <disk>
+  lsblk -lnpo NAME,PARTTYPE "$1" | awk -v t="$ESP_TYPE" 'NF == 2 && tolower($2) == t { print $1 }'
+}
+
+# Whether an EFI partition holds Windows Boot Manager.
+esp_has_windows() { # esp_has_windows <mounted folder>
+  [[ -n $(find "$1" -maxdepth 4 -ipath "$1/efi/microsoft/boot/bootmgfw.efi" -print -quit 2>/dev/null) ]]
+}
+
+# The partitions of another Linux on the disk, one per line: its system, swap
+# and data partitions, and EFI partitions that hold no Windows (a Linux-only
+# one goes with the system it started). Empty when there's no Linux.
+disk_linux_parts() { # disk_linux_parts <disk>
+  local part type dir linux=()
+  if [[ ${INSTALL_DRY_RUN:-0} == 1 ]]; then
+    if [[ $1 == *nvme0n1 ]]; then echo "${1}p2"; fi
+    return 0
+  fi
+  while read -r part type; do
+    if [[ $LINUX_TYPES == *" ${type,,} "* ]]; then linux+=("$part"); fi
+  done < <(lsblk -lnpo NAME,PARTTYPE "$1" | awk 'NF == 2')
+  (( ${#linux[@]} )) || return 0
+  printf '%s\n' "${linux[@]}"
+  while read -r part; do
+    dir=$(esp_mount_ro "$part") || continue
+    if ! esp_has_windows "$dir"; then printf '%s\n' "$part"; fi
+    esp_unmount "$dir"
+  done < <(disk_esps "$1")
+}
+
+# The other Linux in words: "btrfs, encrypted, 1800 GB".
+linux_summary() { # linux_summary <part...>
+  local fs bytes=0 p
+  if [[ ${INSTALL_DRY_RUN:-0} == 1 ]]; then echo "encrypted, 1400 GB"; return; fi
+  fs=$(lsblk -no FSTYPE "$@" 2>/dev/null | sed '/^$/d; /^vfat$/d; s/^crypto_LUKS$/encrypted/' | sort -u | paste -sd, - | sed 's/,/, /g')
+  for p in "$@"; do bytes=$(( bytes + $(lsblk -bdno SIZE "$p") )); done
+  printf '%s%s\n' "${fs:+$fs, }" "$(human_gb "$bytes")"
+}
+
+# The largest free stretch once the given partitions are gone, worked out on a
+# sparse copy of the partition table (the disk itself isn't touched).
+disk_free_after() { # disk_free_after <disk> <part...>
+  local disk=$1 img dump p n
+  shift
+  if [[ ${INSTALL_DRY_RUN:-0} == 1 ]]; then echo $(( 1400 * 1024 * 1024 * 1024 )); return; fi
+  img=$(mktemp); dump=$(sfdisk -d "$disk" 2>/dev/null) || { rm -f "$img"; echo 0; return; }
+  for p in "$@"; do dump=$(grep -v "^${p} :" <<<"$dump"); done
+  truncate -s "$(blockdev --getsize64 "$disk" 2>/dev/null || stat -c %s "$disk")" "$img"
+  sfdisk -q --no-reread --no-tell-kernel "$img" <<<"$dump" >/dev/null 2>&1 || { rm -f "$img"; echo 0; return; }
+  n=$(sfdisk --list-free --bytes "$img" 2>/dev/null \
+    | awk '$1 ~ /^[0-9]+$/ && $4 ~ /^[0-9]+$/ && $4 > max { max = $4 } END { printf "%d\n", max }')
+  rm -f "$img"
+  printf '%s\n' "${n:-0}"
+}
+
+# Boot files another Linux left on EFI partitions that stay: "<part><TAB><path>"
+# per line, paths relative to the partition. Only things recognisably Linux's:
+# boot loader folders, its kernels and menu files, and a fallback loader that is
+# Limine, GRUB, systemd-boot or rEFInd. Windows' files and ours are never listed.
+other_boot_files() { # other_boot_files <disk> [EFI partitions to skip: ones that go, or ours]
+  local disk=$1 part dir f name win
+  shift
+  if [[ ${INSTALL_DRY_RUN:-0} == 1 ]]; then
+    if [[ $disk == *nvme0n1 ]]; then printf '%s\t%s\n' "${disk}p1" EFI/limine "${disk}p1" EFI/BOOT/BOOTX64.EFI "${disk}p1" limine.conf; fi
+    return 0
+  fi
+  while read -r part; do
+    if [[ " $* " == *" $part "* ]]; then continue; fi
+    dir=$(esp_mount_ro "$part") || continue
+    for f in "$dir"/[Ee][Ff][Ii]/*/; do
+      [[ -d $f ]] || continue
+      name=${f%/}; name=${name##*/}
+      case ${name,,} in microsoft|boot|"$DISTRO_ID") continue ;; esac
+      printf '%s\t%s\n' "$part" "${f#"$dir"/}" | sed 's#/$##'
+    done
+    f=$(find "$dir" -maxdepth 3 -ipath "$dir/efi/boot/bootx64.efi" -print -quit 2>/dev/null)
+    win=$(find "$dir" -maxdepth 4 -ipath "$dir/efi/microsoft/boot/bootmgfw.efi" -print -quit 2>/dev/null)
+    if [[ -n $f ]] && ! { [[ -n $win ]] && cmp -s "$f" "$win"; } \
+       && grep -aqiE 'limine|GNU GRUB|systemd-boot|rEFInd' "$f" && ! grep -aq 'Microsoft Corporation' "$f"; then
+      printf '%s\t%s\n' "$part" "${f#"$dir"/}"
+    fi
+    for f in "$dir"/{limine.conf,limine,loader,grub,vmlinuz-*,initramfs-*,intel-ucode.img,amd-ucode.img} "$dir"/[Ee][Ff][Ii]/[Ll]inux; do
+      if [[ -e $f ]]; then printf '%s\t%s\n' "$part" "${f#"$dir"/}"; fi
+    done
+    esp_unmount "$dir"
+  done < <(disk_esps "$disk")
+}
+
+# A boot loader's name from its folder, for people: EFI/limine → limine.
+boot_file_names() { # boot_file_names < other_boot_files output
+  cut -f2 | sed -n 's#^[Ee][Ff][Ii]/\([^/]*\)$#\1#p' | { grep -viE '^(boot|linux)$' || true; } | sort -u | paste -sd, - | sed 's/,/, /g'
 }
 
 # The lowest partition number not yet used on the disk.

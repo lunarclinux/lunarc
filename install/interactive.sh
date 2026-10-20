@@ -53,39 +53,80 @@ disk_contents() { # disk_contents <windows esp>
   if [[ -n $1 ]]; then echo Windows; else echo "what's on it"; fi
 }
 
-# The disk already has partitions: keep them and use the free space, or erase
-# it all. Sets INSTALL_MODE and WINDOWS_ESP; returns 1 to pick another disk.
+# The disk already has partitions: replace another Linux on it, keep
+# everything and use the free space, or erase it all. Sets INSTALL_MODE,
+# WINDOWS_ESP and REPLACE_PARTS; returns 1 to pick another disk.
 disk_choice() { # disk_choice <total steps>
-  local free win what choice options=()
-  INSTALL_MODE=erase WINDOWS_ESP=''
+  local free win what choice linux=() replace_free=0 options=()
+  INSTALL_MODE=erase WINDOWS_ESP='' REPLACE_PARTS='' CLEAN_BOOT=0
   disk_has_partitions "$DISK" || return 0
   free=$(disk_free_bytes "$DISK"); win=$(disk_windows_esp "$DISK"); what=$(disk_contents "$win")
+  mapfile -t linux < <(disk_linux_parts "$DISK")
+  if (( ${#linux[@]} )); then replace_free=$(disk_free_after "$DISK" "${linux[@]}"); fi
   ui_question 1 "$1" "What should happen to ${DISK#/dev/}?"
-  if [[ -n $win ]]; then
+  if [[ -n $win ]] && ! disk_has_ntfs "$DISK"; then
+    ui_text "$C_TEXT" "Windows' boot files are on this disk; Windows itself is on another one. Erasing this disk would stop Windows from starting."
+  elif [[ -n $win ]]; then
     ui_text "$C_TEXT" "Windows is installed on this disk."
   else
     ui_text "$C_TEXT" "This disk already has partitions: $(lsblk -no FSTYPE "$DISK" | sed '/^$/d' | sort -u | paste -sd, - | sed 's/,/, /g')."
+  fi
+  if (( ${#linux[@]} )); then
+    ui_text "$C_TEXT" "There's also another Linux on it ($(linux_summary "${linux[@]}"))."
   fi
   if disk_has_bitlocker "$DISK"; then
     ui_text "$C_GOLD" "BitLocker is on. Before going on, make sure you have the BitLocker recovery key (account.microsoft.com/devices/recoverykey): some computers ask for it once after another system is added."
   fi
   printf '\n'
+  # Replacing only makes sense when something else on the disk stays.
+  if (( ${#linux[@]} && replace_free >= ALONGSIDE_MIN_BYTES )) && [[ -n $win || $(disk_part_count "$DISK") -gt ${#linux[@]} ]]; then
+    options+=("Replace the other Linux, keep $what ($(human_gb "$replace_free"))")
+  fi
   if (( free >= ALONGSIDE_MIN_BYTES )); then
     options+=("Keep $what, use the free space ($(human_gb "$free"))")
-  else
+  elif (( ! ${#linux[@]} )); then
     ui_text "$C_MUTED" "There isn't enough free space to keep $what: $(human_gb "$free") free, $(human_gb "$ALONGSIDE_MIN_BYTES") needed."
     if [[ -n $win ]]; then
       ui_text "$C_MUTED" "To make room: start Windows, right-click Start, open Disk Management, right-click the C: drive and choose Shrink Volume (at least 40 GB, more is better). Also turn off Fast Startup (Control Panel, Power Options, Choose what the power buttons do). Then start from this USB again."
     fi
     printf '\n'
   fi
+  ui_text "$C_MUTED" "To delete or resize partitions yourself, quit with Ctrl+C and open GParted or Disks from the launcher, then start the installer again."
+  printf '\n'
   options+=("Erase the whole disk" "Pick another disk")
   choice=$(gum choose "${options[@]}")
   case $choice in
+    Replace*) INSTALL_MODE=alongside WINDOWS_ESP=$win REPLACE_PARTS="${linux[*]}" ;;
     Keep*) INSTALL_MODE=alongside WINDOWS_ESP=$win ;;
-    Erase*) INSTALL_MODE=erase ;;
+    Erase*) INSTALL_MODE=erase; return 0 ;;
     *) return 1 ;;
   esac
+  old_boot_choice "$1"
+}
+
+# Boot loaders another Linux left on the EFI partitions that stay. Its firmware
+# entry often stays first, so the computer would open the old system's menu
+# instead of ours. Sets CLEAN_BOOT.
+old_boot_choice() { # old_boot_choice <total steps>
+  local files names gone=() default=true
+  # shellcheck disable=SC2206 # device names, one word each
+  gone=($REPLACE_PARTS)
+  files=$(other_boot_files "$DISK" "${gone[@]}")
+  [[ -n $files ]] || return 0
+  names=$(boot_file_names <<<"$files")
+  # Keep them by default while another Linux stays on the disk.
+  if [[ -z $REPLACE_PARTS && -n $(disk_linux_parts "$DISK") ]]; then default=false; fi
+  ui_question 1 "$1" "Remove the old boot menu?"
+  ui_text "$C_TEXT" "Another Linux's boot loader${names:+ ($names)} is still on this disk. Its boot entry would start its menu instead of $DISTRO_NAME's."
+  if [[ $default == true ]]; then
+    ui_text "$C_MUTED" "The system it belonged to is gone, so it can go. Its files are moved into a $DISTRO_ID-removed folder on the same partition, not deleted. Windows' files aren't touched."
+  else
+    ui_text "$C_MUTED" "That Linux is still on the disk: keep its boot loader if you still use it."
+  fi
+  printf '\n'
+  while IFS=$'\t' read -r _ path; do printf '  %s%s%s\n' "$C_MUTED" "$path" "$C_OFF"; done <<<"$files"
+  printf '\n'
+  if ask --default="$default" --affirmative "Remove it" --negative "Keep it" "Remove the old boot loader?"; then CLEAN_BOOT=1; fi
 }
 
 styled_questions() {
@@ -189,13 +230,20 @@ styled_questions() {
     ui_header "Installer"
     printf '  %s%sReady to install%s\n\n' "$C_BOLD" "$C_TEXT" "$C_OFF"
     summary_line "Disk" "$(disk_label "$DISK" | sed 's/  */ /g')"
-    if [[ $INSTALL_MODE == alongside ]]; then
+    if [[ -n $REPLACE_PARTS ]]; then
+      summary_line "" "${C_RED}the other Linux is deleted: ${REPLACE_PARTS//\/dev\//}${C_OFF}"
+      summary_line "" "${C_GREEN}$(disk_contents "$WINDOWS_ESP") is kept${C_OFF}"
+      # shellcheck disable=SC2086 # device names, one word each
+      summary_line "" "$DISTRO_NAME uses its space: $(human_gb "$(disk_free_after "$DISK" $REPLACE_PARTS)")"
+      if [[ -n $WINDOWS_ESP ]]; then summary_line "" "the boot menu gets a Windows entry"; fi
+    elif [[ $INSTALL_MODE == alongside ]]; then
       summary_line "" "${C_GREEN}$(disk_contents "$WINDOWS_ESP") is kept${C_OFF}"
       summary_line "" "$DISTRO_NAME uses the free space: $(human_gb "$(disk_free_bytes "$DISK")")"
       if [[ -n $WINDOWS_ESP ]]; then summary_line "" "the boot menu gets a Windows entry"; fi
     else
       summary_line "" "${C_RED}everything on it will be erased${C_OFF}"
     fi
+    if (( CLEAN_BOOT )); then summary_line "" "the old Linux boot loader is set aside"; fi
     summary_line "Account" "$USERNAME"
     summary_line "Computer name" "$HOSTNAME_NEW"
     summary_line "Time zone" "$TIMEZONE"
@@ -205,7 +253,13 @@ styled_questions() {
       summary_line "" "saved passwords: your password is asked for once after each start"
     fi
     printf '\n'
-    if [[ $INSTALL_MODE == alongside ]]; then
+    if [[ -n $REPLACE_PARTS ]]; then
+      if GUM_CONFIRM_PROMPT_FOREGROUND=$RED GUM_CONFIRM_SELECTED_BACKGROUND=$RED \
+         ask --default=false --affirmative "Replace and install" --negative "Start over" \
+         "Delete the other Linux on ${DISK#/dev/} and install $DISTRO_NAME there?"; then
+        break
+      fi
+    elif [[ $INSTALL_MODE == alongside ]]; then
       if ask --default=false --affirmative "Install" --negative "Start over" \
          "Install $DISTRO_NAME alongside $(disk_contents "$WINDOWS_ESP") on ${DISK#/dev/}?"; then
         break
@@ -241,16 +295,36 @@ plain_questions() {
     DISK=${choices[pick - 1]}
   fi
 
-  # Something on it already: keep it and use the free space?
+  # Something on it already: replace another Linux, or keep it all and use the free space?
   if [[ $INSTALL_MODE != alongside ]] && disk_has_partitions "$DISK"; then
-    local free win
+    local free win linux
     free=$(disk_free_bytes "$DISK"); win=$(disk_windows_esp "$DISK")
-    if (( free >= ALONGSIDE_MIN_BYTES )); then
+    linux=$(disk_linux_parts "$DISK" | paste -sd' ' -)
+    if [[ -n $linux ]]; then
+      # shellcheck disable=SC2086 # device names, one word each
+      read -rp "$DISK has another Linux ($linux). Delete it and install there, keeping the rest ($(human_gb "$(disk_free_after "$DISK" $linux)"))? [y/N] " answer
+      if [[ ${answer,,} == y* ]]; then INSTALL_MODE=alongside WINDOWS_ESP=$win REPLACE_PARTS=$linux; fi
+    fi
+    if [[ $INSTALL_MODE == alongside ]]; then
+      :
+    elif (( free >= ALONGSIDE_MIN_BYTES )); then
       read -rp "$DISK has $(disk_contents "$win") on it. Keep it and install into the free space ($(human_gb "$free"))? [Y/n] " answer
       if [[ ${answer,,} != n* ]]; then INSTALL_MODE=alongside WINDOWS_ESP=$win; fi
     elif [[ -n $win ]]; then
       echo "  Windows is on $DISK without enough free space to keep it ($(human_gb "$free") free; 40 GB needed)."
       echo "  To keep Windows: shrink C: in Windows' Disk Management, turn off Fast Startup, then run this again."
+    fi
+  fi
+
+  if [[ $INSTALL_MODE == alongside ]] && (( ! CLEAN_BOOT )); then
+    local files
+    # shellcheck disable=SC2086 # device names, one word each
+    files=$(other_boot_files "$DISK" $REPLACE_PARTS)
+    if [[ -n $files ]]; then
+      echo "Another Linux's boot files are on $DISK's EFI partitions:"
+      cut -f2 <<<"$files" | sed 's/^/  /'
+      read -rp "Set them aside and remove their boot entries, so the computer starts $DISTRO_NAME? [Y/n] " answer
+      if [[ ${answer,,} != n* ]]; then CLEAN_BOOT=1; fi
     fi
   fi
 
@@ -297,7 +371,9 @@ plain_questions() {
   if [[ ${answer,,} == y* ]]; then AUTOLOGIN=1; fi
 
   echo
-  if [[ $INSTALL_MODE == alongside ]]; then
+  if [[ -n $REPLACE_PARTS ]]; then
+    echo "  Disk:      $DISK (deleting the other Linux: $REPLACE_PARTS; keeping the rest)"
+  elif [[ $INSTALL_MODE == alongside ]]; then
     echo "  Disk:      $DISK (keeping $(disk_contents "$WINDOWS_ESP"); using the free space)"
   else
     echo "  Disk:      $DISK (everything on it will be erased)"
