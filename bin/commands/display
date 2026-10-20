@@ -92,7 +92,14 @@ scale_jq='def default_scale:
     (.width / (.physicalWidth / 25.4)) as $dpi
     | if .builtin then (if $dpi < 150 then 1 elif $dpi < 200 then 1.25 elif $dpi < 250 then 1.5 else 2 end)
       else (if $dpi < 125 then 1 elif $dpi < 175 then 1.5 else 2 end) end
-  else 1 end;'
+  else 1 end;
+# The mode for a screen nobody chose one for: its current (preferred)
+# resolution at the highest refresh rate it offers there. The "preferred" mode
+# often means 60 Hz on a faster screen, and "highrr" can drop the resolution.
+def default_mode:
+  ((.width | tostring) + "x" + (.height | tostring)) as $res
+  | [(.availableModes // [])[] | capture("^(?<r>[0-9]+x[0-9]+)@(?<hz>[0-9.]+)Hz$") | select(.r == $res) | .hz | tonumber] as $hz
+  | if ($hz | length) == 0 then "preferred" else "\($res)@\($hz | max)" end;'
 
 rules() { # rules <monitors-json> <state-json>
   local mons=$1 st=$2 key lid=0
@@ -105,7 +112,7 @@ rules() { # rules <monitors-json> <state-json>
     | .[] | . as $m
     | ($st.monitors[$m.id] // {}) as $saved
     | [$m.id,
-       ($saved.mode // "preferred"),
+       ($saved.mode // ($m | default_mode)),
        (($saved.scale // ($m | default_scale)) | tostring),
        (($layout.positions // {})[$m.id] // "auto"),
        (($saved.transform // 0) | tostring),
