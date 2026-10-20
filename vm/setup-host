@@ -25,6 +25,12 @@ if ! id -nG "$SUDO_USER" | tr ' ' '\n' | grep -qx libvirt; then
 fi
 
 log "network: default (NAT)"
+# libvirt ships firewalld zones for its bridge; a firewalld started before
+# libvirt was installed hasn't read them yet.
+if systemctl is-active --quiet firewalld && ! firewall-cmd --get-zones | tr ' ' '\n' | grep -qx libvirt; then
+  firewall-cmd --reload >/dev/null
+  log "firewalld reloaded (it hadn't loaded libvirt's zone yet)"
+fi
 if ! virsh net-info default >/dev/null 2>&1; then
   virsh net-define /etc/libvirt/qemu/networks/default.xml >/dev/null
 fi
