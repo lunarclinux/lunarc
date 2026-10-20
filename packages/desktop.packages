@@ -14,6 +14,11 @@ xdg-desktop-portal-gtk
 qt5-wayland
 qt6-wayland
 
+# Wi-Fi: the country rules for channels and transmit power (the installer sets
+# the country from the time zone); iw shows them (iw reg get)
+wireless-regdb
+iw
+
 # Bluetooth
 bluez
 bluez-utils

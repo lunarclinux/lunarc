@@ -6,8 +6,9 @@ theme = noctalia
 config-file = ?@DISTRO_ID@-theme
 font-family = Geist Mono
 font-size = 10
-# Translucent, so the wallpaper (blurred, with blur on) shows through.
-background-opacity = 0.55
+# How much of the wallpaper shows through comes from the theme too:
+# `@DISTRO_ID@ theme opacity solid|frosted|clear` (SUPER+Space › Style). A
+# background-opacity line here wins over it.
 window-padding-x = 16
 window-padding-y = 12
 window-decoration = none

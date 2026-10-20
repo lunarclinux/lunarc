@@ -42,6 +42,12 @@ one you picked.
 - `lunarc theme shape rounded`: round corners and a floating bar.
 - `lunarc theme blur off` turns off the blur behind translucent windows and panels
   (`on` brings it back). Panels and windows keep the same colours without it.
+- `lunarc theme opacity solid|frosted|clear` sets how much of the wallpaper shows
+  through the terminal (also under **Style** as Terminal: frosted, solid, clear).
+  Frosted, the default, is the theme's own: 0.9 on dark themes, 0.94 on light
+  ones. A number from 0.3 to 1 works too. A `background-opacity` line in
+  `~/.config/ghostty/config` wins over all of these; `lunarc theme opacity` says so
+  when there is one.
 
 ## The bar
 

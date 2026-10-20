@@ -7,6 +7,7 @@ local function run(cmd) return hl.dsp.exec_cmd(cmd) end
 local bind = dofile("/usr/share/@DISTRO_ID@/default/hypr/bind.lua")
 
 bind(mod .. " + Return", "Open a terminal", run(terminal))
+bind(mod .. " + A", "Open your coding agent (a choice when several are installed)", run("@DISTRO_ID@ agent open"))
 bind(mod .. " + ALT + Space", "Menu (same as SUPER+Space)", run("@DISTRO_ID@ menu"))
 bind(mod .. " + CTRL + Space", "Next keyboard layout", run("@DISTRO_ID@ keyboard next"))
 bind(mod .. " + K", "Keyboard shortcuts (the menu's Keybinds)", run("@DISTRO_ID@ keys"))
