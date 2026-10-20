@@ -24,6 +24,9 @@ done
 grep -qx "#WIRELESS_REGDOM=\"$country\"" "$conf" || exit 0
 sed -i "s/^#WIRELESS_REGDOM=\"$country\"\$/WIRELESS_REGDOM=\"$country\"/" "$conf"
 # A running system applies it now; otherwise the next boot does (udev rule).
+# The kernel looked for the database at boot, before it was installed, and
+# doesn't look again unless told to.
 if [[ -d /run/systemd/system ]] && ! systemd-detect-virt --chroot --quiet 2>/dev/null && command -v iw >/dev/null; then
+  iw reg reload 2>/dev/null || true
   iw reg set "$country" 2>/dev/null || true
 fi
