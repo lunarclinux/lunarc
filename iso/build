@@ -199,4 +199,9 @@ MOTD
 
 mkdir -p "$out"
 mkarchiso -v -r -w "$work/work" -o "$out" "$profile"
+# Run through sudo: the folder and the ISO belong to whoever ran it, so the
+# signature (gpg --detach-sign, as that user) can be written next to the ISO.
+if [[ -n ${SUDO_UID:-} && -n ${SUDO_GID:-} ]]; then
+  chown "$SUDO_UID:$SUDO_GID" "$out" "$out"/*.iso
+fi
 ls -lh "$out"/*.iso
