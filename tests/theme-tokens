@@ -26,7 +26,7 @@ expect() { # expect <description> <command...>
 shape() { # shape <file> [variant]
   jq -r --arg v "${2:-}" '(if $v == "" then . else .[$v] end) | paths(scalars) as $p
     | "\($p | join("."))=\(getpath($p) | tostring)"' "$1" \
-    | sed -E 's/rgba\([0-9]+,[0-9]+,[0-9]+,/rgba(_,/g; s/#[0-9a-f]{6}/#_/g; s/@DISTRO_NAME@/'"$DISTRO_NAME"'/'
+    | sed -E 's/rgba\([0-9]+,[0-9]+,[0-9]+,/rgba(_,/g; s/#[0-9a-f]{6}/#_/g; s/@DISTRO_NAME@/'"$DISTRO_NAME"'/; s/^(material\.terminalOpacity)=.*/\1=_/'
 }
 
 expect "generated tokens are up to date" "$root/tools/make-tokens" --check
@@ -72,6 +72,10 @@ sys.exit(bad)
 PY
 }
 expect "derivation rules reproduce moonlit dark" close_to_design
+expect "terminal opacity: 0.9 on dark variants, 0.94 on light ones" bash -c "
+  for f in '$root'/themes/*/tokens.json; do
+    jq -e '(.dark // {material: {terminalOpacity: 0.9}}).material.terminalOpacity == 0.9 and (.light // {material: {terminalOpacity: 0.94}}).material.terminalOpacity == 0.94' \"\$f\" >/dev/null || { echo \"\$f\"; exit 1; }
+  done"
 
 # `theme token` and `theme tokens` against a pretend install.
 work=$(mktemp -d)
@@ -115,6 +119,17 @@ expect "look: the distro defaults match moonlit's generated look" lua -e "
   end"
 expect "ghostty: background" grep -qx 'background = #070b17' "$ghostty"
 expect "ghostty: cursor and text" bash -c "grep -qx 'cursor-color = #e6e2d6' '$ghostty' && grep -qx 'foreground = #d6d2c6' '$ghostty'"
+expect "ghostty: opacity from the theme" grep -qx 'background-opacity = 0.9' "$ghostty"
+expect "opacity solid" run_theme opacity solid
+expect "solid: ghostty fully opaque" grep -qx 'background-opacity = 1' "$ghostty"
+expect "opacity takes a number" bash -c "$(declare -f run_theme); work='$work' root='$root' DISTRO_ID=$DISTRO_ID; run_theme opacity 0.8 >/dev/null && grep -qx 'background-opacity = 0.8' '$ghostty'"
+expect "opacity refuses other values" refuses opacity 0.1
+expect "opacity refuses words it doesn't know" refuses opacity glass
+mkdir -p "$work/config/ghostty"; printf 'background-opacity = 0.7\n' > "$work/config/ghostty/config"
+expect "your own ghostty line wins: the theme leaves it out" bash -c "$(declare -f run_theme); work='$work' root='$root' DISTRO_ID=$DISTRO_ID; run_theme opacity default >/dev/null && ! grep -q background-opacity '$ghostty'"
+expect "opacity shows where it comes from" bash -c "$(declare -f run_theme); work='$work' root='$root' DISTRO_ID=$DISTRO_ID; run_theme opacity | grep -q '0.7 (set in'"
+rm "$work/config/ghostty/config"
+expect "opacity back to the theme's" run_theme opacity default
 expect "shape defaults to terminal" test "$(run_theme shape)" = terminal
 expect "geometry.current follows the shape" test "$(run_theme token geometry.current.paneRadius)" = 6
 expect "shape rounded" run_theme shape rounded

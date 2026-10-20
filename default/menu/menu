@@ -30,6 +30,9 @@ Style | Wallpaper | choose one | noctalia msg panel-open wallpaper
 Style | Next wallpaper | | noctalia msg wallpaper-next
 Style | Shape: terminal | small corners, bar edge to edge | @DISTRO_ID@ theme shape terminal
 Style | Shape: rounded | round corners, floating bar | @DISTRO_ID@ theme shape rounded
+Style | Terminal: frosted | the theme's see-through glass | @DISTRO_ID@ theme opacity frosted
+Style | Terminal: solid | no wallpaper behind the text | @DISTRO_ID@ theme opacity solid
+Style | Terminal: clear | more wallpaper | @DISTRO_ID@ theme opacity clear
 Style | Night light | warmer screen colours | @DISTRO_ID@ nightlight toggle
 Style | Bar | show or hide | noctalia msg bar-toggle
 Style | Bar stats: icon | click for the stats | @DISTRO_ID@ bar stats icons

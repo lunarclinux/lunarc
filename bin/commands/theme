@@ -25,6 +25,9 @@ Usage: $DISTRO_ID theme <command>
                              terminal (small corners, the bar edge to edge;
                              the default) or rounded (a floating pill bar)
   blur [on|off]              blur behind translucent windows and the shell
+  opacity [solid|frosted|clear|<0.3-1>|default]
+                             how much the terminal shows the wallpaper: solid (none),
+                             frosted (the theme's own; the default), clear, or a number
   token <path>               print one of the current theme's design tokens,
                              e.g. color.accent.amber or geometry.current.paneRadius
                              (geometry.current: the set for the current shape)
@@ -68,6 +71,23 @@ LOOK_GHOSTTY=${XDG_CONFIG_HOME:-$HOME/.config}/ghostty/$DISTRO_ID-theme
 STYLE=${TOKENS%/*}/style.json
 shape() { local v; v=$(setting theme.shape terminal); [[ $v == rounded ]] || v=terminal; printf '%s\n' "$v"; }
 blur() { local v; v=$(setting theme.blur on); [[ $v == off ]] || v=on; printf '%s\n' "$v"; }
+
+# The terminal's background opacity: the setting (`theme opacity`), or the
+# theme's own (material.terminalOpacity) for "frosted" and by default.
+GHOSTTY_MAIN=${XDG_CONFIG_HOME:-$HOME/.config}/ghostty/config
+opacity_choice() { local v; v=$(setting theme.terminal_opacity frosted); valid_opacity "$v" || v=frosted; printf '%s\n' "$v"; }
+valid_opacity() { [[ $1 == solid || $1 == frosted || $1 == clear || $1 =~ ^(0\.[3-9][0-9]?|1(\.0+)?)$ ]]; }
+terminal_opacity() {
+  case $(opacity_choice) in
+    solid) echo 1 ;;
+    clear) echo 0.75 ;;
+    frosted) jq -r '.material.terminalOpacity // 0.9' "$TOKENS" 2>/dev/null || echo 0.9 ;;
+    *) opacity_choice ;;
+  esac
+}
+# A background-opacity line in your own Ghostty config wins: Ghostty reads the
+# theme's file after it, so the theme leaves the setting out then.
+own_opacity() { { grep -sE '^[[:space:]]*background-opacity[[:space:]]*=' "$GHOSTTY_MAIN" || true; } | tail -1 | sed 's/.*=[[:space:]]*//'; }
 
 # jq helpers: a token colour ("#rrggbb", "rgba(r,g,b,a)" or a CSS shadow
 # holding one) as Hyprland's rgba(rrggbbaa) or as #rrggbb over the background.
@@ -115,7 +135,9 @@ write_look() {
   # Ghostty: the theme's Frosted Terminal colours over the palette Noctalia writes
   # (themes/noctalia); the config includes this file.
   tmp=$(mktemp "$LOOK_GHOSTTY.XXXXXX")
-  jq -r "$LOOK_JQ"'
+  local opacity=''
+  if [[ -z $(own_opacity) ]]; then opacity=$(terminal_opacity); fi
+  jq -r --arg opacity "$opacity" "$LOOK_JQ"'
     .color as $c
     | "# Written by `'"$DISTRO_ID"' theme` from the theme'"'"'s design tokens; rewritten on",
       "# every theme change. Your own settings go in the main config.",
@@ -124,7 +146,8 @@ write_look() {
       "cursor-color = \($c.text.primary)",
       "cursor-text = \($c.bg.deep)",
       "selection-background = \($c.state.selectedBg | over($c.bg.deep))",
-      "selection-foreground = \($c.text.primary)"' "$TOKENS" > "$tmp" && mv "$tmp" "$LOOK_GHOSTTY" || { rm -f "$tmp"; return 1; }
+      "selection-foreground = \($c.text.primary)",
+      (if $opacity != "" then "background-opacity = \($opacity)" else empty end)' "$TOKENS" > "$tmp" && mv "$tmp" "$LOOK_GHOSTTY" || { rm -f "$tmp"; return 1; }
   tmp=$(mktemp "$STYLE.XXXXXX"); chmod 644 "$tmp"
   jq --arg shape "$(shape)" --arg blur "$(blur)" '{shape: $shape, blur: ($blur == "on"), geometry: .geometry[$shape]}' "$TOKENS" > "$tmp" \
     && mv "$tmp" "$STYLE" || { rm -f "$tmp"; return 1; }
@@ -264,6 +287,25 @@ case ${1:-} in
       greeter_apply "$name" "$(setting theme.mode)" "$(wallpaper_index "$name")" >/dev/null 2>&1 || true
     fi
     info "$1: $2" ;;
+  opacity)
+    if [[ -z ${2:-} ]]; then
+      own=$(own_opacity)
+      if [[ -n $own ]]; then info "$own (set in $GHOSTTY_MAIN, which wins over the theme)"
+      else info "$(opacity_choice): $(terminal_opacity)"; fi
+      exit 0
+    fi
+    choice=$2; [[ $choice == default ]] && choice=frosted
+    valid_opacity "$choice" || die "opacity is solid, frosted, clear, or a number from 0.3 to 1"
+    set_setting theme.terminal_opacity "$choice"
+    write_look || die "the terminal look could not be written"
+    pkill -USR2 -x -u "$(id -u)" ghostty 2>/dev/null || true
+    own=$(own_opacity)
+    if [[ -n $own ]]; then
+      info "terminal opacity: $choice, but your Ghostty config sets background-opacity = $own, which wins;"
+      info "remove that line from $GHOSTTY_MAIN to use this"
+    else
+      info "terminal opacity: $choice ($(terminal_opacity))"
+    fi ;;
   greeter)
     name=$(setting theme)
     greeter_apply "$name" "$(setting theme.mode)" "$(wallpaper_index "$name")" \

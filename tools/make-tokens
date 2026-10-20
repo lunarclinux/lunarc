@@ -85,6 +85,9 @@ def derive(palette, mode, spec):
                           focusGlow=f"0 0 24px {rgba(accent, 0.12)}")
     c["state"].update(selectedBg=rgba(accent, 0.14), selectedRing=f"inset 0 0 0 1px {rgba(accent, 0.32)}",
                       activeSegmentBg=rgba(accent, 0.20), activeSegmentUnderline=f"inset 0 -2px 0 {accent}")
+    # The terminal's background: a light one needs more cover, since a bright
+    # or busy wallpaper behind pale glass washes out light-on-light text.
+    t["material"]["terminalOpacity"] = 0.9 if mode == "dark" else 0.94
     return t
 
 

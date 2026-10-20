@@ -4,6 +4,8 @@ theme.mode = dark
 # Window corners and the bar (later also menus): terminal or rounded. Blur: on or off.
 theme.shape = terminal
 theme.blur = on
+# How much the terminal shows the wallpaper: solid, frosted (the theme's own), clear, or 0.3-1.
+theme.terminal_opacity = frosted
 # The bar's system stats: icons, hover or inline. The moon segment: on or off.
 bar.stats = icons
 bar.moon = off
