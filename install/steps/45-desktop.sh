@@ -25,6 +25,10 @@ in_target bash "/usr/share/$DISTRO_ID/migrations/system/20261010-1300-firewall.s
 in_target bash "/usr/share/$DISTRO_ID/migrations/system/20261015-1000-printing.sh"
 # Colour in pacman's output.
 in_target bash "/usr/share/$DISTRO_ID/migrations/system/20261015-2310-pacman-color.sh"
+# Wi-Fi's country rules from the time zone.
+in_target bash "/usr/share/$DISTRO_ID/migrations/system/20261019-1000-wifi-country.sh"
+# TRIM: the weekly fstrim timer (discards through encryption are a header flag, set above).
+in_target bash "/usr/share/$DISTRO_ID/migrations/system/20261019-1010-trim.sh"
 # The login screen in the default theme, until someone picks another.
 in_target "/usr/lib/$DISTRO_ID/greeter-theme"
 in_target "/usr/bin/$DISTRO_ID" migrate --system --mark-all

@@ -58,7 +58,10 @@ LUKS_UUID=""
 if (( ENCRYPT )); then
   # LUKS2 with Argon2id (cryptsetup's default); opened as /dev/mapper/system.
   cryptsetup -q luksFormat --type luks2 --label system-crypt --key-file "$ENCRYPT_FILE" "$SYSTEM"
-  cryptsetup open --key-file "$ENCRYPT_FILE" "$SYSTEM" system
+  # Discards pass through to the SSD (TRIM), kept as a flag in the LUKS2 header
+  # so no boot option is needed. Lets someone with the raw disk see which
+  # blocks are empty, never their contents; most distros accept that.
+  cryptsetup open --allow-discards --persistent --key-file "$ENCRYPT_FILE" "$SYSTEM" system
   LUKS_UUID=$(cryptsetup luksUUID "$SYSTEM")
   SYSTEM=/dev/mapper/system
   info "encrypted; unlocked as $SYSTEM"

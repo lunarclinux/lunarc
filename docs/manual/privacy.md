@@ -58,7 +58,7 @@ features below.
 
 ## Defaults that protect you
 
-- **Disk encryption** is the installer's default (LUKS2). Backups are encrypted (Pika Backup). Saved passwords and clipboard history live in the keyring.
+- **Disk encryption** is the installer's default (LUKS2). TRIM passes through it so the SSD stays fast; that lets someone holding the disk see which blocks are empty, never what's in them (decision record 0051). Backups are encrypted (Pika Backup). Saved passwords and clipboard history live in the keyring.
 - **Firewall:** incoming connections are refused (firewalld, zone `public`), except mDNS replies from the local network, which finding printers needs. `lunarc firewall allow localsend` (or `kdeconnect`, `syncthing`, `ssh`, `steam-streaming`, `8080/tcp`) opens one; `deny` closes it.
 - **Wi-Fi:** a random hardware (MAC) address per network, temporary IPv6 addresses, and your computer's name isn't sent to the network.
 - **Firefox:** telemetry, studies, sponsored tiles and stories, Firefox Suggest and recommendations off; strict tracking protection; HTTPS-only mode; search suggestions off; DuckDuckGo as the search engine; uBlock Origin installed (removable). Firefox's own DNS-over-HTTPS stays off so it doesn't send your lookups to a provider you didn't choose; use `lunarc privacy dns` for the whole system instead. All of these can be changed in Firefox's settings.
