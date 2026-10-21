@@ -116,6 +116,7 @@ Items are in `/usr/share/lunarc/default/menu/menu`; copy it to `~/.config/lunarc
 | `lunarc theme wallpaper next` / `prev` / `set <n>` | Cycle the current theme's wallpapers (each theme remembers its pick) |
 | `lunarc terminal set ghostty\|alacritty\|kitty\|wezterm\|foot` | Change the terminal (installs it if needed) |
 | `lunarc agent set claude\|codex\|gemini\|opencode` | Choose the AI coding agent |
+| `lunarc terminal notifications on\|off` | Desktop notifications from programs in the terminal, like Claude Code (off by default; on, they vanish after a few seconds and stay out of the list) |
 | `lunarc agent open` (SUPER+A) | Open your agent in a terminal: the one installed, or a choice when several are |
 | `lunarc agent launch` / `prompt "<text>"` | Open the default agent in a terminal |
 | `lunarc agent usage` | Tokens per day and model; also in the bar (✦) |

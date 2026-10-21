@@ -71,6 +71,15 @@ brightness = false
 background_opacity = 0.80
 remote_icons = false
 
+# Notifications from programs in the terminal (Claude Code and others, sent
+# through Ghostty; off unless `@DISTRO_ID@ terminal notifications on`): gone
+# after six seconds, and kept out of the notification list so they don't pile up.
+[notification.filter.terminal]
+match = "ghostty"
+override_duration = 6000
+allow_permanent = false
+save_history = false
+
 # After 5 minutes idle: lock, with the screensaver playing behind the lock
 # (`@DISTRO_ID@ lock --idle`; type the password to come back). Screens off at
 # 11 minutes. Noctalia's own lock step stays off; it is the fallback the lock
