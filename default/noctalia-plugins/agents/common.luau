@@ -4,6 +4,7 @@
 local M = {}
 
 M.cli = "@DISTRO_ID@"
+M.MONO = "Geist Mono"
 
 function M.fetch(cb)
   noctalia.runAsync({ M.cli, "agent", "usage", "--json" }, function(result)
