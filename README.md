@@ -60,6 +60,7 @@ pkg/build --chroot # the same in a clean Arch chroot, into pkg/out/repo; publish
 vm/build-iso       # installer ISO (built in the dev VM)
 vm/test-install    # install into the clean VM and run the checks
 tools/lint         # what CI runs
+tools/release      # a whole release: chroot packages, publish, ISO, signature, upload, website
 ```
 
 ## Setup after cloning

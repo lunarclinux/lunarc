@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# A release, start to finish: signed packages from the clean chroot, the
+# package repository, the ISO from those packages, its signature, the upload
+# and the website. Run in a terminal from a clean, up-to-date main: sudo and
+# the signing key's passphrase are asked for. Stops at the first failure.
+#
+#   tools/release
+#
+# Needs: devtools and archiso, the signing key (SIGNING_GNUPGHOME, default
+# ~/.local/share/<id>-signing/gnupg), gh with write access, and the Cloudflare
+# token (~/.config/cloudflare-<id>-token). Without the token it stops after
+# signing the ISO and prints what's left.
+set -euo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd); cd "$root"
+source distro.conf
+key=$(<pkg/keyring/fingerprint)
+gnupg=${SIGNING_GNUPGHOME:-$HOME/.local/share/$DISTRO_ID-signing/gnupg}
+token=${CLOUDFLARE_TOKEN_FILE:-$HOME/.config/cloudflare-$DISTRO_ID-token}
+step() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
+fail() { printf '\033[31mrelease:\033[0m %s\n' "$*" >&2; exit 1; }
+
+[[ $(git branch --show-current) == main && -z $(git status --porcelain) ]] || fail "run it from a clean main checkout"
+git pull -q --ff-only
+[[ -d $gnupg ]] || fail "no signing key in $gnupg"
+
+step "1/6 packages in the clean chroot (sudo once; the key passphrase to sign)"
+pkg/build --chroot
+
+step "2/6 publishing the package repository"
+tools/publish
+
+step "3/6 the ISO from those packages (sudo)"
+sudo iso/build
+iso=$(ls -t iso/out/"$DISTRO_ID"-*-x86_64.iso | head -1)
+echo "ISO: $iso"
+
+step "4/6 signing the ISO"
+gpg --homedir "$gnupg" --local-user "$key" --yes --detach-sign "$iso"
+gpg --homedir "$gnupg" --verify "$iso.sig" "$iso"
+
+name=$(basename "$iso")
+if [[ ! -r $token ]]; then
+  echo
+  echo "Stopped before uploading: no Cloudflare token in $token. Put it there (chmod 600), then:"
+  echo "  tools/publish-iso $iso && git commit -qm 'Site: release $name' site/releases.json && git push -q && tools/deploy-site"
+  exit 0
+fi
+
+step "5/6 uploading the ISO"
+tools/publish-iso "$iso"
+git commit -qm "Site: release $name" site/releases.json
+git push -q
+
+step "6/6 deploying the website"
+tools/deploy-site
+printf '\nDone: packages published, %s is live.\n' "$name"
