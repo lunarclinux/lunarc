@@ -15,6 +15,18 @@ menu (on the console: `iwctl`).
 Windows first (Disk Management, Shrink Volume), or delete partitions with GParted or
 Disks from the live system's launcher; see Installing.
 
+**Updates fail with "failed to synchronize all databases" at work or school.** A
+network filter (a DNS filter such as Cisco Umbrella) may block `lunarclinux.com`;
+filters often block domains that are new. Installs since 2026-10-21 fall back to
+the same signed packages on GitHub by themselves. On an older install, add the
+fallback once by hand, right under the `Server = https://pkgs.lunarclinux.com` line
+in `/etc/pacman.conf`:
+
+    Server = https://github.com/lunarclinux/lunarc-packages/releases/download/packages
+
+The packages and the database are signed either way, so the source doesn't change
+what pacman accepts.
+
 ## Starting up
 
 **The old system's boot menu opens instead of Lunarc's** (after installing over another

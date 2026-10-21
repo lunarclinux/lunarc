@@ -163,6 +163,15 @@ repo_url() {
   if [[ $url =~ ^https://[A-Za-z0-9.-]+(/[A-Za-z0-9._/-]*)?$ ]]; then printf '%s\n' "${url%/}"; fi
 }
 
+# The same packages straight from GitHub (repo.conf's REPO_FALLBACK), for
+# networks that block the distro's own domain.
+repo_fallback() {
+  local github=""
+  if [[ -r $DISTRO_LIB/repo.conf ]]; then github=$(sed -n 's/^REPO_GITHUB=//p' "$DISTRO_LIB/repo.conf" | head -1); fi
+  github=${github//\$DISTRO_ID/$DISTRO_ID}
+  if [[ $github =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]]; then printf 'https://github.com/%s/releases/download/packages\n' "$github"; fi
+}
+
 # The first Arch mirror pacman would use, as a URL to core's database.
 arch_mirror() {
   local server
@@ -188,6 +197,8 @@ network_check() {
   fi
   repo=$(repo_url); mirror=$(arch_mirror)
   if [[ -n $repo ]]; then reach "$repo/$DISTRO_REPO.db" || rc=$?; fi
+  # Our domain blocked (a network filter), GitHub not: pacman uses the second server.
+  if (( rc != 0 )) && [[ -n $(repo_fallback) ]] && reach "$(repo_fallback)/$DISTRO_REPO.db"; then rc=0; fi
   if [[ -n $mirror ]]; then reach "$mirror" || mrc=$?; fi
   if (( rc == 60 || mrc == 60 )); then tls_suspect=1; return 0; fi   # the clock check explains it
   if (( rc != 0 && mrc != 0 )); then
