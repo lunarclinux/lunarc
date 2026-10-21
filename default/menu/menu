@@ -21,7 +21,6 @@ Install  | | apps and packages      | menu: install | +
 Remove   | |                        | menu: remove  | −
 | Update | | term: @DISTRO_ID@ update | ↑
 System   | | lock, reboot, power off |              | !
-| Coding agent | SUPER+A | @DISTRO_ID@ agent open | ◇
 
 Style | Theme | colours for everything | menu: theme
 Style | Dark mode | the theme's dark colours | @DISTRO_ID@ theme mode dark
@@ -62,7 +61,8 @@ Setup | Backups | where and how often | @DISTRO_ID@ setup backups
 Setup | Network share: add | NFS or SMB | term: @DISTRO_ID@ share add
 Setup | Network shares | list and test | term: @DISTRO_ID@ share list; for s in $(@DISTRO_ID@ share list --names); do @DISTRO_ID@ share test "$s"; done
 Setup | Default terminal | | menu: terminal
-Setup | Coding agent | | menu: agent
+Setup | Coding agent | the default one | menu: agent
+Setup | Open the coding agent | SUPER+A | @DISTRO_ID@ agent open
 Setup | Privacy | what connects where | term: @DISTRO_ID@ privacy; echo; echo "Change: @DISTRO_ID@ privacy weather on|off, dns quad9|mullvad|cloudflare|off, connectivity on|off, aur-search on|off"
 Setup | Firewall | what may connect in | term: @DISTRO_ID@ firewall status; echo; @DISTRO_ID@ firewall apps; echo; echo "Allow one: @DISTRO_ID@ firewall allow <app or port>"
 Setup | Firmware updates | BIOS, SSD, devices | term: @DISTRO_ID@ update firmware
