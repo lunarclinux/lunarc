@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# One-time setup of a host for the build VMs (vm/README.md). Run with sudo:
+#
+#   sudo vm/setup-host
+#
+# Starts libvirt, its default NAT network and the `default` storage pool
+# (/var/lib/libvirt/images), adds you to the libvirt group, makes both VMs'
+# empty 60 GB disks, downloads the Arch live ISO the VMs boot (checked against
+# Arch's signature) and defines the VMs from the XML here. Safe to run again:
+# what exists is left alone. Afterwards, as yourself: vm/make-seed, then the
+# empty-disk snapshot (vm/snap take distro-clean l0-complete). libvirt's
+# polkit rule reads the group file, so no new login is needed for virsh.
+set -euo pipefail
+[[ $EUID -eq 0 && -n ${SUDO_USER:-} ]] || { echo "vm/setup-host: run it with sudo" >&2; exit 1; }
+here=$(cd "$(dirname "$0")" && pwd)
+export LIBVIRT_DEFAULT_URI=qemu:///system
+images=/var/lib/libvirt/images
+log() { printf '\033[1m[setup-host]\033[0m %s\n' "$*"; }
+
+log "libvirt"
+systemctl enable --now libvirtd.socket >/dev/null
+for _ in $(seq 20); do virsh version >/dev/null 2>&1 && break; sleep 0.5; done
+if ! id -nG "$SUDO_USER" | tr ' ' '\n' | grep -qx libvirt; then
+  usermod -aG libvirt "$SUDO_USER"
+  log "added $SUDO_USER to the libvirt group"
+fi
+
+log "network: default (NAT)"
+# libvirt ships firewalld zones for its bridge; a firewalld started before
+# libvirt was installed hasn't read them yet.
+if systemctl is-active --quiet firewalld && ! firewall-cmd --get-zones | tr ' ' '\n' | grep -qx libvirt; then
+  firewall-cmd --reload >/dev/null
+  log "firewalld reloaded (it hadn't loaded libvirt's zone yet)"
+fi
+if ! virsh net-info default >/dev/null 2>&1; then
+  virsh net-define /etc/libvirt/qemu/networks/default.xml >/dev/null
+fi
+virsh net-autostart default >/dev/null
+virsh net-info default | grep -q '^Active: *yes' || virsh net-start default >/dev/null
+
+log "storage pool: default ($images)"
+if ! virsh pool-info default >/dev/null 2>&1; then
+  virsh pool-define-as default dir --target "$images" >/dev/null
+  virsh pool-build default >/dev/null
+fi
+virsh pool-autostart default >/dev/null
+virsh pool-info default | grep -q '^State: *running' || virsh pool-start default >/dev/null
+
+for vm in distro-dev distro-clean; do
+  if ! virsh vol-info --pool default "$vm.qcow2" >/dev/null 2>&1; then
+    virsh vol-create-as default "$vm.qcow2" 60G --format qcow2 >/dev/null
+    log "disk: $vm.qcow2 (60 GB, empty)"
+  fi
+done
+
+# The Arch live ISO named in the XML, checked against Arch's signature.
+iso=$(sed -n "s|.*<source file='$images/\(archlinux-[0-9.]*-x86_64\.iso\)'/>.*|\1|p" "$here/distro-clean.xml" | head -1)
+[[ -n $iso ]] || { echo "no Arch ISO named in distro-clean.xml" >&2; exit 1; }
+if [[ ! -f $images/$iso ]]; then
+  version=${iso#archlinux-}; version=${version%-x86_64.iso}
+  mirror=https://geo.mirror.pkgbuild.com/iso/$version
+  log "downloading $iso"
+  tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+  curl -fL --progress-bar -o "$tmp/$iso" "$mirror/$iso"
+  curl -fsSL -o "$tmp/$iso.sig" "$mirror/$iso.sig"
+  pacman-key -v "$tmp/$iso.sig" >/dev/null 2>&1 || { echo "$iso: Arch's signature doesn't check out" >&2; exit 1; }
+  install -m644 "$tmp/$iso" "$images/$iso"
+  log "$iso: signature good"
+fi
+
+# The XML names this host's discrete GPU for 3D; say so if it isn't there.
+node=$(sed -n "s|.*rendernode='\([^']*\)'.*|\1|p" "$here/distro-clean.xml" | head -1)
+if [[ -n $node && ! -e $node ]]; then
+  log "WARNING: $node doesn't exist here; change rendernode in the XML (ls /dev/dri/by-path/)"
+fi
+
+for vm in distro-dev distro-clean; do
+  if ! virsh dominfo "$vm" >/dev/null 2>&1; then
+    virsh define "$here/$vm.xml" >/dev/null
+    log "defined $vm"
+  fi
+done
+virsh pool-refresh default >/dev/null
+log "done. Next, as $SUDO_USER: vm/make-seed, then vm/snap take distro-clean l0-complete"

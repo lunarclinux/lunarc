@@ -37,7 +37,12 @@ moved=()
 if (( CLEAN_BOOT )); then
   stamp=$(date +%Y-%m-%d)
   current='' dir='' uuid=''
-  while IFS=$'\t' read -r part path; do
+  # The list first, in full: other_boot_files mounts each partition read-only
+  # while it looks, and a second mount of a partition still mounted that way
+  # comes up read-only too.
+  mapfile -t leftovers < <(other_boot_files "$DISK" "$ESP")   # never our own, just made
+  for line in "${leftovers[@]}"; do
+    part=${line%%$'\t'*} path=${line#*$'\t'}
     if [[ $part != "$current" ]]; then
       if [[ -n $dir ]]; then umount "$dir"; rmdir "$dir"; fi
       current=$part dir=$(mktemp -d); mount "$part" "$dir"
@@ -47,7 +52,7 @@ if (( CLEAN_BOOT )); then
     mv "$dir/$path" "$dir/$DISTRO_ID-removed/$stamp/$path"
     moved+=("$uuid ${path,,}")
     info "set aside: $part $path (in $DISTRO_ID-removed/$stamp)"
-  done < <(other_boot_files "$DISK" "$ESP")   # never our own, just made
+  done
   if [[ -n $dir ]]; then umount "$dir"; rmdir "$dir"; fi
 fi
 

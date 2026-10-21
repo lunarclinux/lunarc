@@ -29,6 +29,8 @@ in_target bash "/usr/share/$DISTRO_ID/migrations/system/20261015-2310-pacman-col
 in_target bash "/usr/share/$DISTRO_ID/migrations/system/20261019-1000-wifi-country.sh"
 # TRIM: the weekly fstrim timer (discards through encryption are a header flag, set above).
 in_target bash "/usr/share/$DISTRO_ID/migrations/system/20261019-1010-trim.sh"
+# The keyring's password follows the login password when it's changed.
+in_target bash "/usr/share/$DISTRO_ID/migrations/system/20261020-1000-keyring-follows-password.sh"
 # The login screen in the default theme, until someone picks another.
 in_target "/usr/lib/$DISTRO_ID/greeter-theme"
 in_target "/usr/bin/$DISTRO_ID" migrate --system --mark-all

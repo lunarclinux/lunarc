@@ -775,6 +775,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     if "$here/ssh" "$vm" "$user" -- "test -x /usr/lib/$id/commands/keyboard"; then
       check "lock-outs are short"          "grep -qx 'deny = 10' /etc/security/faillock.conf && grep -qx 'unlock_time = 120' /etc/security/faillock.conf && for i in 1 2 3 4; do echo wrong | sudo -S -k -p '' true 2>/dev/null; done; echo '$password' | sudo -S -k -p '' true"
       check "login screen unlocks the keyring" "grep -q 'pam_gnome_keyring.so auto_start' /etc/pam.d/greetd"
+      check "passwd changes the keyring's password too" "grep -qE '^password[[:space:]]+optional[[:space:]]+pam_gnome_keyring.so' /etc/pam.d/passwd"
       if (( encrypt )); then
         check "keyring needs no password"  "$hypr export DBUS_SESSION_BUS_ADDRESS=unix:path=\$XDG_RUNTIME_DIR/bus; test -f ~/.local/share/keyrings/login.keyring && echo s3cret | timeout 10 secret-tool store --label=install-test app install-test && timeout 10 secret-tool lookup app install-test | grep -qx s3cret && ! hyprctl clients -j | jq -e '.[] | select(.class == \"gcr-prompter\")' >/dev/null"
       else
