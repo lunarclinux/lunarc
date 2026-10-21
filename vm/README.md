@@ -11,11 +11,10 @@ Recreate on a new host (needs libvirt, qemu-full, edk2-ovmf, dnsmasq, xorriso):
 
 ```sh
 sudo vm/setup-host                                   # libvirt, network, pool, disks, Arch ISO, both VMs
-sg libvirt -c vm/make-seed                           # SSH into the live ISO (below)
-sg libvirt -c 'vm/snap take distro-clean l0-complete'  # the empty-disk starting point vm/test-install restores
+vm/make-seed                                         # SSH into the live ISO (below)
+vm/snap take distro-clean l0-complete                # the empty-disk starting point vm/test-install restores
 ```
 
-(`sg libvirt` until you next log in; `setup-host` adds you to the group.)
 
 The render node path in the XML (`/dev/dri/by-path/pci-0000:03:00.0-render`) is this host's discrete GPU; change it on other hardware.
 

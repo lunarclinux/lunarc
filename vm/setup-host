@@ -8,7 +8,8 @@
 # empty 60 GB disks, downloads the Arch live ISO the VMs boot (checked against
 # Arch's signature) and defines the VMs from the XML here. Safe to run again:
 # what exists is left alone. Afterwards, as yourself: vm/make-seed, then the
-# empty-disk snapshot (vm/snap take distro-clean l0-complete).
+# empty-disk snapshot (vm/snap take distro-clean l0-complete). libvirt's
+# polkit rule reads the group file, so no new login is needed for virsh.
 set -euo pipefail
 [[ $EUID -eq 0 && -n ${SUDO_USER:-} ]] || { echo "vm/setup-host: run it with sudo" >&2; exit 1; }
 here=$(cd "$(dirname "$0")" && pwd)
@@ -21,7 +22,7 @@ systemctl enable --now libvirtd.socket >/dev/null
 for _ in $(seq 20); do virsh version >/dev/null 2>&1 && break; sleep 0.5; done
 if ! id -nG "$SUDO_USER" | tr ' ' '\n' | grep -qx libvirt; then
   usermod -aG libvirt "$SUDO_USER"
-  log "added $SUDO_USER to the libvirt group (log out and in, or use: sg libvirt -c '<command>')"
+  log "added $SUDO_USER to the libvirt group"
 fi
 
 log "network: default (NAT)"
@@ -80,4 +81,4 @@ for vm in distro-dev distro-clean; do
   fi
 done
 virsh pool-refresh default >/dev/null
-log "done. Next, as $SUDO_USER: sg libvirt -c vm/make-seed; then sg libvirt -c 'vm/snap take distro-clean l0-complete'"
+log "done. Next, as $SUDO_USER: vm/make-seed, then vm/snap take distro-clean l0-complete"
