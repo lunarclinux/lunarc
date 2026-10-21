@@ -8,7 +8,7 @@ plugin API (version 0.15). They join tte's own effects in the random rotation.
 | `moonarc.py` | `moonarc` | A big moon waxes and wanes across the sky and sweeps the text into place out of stardust. About 11 s. |
 | `eclipse.py` | `eclipse` | A total eclipse of the word: dimming, Baily's beads, diamond rings and a streaming corona. About 13 s. |
 | `moonrise.py` | `moonrise` | The text rises from behind a horizon, warming from dark gold. About 8.5 s. |
-| `constellations.py` | `constellations` | A twinkling sky; one constellation's lines draw in, then it comes alive (Draco turns into a dragon and flies off). Then the word fades in. About 14 s. `--act` picks one. |
+| `constellations.py` | `constellations` | A twinkling sky; one constellation's lines draw in, then it comes alive (Draco becomes a rearing dragon, unfurls its wings and takes off). Then the word fades in. About 15 s. `--act` picks one. |
 
 `lib/` holds shared drawing code for scene effects (`skykit.py`: braille lines, a star field, shape morphing). tte only loads the top-level `*.py` files, so it isn't mistaken for an effect.
 

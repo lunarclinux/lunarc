@@ -22,7 +22,11 @@ from terminaltexteffects.utils import argutils
 from terminaltexteffects.utils.argutils import ArgSpec, ParserSpec
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
-from skykit import WHITE, Braille, Pool, StarField, blend, ease_in, ease_in_out, ease_out, mix, place, resample, span  # noqa: E402
+import skykit  # noqa: E402
+from skykit import (  # noqa: E402
+    WHITE, Braille, Pool, StarField, blend, ease_in, ease_in_out, ease_out, interpolate, mix, place, resample, span, spline,
+    tube,
+)
 
 ACTS = ("draco",)
 
@@ -105,9 +109,8 @@ class ConstellationsConfig(BaseConfig):
 
 
 # --- Draco ---------------------------------------------------------------------
-# A unit box, y up. The constellation (stylised: the head's four stars, then the
-# body winding down and round to the tail between the Dippers), and a dragon
-# facing the same way, head to the right.
+# The constellation, stylised, in a unit box (y up): the head's four stars,
+# then the body winding down and round to the tail between the Dippers.
 
 DRACO_STARS = {
     "gamma": (0.86, 0.70), "beta": (0.80, 0.79), "nu": (0.72, 0.75), "xi": (0.76, 0.64),
@@ -117,37 +120,75 @@ DRACO_STARS = {
 }
 DRACO_HEAD = ["xi", "gamma", "beta", "nu", "xi"]
 DRACO_BODY = ["xi", "delta", "pi", "zeta", "eta", "theta", "iota", "alpha", "kappa", "lambda"]
-# One path for the morph: tail to head along the body, then round the head.
+# One path for the morph, tail first, matching the dragon's spine.
 DRACO_PATH = list(reversed(DRACO_BODY)) + DRACO_HEAD[1:]
 
-# The dragon's outline, tail tip first: along the back to the head, round the
-# snout and jaw, back along the belly to the tail.
-DRAGON_BODY = [
-    (0.02, 0.80), (0.00, 0.73), (0.05, 0.75), (0.08, 0.66), (0.13, 0.57), (0.22, 0.51),
-    (0.34, 0.52), (0.46, 0.55), (0.58, 0.57), (0.68, 0.61), (0.76, 0.67), (0.82, 0.74),
-    (0.85, 0.83), (0.83, 0.90), (0.88, 0.84), (0.91, 0.79), (0.99, 0.76), (1.00, 0.72),
-    (0.93, 0.71), (0.97, 0.67), (0.90, 0.66), (0.84, 0.64), (0.78, 0.57), (0.72, 0.49),
-    (0.60, 0.43), (0.46, 0.41), (0.33, 0.43), (0.22, 0.45), (0.12, 0.52), (0.07, 0.62),
-    (0.04, 0.74),
+# The dragon, rearing and facing the viewer with its head turned left, in its
+# own units: x across from the body's centre line, y up from its feet. About
+# 1.6 wide with the wings spread, 1.25 tall.
+SPINE = [  # tail tip up the body and neck to the back of the head
+    (0.07, -0.22), (0.05, -0.16), (0.11, -0.12), (0.16, -0.05), (0.14, 0.04), (0.08, 0.12),
+    (0.04, 0.22), (0.02, 0.32), (0.00, 0.42), (0.00, 0.52), (0.03, 0.60), (0.05, 0.68),
+    (0.03, 0.76), (-0.01, 0.84),
 ]
-DRAGON_WING = [  # from the shoulder up to the tip, then the scalloped trailing edge back down
-    (0.62, 0.58), (0.58, 0.78), (0.50, 0.96), (0.46, 0.84), (0.40, 0.90), (0.38, 0.76),
-    (0.31, 0.80), (0.32, 0.66), (0.25, 0.68), (0.36, 0.56),
+SPINE_WIDTH = [0.002, 0.007, 0.012, 0.018, 0.025, 0.035, 0.05, 0.06, 0.065, 0.06, 0.045, 0.035, 0.032, 0.03]
+HEAD = [  # profile facing left: throat, jaw, chin, nose, snout ridge, brow, crown, nape
+    (0.00, 0.815), (-0.05, 0.797), (-0.11, 0.808), (-0.165, 0.83), (-0.19, 0.846), (-0.175, 0.862),
+    (-0.125, 0.872), (-0.085, 0.89), (-0.05, 0.902), (-0.01, 0.888), (0.025, 0.858),
 ]
-DRAGON_SHOULDER = (0.62, 0.58)
-DRAGON_LEGS = [
-    [(0.70, 0.50), (0.72, 0.38), (0.77, 0.34)],
-    [(0.64, 0.45), (0.65, 0.35), (0.69, 0.31)],
-    [(0.42, 0.42), (0.40, 0.31), (0.45, 0.27)],
-    [(0.34, 0.43), (0.31, 0.33), (0.35, 0.29)],
-]
-DRAGON_EYE = (0.91, 0.745)
+MOUTH = [(-0.19, 0.846), (-0.14, 0.836), (-0.11, 0.84)]
+HORNS = [[(-0.045, 0.898), (-0.015, 0.95), (0.035, 0.995), (0.06, 1.01)],
+         [(-0.02, 0.892), (0.015, 0.925), (0.055, 0.945), (0.08, 0.948)]]
+EYE = (-0.093, 0.866)
 
 
-def wing_at(flap: float) -> list[tuple[float, float]]:
-    """The wing at a point in its beat: 1 is fully up, -0.5 swept down."""
-    sx, sy = DRAGON_SHOULDER
-    return [(sx + (x - sx) * (0.85 + 0.15 * abs(flap)), sy + (y - sy) * flap) for x, y in DRAGON_WING]
+def _bigger(points: list[tuple[float, float]], k: float = 1.35, about: tuple[float, float] = (0.02, 0.85)) -> list[tuple[float, float]]:
+    return [(about[0] + (x - about[0]) * k, about[1] + (y - about[1]) * k) for x, y in points]
+
+
+HEAD, MOUTH, HORNS, EYE = _bigger(HEAD), _bigger(MOUTH), [_bigger(h) for h in HORNS], _bigger([EYE])[0]
+LEGS = [  # front legs tucked up, one hind leg reaching down; each ends in claws
+    [(-0.05, 0.47), (-0.11, 0.41), (-0.085, 0.345)],
+    [(0.06, 0.46), (0.115, 0.40), (0.10, 0.34)],
+    [(0.035, 0.27), (-0.035, 0.22), (-0.02, 0.15)],
+]
+
+# Wings, the right one (the left mirrors it), as offsets from the shoulder:
+# folded flat against the body, and spread wide. Joints: elbow, wrist, the four
+# fingertips (top to bottom) and the root where the membrane meets the body.
+SHOULDER = (0.055, 0.60)
+WING_FOLDED = {"elbow": (0.10, 0.02), "wrist": (0.06, 0.18), "f1": (0.10, 0.22), "f2": (0.12, 0.05),
+               "f3": (0.10, -0.08), "f4": (0.07, -0.15), "root": (0.02, -0.18)}
+WING_SPREAD = {"elbow": (0.17, 0.19), "wrist": (0.33, 0.35), "f1": (0.64, 0.50), "f2": (0.77, 0.20),
+               "f3": (0.68, -0.07), "f4": (0.42, -0.20), "root": (0.02, -0.18)}
+FINGERS = ("f1", "f2", "f3", "f4")
+
+
+def wing(unfurl: float, flap: float, side: int) -> dict[str, tuple[float, float]]:
+    """The wing's joints in dragon units. unfurl: 0 folded to 1 spread (the arm
+    opens first, then the fingers fan out). flap: 1 raised to -0.4 swept down.
+    side: 1 for the right wing, -1 for the left."""
+    arm = ease_in_out(unfurl / 0.6)
+    fan = ease_in_out((unfurl - 0.3) / 0.7)
+    sx, sy = SHOULDER
+    joints = {}
+    for name, (fx, fy) in WING_FOLDED.items():
+        t = arm if name in ("elbow", "wrist") else fan
+        ox, oy = WING_SPREAD[name]
+        x, y = fx + (ox - fx) * t, fy + (oy - fy) * t
+        # The beat: swing about the shoulder (the root stays on the body).
+        if name != "root":
+            x *= 0.88 + 0.12 * abs(flap)
+            y = y * flap if y > 0 else y - (1 - flap) * 0.05
+        joints[name] = (side * (sx + x), sy + y)
+    joints["shoulder"] = (side * sx, sy)
+    return joints
+
+
+def scallop(a: tuple[float, float], b: tuple[float, float], toward: tuple[float, float]) -> list[tuple[float, float]]:
+    """A membrane edge from a to b, curving in toward the wrist."""
+    mx, my = (a[0] + b[0]) / 2, (a[1] + b[1]) / 2
+    return skykit.spline([a, (mx + (toward[0] - mx) * 0.22, my + (toward[1] - my) * 0.22), b], 6)
 
 
 class ConstellationsIterator(BaseEffectIterator[ConstellationsConfig]):
@@ -156,13 +197,15 @@ class ConstellationsIterator(BaseEffectIterator[ConstellationsConfig]):
     SKY_IN = 60
     LINES = (60, 180)       # start, length
     HOLD = 60
-    MORPH = 120
-    GROW = 60
-    FLAP = 80
-    FLY = 170
+    MORPH = 110             # constellation line into the dragon's spine
+    BODY = 70               # body, head, horns, legs and spines fill in
+    UNFURL = 110            # the wings open
+    PERIOD = 38             # frames per wing beat
+    BEATS = 2               # beats on the spot before it lifts off
+    CLIMB = 150             # from lift-off until it's gone
     WORD = 90
     END_HOLD = 40
-    MORPH_POINTS = 160
+    MORPH_POINTS = 200
 
     def __init__(self, effect: Constellations) -> None:
         super().__init__(effect)
@@ -184,38 +227,48 @@ class ConstellationsIterator(BaseEffectIterator[ConstellationsConfig]):
             self.letters.append((character, mapping[character.input_coord]))
 
         self.sky = StarField(self.terminal, layer=0)
-        self.lines = Braille(self.terminal, 1600, layer=2)
-        self.bright = Pool(self.terminal, 24, layer=3)     # the constellation's own stars
-        self.sparks = Pool(self.terminal, 140, layer=4)    # trail behind the dragon
+        self.lines = Braille(self.terminal, 2600, layer=2)
+        self.bright = Pool(self.terminal, 40, layer=3)     # stars: the constellation's, then the dragon's joints
+        self.sparks = Pool(self.terminal, 160, layer=4)    # trail behind the dragon as it climbs
         self.trail: list[list] = []
-
-        # Where the figure sits: centred, as big as fits comfortably.
         w, h = self.lines.width, self.lines.height
-        self.scale = min(w * 0.55, h * 0.95)
-        self.x0 = (w - self.scale) / 2
-        self.y0 = (h - self.scale) / 2 - self.scale * 0.05
+
+        # The constellation, centred.
+        size = min(w * 0.55, h * 0.95)
+        cx0, cy0 = (w - size) / 2, (h - size) / 2 - size * 0.05
+        self.stars = {k: place([v], cx0, cy0, size)[0] for k, v in DRACO_STARS.items()}
+        self.head = [self.stars[k] for k in DRACO_HEAD]
+        self.body = [self.stars[k] for k in DRACO_BODY]
+
+        # The dragon, centred, as big as fits with its wings spread.
+        self.scale = min(h * 0.72 / 1.25, w * 0.82 / 1.64)
+        self.cx = w / 2
+        self.base = (h - 1.25 * self.scale) / 2 + 0.22 * self.scale
+        self.lift = 0.0
+        self.spine = spline(SPINE, 10)
+        self.widths = interpolate(SPINE_WIDTH, len(self.spine))
+
+        # The morph: the constellation's path flows into the spine and round the head.
+        self.path_from = resample([self.stars[k] for k in DRACO_PATH], self.MORPH_POINTS)
+        self.path_to = resample(self.dots(self.spine + list(reversed(spline(HEAD, 6)))), self.MORPH_POINTS)
+        self.star_index = {
+            k: min(range(self.MORPH_POINTS), key=lambda i, p=p: (self.path_from[i][0] - p[0]) ** 2 + (self.path_from[i][1] - p[1]) ** 2)
+            for k, p in self.stars.items()
+        }
 
         self.t_lines_end = self.LINES[0] + self.LINES[1]
         self.t_morph = self.t_lines_end + self.HOLD
-        self.t_grow = self.t_morph + self.MORPH
-        self.t_flap = self.t_grow + self.GROW
-        self.t_fly = self.t_flap + self.FLAP
-        self.t_word = self.t_fly + self.FLY - 30
+        self.t_body = self.t_morph + self.MORPH
+        self.t_unfurl = self.t_body + self.BODY
+        self.t_beat = self.t_unfurl + self.UNFURL
+        self.t_climb = self.t_beat + self.BEATS * self.PERIOD
+        self.t_word = self.t_climb + self.CLIMB - 40
         self.total = self.t_word + self.WORD + self.END_HOLD
 
-        stars = {k: place([v], self.x0, self.y0, self.scale)[0] for k, v in DRACO_STARS.items()}
-        self.stars = stars
-        self.head = [stars[k] for k in DRACO_HEAD]
-        self.body = [stars[k] for k in DRACO_BODY]
-        self.path_from = resample([stars[k] for k in DRACO_PATH], self.MORPH_POINTS)
-        self.path_to = resample(place(DRAGON_BODY, self.x0, self.y0, self.scale), self.MORPH_POINTS)
-        # Each star rides the morph at the point of the path nearest to it.
-        self.star_index = {
-            k: min(range(self.MORPH_POINTS), key=lambda i, p=p: (self.path_from[i][0] - p[0]) ** 2 + (self.path_from[i][1] - p[1]) ** 2)
-            for k, p in stars.items()
-        }
+    def dots(self, points: list[tuple[float, float]]) -> list[tuple[float, float]]:
+        """Dragon units to dots, with the current lift."""
+        return [(self.cx + x * self.scale, self.base + y * self.scale + self.lift) for x, y in points]
 
-    # Colours
     def line_color(self, level: float) -> Color:
         return mix(self.config.background_color, self.config.line_color, level)
 
@@ -223,7 +276,7 @@ class ConstellationsIterator(BaseEffectIterator[ConstellationsConfig]):
         if self.f > self.total:
             raise StopIteration
         f = self.f
-        bg, star_c, line_c = self.config.background_color, self.config.star_color, self.config.line_color
+        bg, star_c = self.config.background_color, self.config.star_color
         sky_level = span(f, 0, self.SKY_IN) * (1 - 0.45 * span(f, self.t_word, self.WORD))
         self.sky.draw(f, bg, star_c, sky_level)
 
@@ -234,7 +287,6 @@ class ConstellationsIterator(BaseEffectIterator[ConstellationsConfig]):
         self.bright.end()
         self.draw_trail(f)
 
-        # The word.
         word = ease_in_out(span(f, self.t_word, self.WORD))
         for character, final in self.letters:
             if word > 0:
@@ -256,12 +308,12 @@ class ConstellationsIterator(BaseEffectIterator[ConstellationsConfig]):
     # --- Draco's act ------------------------------------------------------------
     def draw_draco(self, f: int) -> None:
         bg, star_c = self.config.background_color, self.config.star_color
-        lines_start, lines_len = self.LINES
         if f < self.t_morph:
             # The constellation's stars brighten, then its lines draw in: the head
             # first, then the body down to the tail.
-            glow = span(f, lines_start - 30, 40)
-            progress = span(f, lines_start, lines_len)
+            start, length = self.LINES
+            glow = span(f, start - 30, 40)
+            progress = span(f, start, length)
             pulse = 0.85 + 0.15 * math.sin(f / 9) if f >= self.t_lines_end else 1.0
             self.lines.polyline(self.head, 0.75 * pulse, ease_in_out(progress / 0.3))
             self.lines.polyline(self.body, 0.75 * pulse, ease_in_out((progress - 0.25) / 0.75))
@@ -269,57 +321,109 @@ class ConstellationsIterator(BaseEffectIterator[ConstellationsConfig]):
                 self.star(x, y, mix(bg, WHITE, glow), "✦" if glow > 0.6 else "*")
             return
 
-        if f < self.t_grow:
-            # Line figure into dragon: the path flows from one shape to the other,
-            # the stars riding along and fading into the outline.
+        if f < self.t_body:
+            # The line flows into the dragon's spine and round its head, the stars
+            # riding along and fading.
             t = ease_in_out(span(f, self.t_morph, self.MORPH))
             points = blend(self.path_from, self.path_to, t)
-            self.lines.polyline(points, 0.75 + 0.25 * t)
-            for k, i in self.star_index.items():
+            self.lines.polyline(points, 0.8 + 0.2 * t)
+            for i in self.star_index.values():
                 x, y = points[i]
-                self.star(x, y, mix(WHITE, mix(bg, star_c, 0.6), t), "✦" if t < 0.5 else "*")
+                self.star(x, y, mix(WHITE, bg, t * 0.9), "✦" if t < 0.5 else "·")
             return
 
-        # The dragon: wings, legs and the eye draw in, a few wing beats on the spot,
-        # then away to the upper right, faster and faster.
-        grow = ease_out(span(f, self.t_grow, self.GROW))
-        beat_age = max(0, f - self.t_flap)
-        flap = math.cos(beat_age / 7) if f >= self.t_flap else 1.0
-        flap = 0.25 + 0.75 * flap if flap > 0 else flap * 0.5
-        fly = ease_in(span(f, self.t_fly, self.FLY))
-        dx = fly * self.lines.width * 1.1
-        dy = fly * self.lines.height * 0.7 + 0.03 * self.scale * math.sin(beat_age / 7) * (1 if f >= self.t_flap else 0)
-        sway = beat_age / 9
+        # The dragon. Its body fills in, the wings unfurl, it beats them twice and
+        # climbs away, still beating, faster as it goes.
+        body = ease_out(span(f, self.t_body, self.BODY))
+        unfurl = span(f, self.t_unfurl, self.UNFURL)
+        beating = f >= self.t_beat
+        phase = (f - self.t_beat) / self.PERIOD * math.tau if beating else 0.0
+        flap = 0.3 + 0.7 * math.cos(phase)
+        climb = ease_in(span(f, self.t_climb, self.CLIMB))
+        # Each downstroke lifts it a little; then it climbs off the top.
+        bob = (0.5 - 0.5 * math.cos(phase)) * 0.035 * self.scale if beating else 0.0
+        self.lift = bob + climb * (self.lines.height + 1.3 * self.scale)
+        sway = (f - self.t_body) / 14
 
-        def put(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
-            return [(x + dx, y + dy) for x, y in place(points, self.x0, self.y0, self.scale)]
+        # Body: a tapered tube along the spine, the tail swaying a little.
+        spine = [(x + (0.012 * math.sin(sway + i * 0.25) * (1 - i / len(self.spine)) if i < len(self.spine) * 0.45 else 0), y)
+                 for i, (x, y) in enumerate(self.spine)]
+        left, right = tube(spine, [w * (0.25 + 0.75 * body) for w in self.widths])
+        self.lines.polyline(self.dots(left), 1.0)
+        self.lines.polyline(self.dots(right), 1.0)
+        if body < 1:
+            self.lines.polyline(self.dots(spine), 1.0 - body)
+        # Spines down the back of the neck and along the back and tail.
+        n = len(spine)
+        for i in range(int(n * 0.14), int(n * 0.94), 9):
+            if i / n > body:
+                break
+            (x0, y0), (x1, y1), (x2, y2) = right[i - 3], right[i], right[i + 3]
+            ox, oy = x1 - spine[i][0], y1 - spine[i][1]
+            length = math.hypot(ox, oy) or 1.0
+            size = 0.016 + 0.014 * self.widths[i] / 0.065
+            # The tip leans toward the tail.
+            tip = (x1 + ox / length * size - (x2 - x0) * 0.5, y1 + oy / length * size - (y2 - y0) * 0.5)
+            self.lines.polyline(self.dots([(x0, y0), tip, (x2, y2)]), 0.75)
 
-        body = [(x, y + (0.03 * math.sin(sway + x * 7) * (0.35 - x) / 0.35 if x < 0.35 else 0)) for x, y in DRAGON_BODY]
-        self.lines.polyline(put(body), 1.0)
-        self.lines.polyline(put(wing_at(flap)), 0.95, grow)
-        for leg in DRAGON_LEGS:
-            self.lines.polyline(put(leg), 0.85, grow)
-        if grow > 0.6:
-            ex, ey = put([DRAGON_EYE])[0]
-            self.lines.disc(ex, ey, 0.8, 1.0)
-        if fly > 0:
-            tx, ty = put([DRAGON_BODY[0]])[0]
-            for _ in range(2):
-                self.trail.append([tx + random.uniform(-3, 3), ty + random.uniform(-3, 3), f, random.choice("··∙+*")])
+        # Head, horns, legs.
+        self.lines.polyline(self.dots(spline(HEAD, 6)), 1.0, body)
+        self.lines.polyline(self.dots(MOUTH), 0.8, body)
+        for horn in HORNS:
+            self.lines.polyline(self.dots(spline(horn, 6)), 0.95, ease_out((body - 0.3) / 0.7))
+        for leg in LEGS:
+            pts = spline(leg, 6)
+            self.lines.polyline(self.dots(pts), 0.9, body)
+            if body > 0.8:
+                ex, ey = leg[-1]
+                for dx, dy in ((-0.025, -0.012), (-0.012, -0.026), (0.008, -0.025)):
+                    self.lines.polyline(self.dots([(ex, ey), (ex + dx, ey + dy)]), 0.85)
+        if body > 0.5:
+            x, y = self.dots([EYE])[0]
+            self.star(x, y, mix(bg, WHITE, body), "✦")
+
+        # Wings.
+        if unfurl > 0:
+            level = span(unfurl, 0, 0.15)
+            for side in (1, -1):
+                j = wing(unfurl, flap, side)
+                wrist = j["wrist"]
+                self.lines.polyline(self.dots([j["shoulder"], j["elbow"], wrist, j["f1"]]), 0.95 * level)
+                for finger in FINGERS[1:]:
+                    self.lines.polyline(self.dots([wrist, j[finger]]), 0.85 * level)
+                edge = [j["root"], j["f4"], j["f3"], j["f2"], j["f1"]]
+                for a, b in zip(edge, edge[1:]):
+                    self.lines.polyline(self.dots(scallop(a, b, wrist)), 0.7 * level)
+                # Stars at the joints, like the constellation it came from.
+                for name in ("wrist", *FINGERS):
+                    x, y = self.dots([j[name]])[0]
+                    twinkle = 0.75 + 0.25 * math.sin(f / 7 + FINGERS.index(name) if name in FINGERS else f / 7)
+                    self.star(x, y, mix(bg, WHITE, level * twinkle), "✦")
+                x, y = self.dots([j["elbow"]])[0]
+                self.star(x, y, mix(bg, star_c, level), "*")
+        tx, ty = self.dots([SPINE[0]])[0]
+        self.star(tx, ty, mix(bg, WHITE, body * 0.8), "*")
+
+        if climb > 0:
+            for px, py in (SPINE[0], LEGS[2][-1]):
+                x, y = self.dots([(px, py)])[0]
+                self.trail.append([x + random.uniform(-3, 3), y + random.uniform(-2, 2), f, random.choice("··∙+*")])
 
     def star(self, x: float, y: float, color: Color, symbol: str) -> None:
+        if not (0 <= x < self.lines.width and 0 <= y < self.lines.height):
+            return
         col = self.lines.left + int(x) // 2
         row = self.lines.bottom + int(y) // 4
         self.bright.put(col, row, symbol, color)
 
     def draw_trail(self, f: int) -> None:
-        life = 50
+        life = 55
         self.trail = [p for p in self.trail if f - p[2] <= life]
         self.sparks.begin()
         for x, y, born, symbol in self.trail:
             age = (f - born) / life
-            col = self.lines.left + int(x - age * 6) // 2
-            row = self.lines.bottom + int(y - age * 10) // 4
+            col = self.lines.left + int(x) // 2
+            row = self.lines.bottom + int(y - age * 8) // 4
             self.sparks.put(col, row, symbol, mix(mix(self.config.line_color, WHITE, 0.4), self.config.background_color, age))
         self.sparks.end()
 

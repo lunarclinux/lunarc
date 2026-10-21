@@ -236,3 +236,50 @@ def place(points: list[tuple[float, float]], x: float, y: float, scale: float,
           flip: bool = False) -> list[tuple[float, float]]:
     """Unit-box points (0 to 1) moved to dots: lower-left corner at (x, y), `scale` dots per unit."""
     return [(x + ((1 - px) if flip else px) * scale, y + py * scale) for px, py in points]
+
+
+def spline(points: list[tuple[float, float]], steps: int = 8) -> list[tuple[float, float]]:
+    """A smooth curve through points (Catmull-Rom), `steps` samples per span."""
+    if len(points) < 3:
+        return list(points)
+    pts = [points[0], *points, points[-1]]
+    out = []
+    for i in range(1, len(pts) - 2):
+        p0, p1, p2, p3 = pts[i - 1], pts[i], pts[i + 1], pts[i + 2]
+        for s in range(steps):
+            t = s / steps
+            t2, t3 = t * t, t * t * t
+            out.append(tuple(
+                0.5 * (2 * p1[k] + (-p0[k] + p2[k]) * t + (2 * p0[k] - 5 * p1[k] + 4 * p2[k] - p3[k]) * t2
+                       + (-p0[k] + 3 * p1[k] - 3 * p2[k] + p3[k]) * t3)
+                for k in (0, 1)))
+    out.append(points[-1])
+    return out
+
+
+def tube(center: list[tuple[float, float]], widths: list[float]) -> tuple[list, list]:
+    """The two edges of a band along `center`, half-width widths[i] at point i."""
+    left, right = [], []
+    n = len(center)
+    for i, (x, y) in enumerate(center):
+        ax, ay = center[max(i - 1, 0)]
+        bx, by = center[min(i + 1, n - 1)]
+        dx, dy = bx - ax, by - ay
+        length = math.hypot(dx, dy) or 1.0
+        nx, ny = -dy / length, dx / length
+        w = widths[i]
+        left.append((x + nx * w, y + ny * w))
+        right.append((x - nx * w, y - ny * w))
+    return left, right
+
+
+def interpolate(values: list[float], n: int) -> list[float]:
+    """values (one per control point) spread over n samples."""
+    if n < 2 or len(values) < 2:
+        return [values[0]] * n
+    out = []
+    for i in range(n):
+        t = i / (n - 1) * (len(values) - 1)
+        k = min(int(t), len(values) - 2)
+        out.append(values[k] + (values[k + 1] - values[k]) * (t - k))
+    return out
