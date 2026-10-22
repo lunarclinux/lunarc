@@ -61,6 +61,8 @@ Setup | Backups | where and how often | @DISTRO_ID@ setup backups
 Setup | Network share: add | NFS or SMB | term: @DISTRO_ID@ share add
 Setup | Network shares | list and test | term: @DISTRO_ID@ share list; for s in $(@DISTRO_ID@ share list --names); do @DISTRO_ID@ share test "$s"; done
 Setup | Default terminal | | menu: terminal
+Setup | Terminal notifications: on | Claude Code and other programs; vanish after 6 s | @DISTRO_ID@ terminal notifications on
+Setup | Terminal notifications: off | the default | @DISTRO_ID@ terminal notifications off
 Setup | Coding agent | the default one | menu: agent
 Setup | Open the coding agent | SUPER+A | @DISTRO_ID@ agent open
 Setup | Privacy | what connects where | term: @DISTRO_ID@ privacy; echo; echo "Change: @DISTRO_ID@ privacy weather on|off, dns quad9|mullvad|cloudflare|off, connectivity on|off, aur-search on|off"
