@@ -96,10 +96,13 @@ scale_jq='def default_scale:
 # The mode for a screen nobody chose one for: its current (preferred)
 # resolution at the highest refresh rate it offers there. The "preferred" mode
 # often means 60 Hz on a faster screen, and "highrr" can drop the resolution.
+# A laptop panel (built in) keeps its preferred mode: a 120-165 Hz panel at full
+# rate costs battery all day (`display set` picks any mode).
 def default_mode:
+  if .builtin then "preferred" else
   ((.width | tostring) + "x" + (.height | tostring)) as $res
   | [(.availableModes // [])[] | capture("^(?<r>[0-9]+x[0-9]+)@(?<hz>[0-9.]+)Hz$") | select(.r == $res) | .hz | tonumber] as $hz
-  | if ($hz | length) == 0 then "preferred" else "\($res)@\($hz | max)" end;'
+  | if ($hz | length) == 0 then "preferred" else "\($res)@\($hz | max)" end end;'
 
 rules() { # rules <monitors-json> <state-json>
   local mons=$1 st=$2 key lid=0
