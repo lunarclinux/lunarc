@@ -33,6 +33,9 @@ hl.config({
         -- start a new one (instead of only a red "lock screen died" screen).
         allow_session_lock_restore = true,
         background_color = 0x1d2021,
+        -- Adaptive sync (VRR) for fullscreen apps only: games get it, the
+        -- desktop doesn't flicker on screens that do it badly (decision record 0053).
+        vrr = 2,
     },
 })
 

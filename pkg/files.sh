@@ -84,6 +84,9 @@ case $part in
       # SSH keys: the keyring's SSH agent (enabled below) asks for a key's
       # passphrase once and can keep it in the login keyring.
       printf 'SSH_AUTH_SOCK=${XDG_RUNTIME_DIR}/gcr/ssh\n'
+      # Mesa's shader cache holds 1 GB; once full, games compile shaders again
+      # (decision record 0053).
+      printf 'MESA_SHADER_CACHE_MAX_SIZE=12G\n'
     } > "$dest/usr/lib/environment.d/50-$id.conf"
 
     # User services, enabled for every user through static wants links.
@@ -158,6 +161,11 @@ case $part in
     printf '# Telemetry opt-outs for shells outside the desktop session (TTY, SSH).\nset -a\n. /usr/lib/environment.d/60-%s-privacy.conf\nset +a\n' "$id" \
       > "$dest/etc/profile.d/$id-privacy.sh"
     put "$src/etc/sysctl.d/hardening.conf" "$dest/usr/lib/sysctl.d/90-$id-hardening.conf"
+    # Game compatibility, zram-friendly memory settings and NTSync for Proton
+    # (decision record 0053). /etc/sysctl.d still wins for the user's own values.
+    put "$src/etc/sysctl.d/gaming.conf" "$dest/usr/lib/sysctl.d/80-$id-gaming.conf"
+    put "$src/etc/sysctl.d/memory.conf" "$dest/usr/lib/sysctl.d/80-$id-memory.conf"
+    put "$src/etc/modules-load.d/ntsync.conf" "$dest/usr/lib/modules-load.d/$id-ntsync.conf"
     put "$src/default/privacy/gschema.override" "$dest/usr/share/glib-2.0/schemas/90_$id.gschema.override"
     # App fonts: GTK apps in Geist and Geist Mono (defaults; the user's choice wins).
     put "$src/default/look/gschema.override" "$dest/usr/share/glib-2.0/schemas/91_$id-look.gschema.override"

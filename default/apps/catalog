@@ -92,6 +92,8 @@ heroic           | games     | Heroic Games Launcher  | aur      | heroic-games-
 gamescope        | games     | Gamescope              | repo     | gamescope                   |
 umu             | games     | umu-launcher (Proton outside Steam) | multilib | umu-launcher       |
 moonlight        | games     | Moonlight (game streaming) | repo | moonlight-qt                |
+mangohud         | games     | MangoHud (FPS and frame-time overlay) | multilib | mangohud lib32-mangohud |
+protonup-qt      | games     | ProtonUp-Qt (GE-Proton and other Proton builds) | aur | protonup-qt | community package
 
 # Talking and sharing
 discord          | chat      | Discord                | repo     | discord                     |
