@@ -49,7 +49,7 @@ SUPER is the Windows key. SUPER+K lists every shortcut, searchable; Return on on
 | SUPER+L (or SUPER+Escape) | Lock |
 | SUPER+N | Act on the latest notification |
 | ALT+Tab | Switch windows |
-| Print | Screenshot of a region (SHIFT: screen, SUPER: window, CTRL: region then edit) |
+| Print | Screenshot of a region (SHIFT: screen, SUPER: window, CTRL: region then edit, SUPER+SHIFT: region in 5 seconds) |
 | ALT+Print | Start or stop a screen recording |
 | SUPER+CTRL+C | Pick a colour from the screen |
 | SUPER+CTRL+D | Dictate: speak, press again, the text is typed |
@@ -135,7 +135,7 @@ Items are in `/usr/share/lunarc/default/menu/menu`; copy it to `~/.config/lunarc
 | `lunarc update firmware` | Check for firmware updates (only when you run it) |
 | `lunarc privacy` | Privacy switches: weather lookup, encrypted DNS, network check (see "What Lunarc connects to", `privacy.md`) |
 | `lunarc firewall allow <app>` / `deny` | Let LocalSend, KDE Connect, Syncthing, SSH or a port through the firewall (closed by default) |
-| `lunarc capture screenshot\|record\|stop\|color\|text\|qr` | Screenshots (`~/Pictures/Screenshots`), recordings (`~/Videos/Recordings`), colour picker, copy text or a QR code from the screen |
+| `lunarc capture screenshot\|record\|stop\|color\|text\|qr` | Screenshots (`~/Pictures/Screenshots`), recordings (`~/Videos/Recordings`), colour picker, copy text or a QR code from the screen. `screenshot --delay N` waits first (a region is picked before the wait). The notification afterwards opens the file, or shows it in Files |
 | `lunarc remind "stretch" in 20m` / `at 15:30` / `list` / `cancel <id>` | Reminders (also the alarm icon in the bar) |
 | `lunarc dictate toggle` / `setup` | Dictation; runs locally with whisper.cpp (the first click downloads the speech model, about 148 MB) |
 | `lunarc menu` / `lunarc keys` | The menu / its Keybinds (`keys --list`, `keys set`, `keys reset` from the terminal) |

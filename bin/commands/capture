@@ -12,7 +12,10 @@ usage() {
   cat <<USAGE
 Usage: $DISTRO_ID capture <command>
 
-  screenshot [region|window|screen] [--edit]   save to $shots and copy it
+  screenshot [region|window|screen] [--edit] [--delay N]
+                                               save to $shots and copy it; with
+                                               --delay, wait N seconds first (a
+                                               region is picked before the wait)
   record [region|screen] [--audio]            start a screen recording
   stop                                         stop the recording
   record-toggle [region|screen]                start or stop
@@ -22,7 +25,8 @@ Usage: $DISTRO_ID capture <command>
   qr                                           read a QR code in a region
 
 Screenshots are copied to the clipboard as well as saved. Recordings go to
-$videos.
+$videos. The notification after a screenshot or recording opens the file;
+its buttons open it or show it in Files.
 USAGE
 }
 
@@ -32,6 +36,37 @@ note() {
   local opts=()
   while [[ ${1:-} == -[iu] ]]; do opts+=("$1" "$2"); shift 2; done
   notify-send -a "$DISTRO_NAME" "${opts[@]}" -- "$@" 2>/dev/null || true
+}
+
+# note_file <summary> <body> <file>: a notification for a saved file. Clicking
+# it opens the file; its buttons open it or show it in Files. It waits for the
+# answer in the background, so the command itself returns at once.
+note_file() {
+  local summary=$1 body=$2 file=$3 icon=()
+  if [[ $file == *.png ]]; then icon=(-i "$file"); fi
+  setsid -f bash -c '
+    file=$1; shift
+    action=$(notify-send -a "$0" --action=default=Open --action=open=Open \
+      --action=show="Show in Files" --wait "$@" 2>/dev/null) || exit 0
+    case $action in
+      default|open) exec xdg-open "$file" ;;
+      show)
+        uri=file://$(jq -rn --arg p "$file" '"'"'$p | split("/") | map(@uri) | join("/")'"'"')
+        gdbus call --session --dest org.freedesktop.FileManager1 --object-path /org/freedesktop/FileManager1 \
+          --method org.freedesktop.FileManager1.ShowItems "[\"$uri\"]" "" >/dev/null 2>&1 \
+          || exec xdg-open "${file%/*}" ;;
+    esac' "$DISTRO_NAME" "$file" "${icon[@]}" -- "$summary" "$body" </dev/null >/dev/null 2>&1
+}
+
+# countdown <seconds>: a short notification each second, kept out of the
+# notification list; the last second shows nothing, so none is in the picture.
+countdown() {
+  local n=$1 id=""
+  while (( n > 1 )); do
+    id=$(notify-send -a "$DISTRO_NAME" -e -t 900 -p ${id:+-r "$id"} -- "Screenshot in $n" 2>/dev/null || true)
+    sleep 1; n=$((n - 1))
+  done
+  sleep 1.2
 }
 
 # A region chosen with the mouse, or empty if cancelled.
@@ -46,18 +81,23 @@ focused_output() {
 }
 
 screenshot() {
-  local mode=region edit=0 arg file geometry=""
-  for arg in "$@"; do
-    case $arg in
-      region|window|screen) mode=$arg ;;
-      --edit) edit=1 ;;
-      *) die "unknown screenshot option: $arg" ;;
+  local mode=region edit=0 delay=0 file geometry=""
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      region|window|screen) mode=$1; shift ;;
+      --edit) edit=1; shift ;;
+      --delay) delay=${2:-}; shift 2 || true ;;
+      --delay=*) delay=${1#--delay=}; shift ;;
+      *) die "unknown screenshot option: $1" ;;
     esac
   done
-  case $mode in
-    region) geometry=$(pick_region); [[ -n $geometry ]] || exit 0 ;;
-    window) geometry=$(active_window_geometry); [[ -n $geometry ]] || die "no focused window" ;;
-  esac
+  [[ $delay =~ ^[0-9]+$ ]] && (( delay <= 30 )) || die "--delay takes 0 to 30 seconds"
+  # A region first, then the wait: pick the area, then open the menu or hover
+  # whatever you want in the picture. A window is whichever has focus when the
+  # wait ends.
+  if [[ $mode == region ]]; then geometry=$(pick_region); [[ -n $geometry ]] || exit 0; fi
+  if (( delay > 0 )); then countdown "$delay"; fi
+  if [[ $mode == window ]]; then geometry=$(active_window_geometry); [[ -n $geometry ]] || die "no focused window"; fi
   mkdir -p "$shots"
   file=$shots/screenshot-$(date +%Y%m%d-%H%M%S).png
   if [[ $mode == screen ]]; then grim -o "$(focused_output)" "$file"
@@ -70,7 +110,7 @@ screenshot() {
   fi
   printf '%s\n' "$file"
   if [[ -t 1 ]]; then return; fi
-  note -i "$file" "Screenshot saved" "Copied to the clipboard. ${file/#$HOME/\~}"
+  note_file "Screenshot saved" "Copied to the clipboard. ${file/#$HOME/\~}" "$file"
 }
 
 is_recording() {
@@ -129,7 +169,7 @@ stop_recording() {
   rm -f "$recording_pid" "$recording_file"
   refresh_bar
   printf '%s\n' "$file"
-  note "Recording saved" "${file/#$HOME/\~}"
+  note_file "Recording saved" "${file/#$HOME/\~}" "$file"
 }
 
 case ${1:-} in

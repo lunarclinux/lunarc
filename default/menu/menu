@@ -75,6 +75,9 @@ Capture | Screenshot: region | Print | @DISTRO_ID@ capture screenshot region
 Capture | Screenshot: region, then edit | CTRL+Print | @DISTRO_ID@ capture screenshot region --edit
 Capture | Screenshot: window | SUPER+Print | @DISTRO_ID@ capture screenshot window
 Capture | Screenshot: screen | SHIFT+Print | @DISTRO_ID@ capture screenshot screen
+Capture | Screenshot: region in 5 s | pick it, then set up the shot; SUPER+SHIFT+Print | @DISTRO_ID@ capture screenshot region --delay 5
+Capture | Screenshot: screen in 5 s | time to open a menu or hover | @DISTRO_ID@ capture screenshot screen --delay 5
+Capture | Screenshot: screen in 10 s | | @DISTRO_ID@ capture screenshot screen --delay 10
 Capture | Record the screen | stop from the bar | @DISTRO_ID@ capture record screen
 Capture | Record a region | | @DISTRO_ID@ capture record region
 Capture | Record with sound | | @DISTRO_ID@ capture record screen --audio
