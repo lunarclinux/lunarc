@@ -2,11 +2,11 @@
   "base_url": "https://downloads.lunarclinux.com/",
   "current": {
     "channel": "preview",
-    "version": "2026.10.20",
-    "date": "2026-10-20",
-    "file": "lunarc-2026.10.20-x86_64.iso",
-    "size": 2918035456,
-    "sha256": "6e75d19907b714c4f6b89321ca31640eeeb739ff0903b337600deafabf48f344",
-    "sig": "lunarc-2026.10.20-x86_64.iso.sig"
+    "version": "2026.10.21",
+    "date": "2026-10-21",
+    "file": "lunarc-2026.10.21-x86_64.iso",
+    "size": 2918371328,
+    "sha256": "16f9a84e0d843f2ce178c4d45eb0b1d354edeb9977caebc7bd119ec250f703bd",
+    "sig": "lunarc-2026.10.21-x86_64.iso.sig"
   }
 }
