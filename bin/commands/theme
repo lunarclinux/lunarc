@@ -87,7 +87,8 @@ terminal_opacity() {
 }
 # A background-opacity line in your own Ghostty config wins: Ghostty reads the
 # theme's file after it, so the theme leaves the setting out then.
-own_opacity() { { grep -sE '^[[:space:]]*background-opacity[[:space:]]*=' "$GHOSTTY_MAIN" || true; } | tail -1 | sed 's/.*=[[:space:]]*//'; }
+own_setting() { { grep -sE "^[[:space:]]*$1[[:space:]]*=" "$GHOSTTY_MAIN" || true; } | tail -1 | sed 's/.*=[[:space:]]*//'; }
+own_opacity() { own_setting background-opacity; }
 
 # jq helpers: a token colour ("#rrggbb", "rgba(r,g,b,a)" or a CSS shadow
 # holding one) as Hyprland's rgba(rrggbbaa) or as #rrggbb over the background.
@@ -135,9 +136,14 @@ write_look() {
   # Ghostty: the theme's Frosted Terminal colours over the palette Noctalia writes
   # (themes/noctalia); the config includes this file.
   tmp=$(mktemp "$LOOK_GHOSTTY.XXXXXX")
-  local opacity=''
+  local opacity='' notify=''
   if [[ -z $(own_opacity) ]]; then opacity=$(terminal_opacity); fi
-  jq -r --arg opacity "$opacity" "$LOOK_JQ"'
+  # Programs' desktop notifications (OSC 9/777): off unless `terminal
+  # notifications on`; a line in the user's own config wins, as for opacity.
+  if [[ -z $(own_setting desktop-notifications) ]]; then
+    notify=false; [[ $(setting terminal.notifications off) == on ]] && notify=true
+  fi
+  jq -r --arg opacity "$opacity" --arg notify "$notify" "$LOOK_JQ"'
     .color as $c
     | "# Written by `'"$DISTRO_ID"' theme` from the theme'"'"'s design tokens; rewritten on",
       "# every theme change. Your own settings go in the main config.",
@@ -147,7 +153,8 @@ write_look() {
       "cursor-text = \($c.bg.deep)",
       "selection-background = \($c.state.selectedBg | over($c.bg.deep))",
       "selection-foreground = \($c.text.primary)",
-      (if $opacity != "" then "background-opacity = \($opacity)" else empty end)' "$TOKENS" > "$tmp" && mv "$tmp" "$LOOK_GHOSTTY" || { rm -f "$tmp"; return 1; }
+      (if $opacity != "" then "background-opacity = \($opacity)" else empty end),
+      (if $notify != "" then "desktop-notifications = \($notify)" else empty end)' "$TOKENS" > "$tmp" && mv "$tmp" "$LOOK_GHOSTTY" || { rm -f "$tmp"; return 1; }
   tmp=$(mktemp "$STYLE.XXXXXX"); chmod 644 "$tmp"
   jq --arg shape "$(shape)" --arg blur "$(blur)" '{shape: $shape, blur: ($blur == "on"), geometry: .geometry[$shape]}' "$TOKENS" > "$tmp" \
     && mv "$tmp" "$STYLE" || { rm -f "$tmp"; return 1; }

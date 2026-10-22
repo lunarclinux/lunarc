@@ -68,6 +68,8 @@ source "$root/repo.conf"
 if [[ -n $REPO_URL ]]; then
   printf '\n# %s packages (signed; key from the %s-keyring package)\n[%s]\nSigLevel = Required\nServer = %s\n' \
     "$DISTRO_NAME" "$DISTRO_ID" "$DISTRO_REPO" "$REPO_URL" >> "$MNT/etc/pacman.conf"
+  # The same packages straight from GitHub, for networks that block our domain.
+  if [[ -n ${REPO_FALLBACK:-} ]]; then printf 'Server = %s\n' "$REPO_FALLBACK" >> "$MNT/etc/pacman.conf"; fi
   # pacstrap left the install medium's copy of this repository's database in
   # the target. Its date is newer than the server's, so pacman -Sy would keep
   # it and pair it with the server's signature ("signature is invalid" on the

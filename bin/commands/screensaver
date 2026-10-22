@@ -83,9 +83,14 @@ own_effect() { [[ -f $SHARE/default/screensaver/effects/$1.py ]]; }
 
 open_window() { # open_window [effect]
   command -v ghostty >/dev/null || die "the screensaver needs Ghostty"
+  # The window opens in the colour the effects draw on, so the screen goes
+  # straight to it instead of jumping from Ghostty's background.
+  local bg colour=()
+  bg=$(theme_colour mSurface)
+  if [[ $bg =~ ^[0-9A-Fa-f]{6}$ ]]; then colour=(--background="#$bg"); fi
   # Detached, so the caller (Noctalia's idle hook, a shell) returns at once.
   setsid -f bash -c 'source "$DISTRO_LIB/lib.sh"; launch_app "$@"' _ \
-    ghostty --class="$class" --font-size=13 --window-padding-x=0 --window-padding-y=0 \
+    ghostty --class="$class" "${colour[@]}" --font-size=13 --window-padding-x=0 --window-padding-y=0 \
     --cursor-style-blink=false --cursor-opacity=0 --confirm-close-surface=false --background-opacity=1 --scrollbar=never \
     -e "/usr/bin/$DISTRO_ID" screensaver run "$@" >/dev/null 2>&1
   # The window rule normally makes it fullscreen; in some sessions it opens
@@ -137,13 +142,14 @@ case ${1:-} in
     lock=0
     if [[ ${2:-} == --lock ]]; then lock=1; shift; fi
     only=${2:-}
-    # The window opens tiled and then goes fullscreen; wait for its size to
-    # settle so the first effect is centred on the whole screen.
+    # The window rule opens it fullscreen; now and then it opens tiled first.
+    # Wait for its size to hold still (briefly: the screen shows only the bare
+    # background meanwhile) so the first effect is centred on the whole screen.
     last="" same=0
-    for _ in $(seq 30); do
+    for _ in $(seq 40); do
       size=$(stty size 2>/dev/null)
-      if [[ $size == "$last" ]]; then (( ++same >= 3 )) && break; else same=0; fi
-      last=$size; sleep 0.1
+      if [[ $size == "$last" ]]; then (( ++same >= 2 )) && break; else same=0; fi
+      last=$size; sleep 0.05
     done
     mapfile -t effects < <(effect_list)
     mapfile -t colours < <(theme_colours)

@@ -6,6 +6,8 @@ theme.shape = terminal
 theme.blur = on
 # How much the terminal shows the wallpaper: solid, frosted (the theme's own), clear, or 0.3-1.
 theme.terminal_opacity = frosted
+# Desktop notifications from programs in the terminal (Claude Code and others): on or off.
+terminal.notifications = off
 # The bar's system stats: icons, hover or inline. The moon segment: on or off.
 bar.stats = icons
 bar.moon = off

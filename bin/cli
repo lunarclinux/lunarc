@@ -21,8 +21,14 @@ usage() {
     printf '  %-12s %s\n' "${cmd##*/}" "$summary"
   done
   echo
+  echo "Short names: term (terminal)"
   echo "Run '$self <command> --help' for a command's options."
 }
+
+# Short names for commands that are long to type.
+case ${1:-} in
+  term) set -- terminal "${@:2}" ;;
+esac
 
 case ${1:-help} in
   help|-h|--help) usage ;;

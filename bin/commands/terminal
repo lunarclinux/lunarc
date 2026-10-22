@@ -17,7 +17,7 @@ current() { setting terminal ghostty; }
 
 usage() {
   cat <<USAGE
-Usage: $DISTRO_ID terminal <command>
+Usage: $DISTRO_ID terminal <command>     (or: $DISTRO_ID term <command>)
 
   list               terminals this distro knows about, and which are installed
   current            the default terminal
@@ -26,6 +26,10 @@ Usage: $DISTRO_ID terminal <command>
   launch [-- cmd]    open the default terminal, optionally running cmd
   run -- cmd         open it running cmd, then stay open at a shell prompt
                      (how the menu runs installs, updates and other commands)
+  notifications [on|off]   (or: notify on|off)
+                     let programs in the terminal (Claude Code and others) show
+                     desktop notifications; off by default. On, they disappear
+                     after a few seconds and stay out of the notification list.
 USAGE
 }
 
@@ -39,6 +43,13 @@ case ${1:-} in
       printf '%s %-10s %s\n' "$mark" "$name" "$state"
     done ;;
   current) current ;;
+  notifications|notify)
+    if [[ -z ${2:-} ]]; then setting terminal.notifications off; exit 0; fi
+    [[ $2 == on || $2 == off ]] || die "notifications: on or off"
+    set_setting terminal.notifications "$2"
+    # Written into Ghostty's settings file with the theme's look; open windows reload.
+    "/usr/bin/$DISTRO_ID" theme tokens >/dev/null || die "Ghostty's settings could not be written"
+    info "terminal notifications: $2" ;;
   install)
     [[ -n ${2:-} ]] || die "which terminal? see '$DISTRO_ID terminal list'"
     pkg=$(field "$2" 2) || die "unknown terminal: $2"
