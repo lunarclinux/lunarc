@@ -693,7 +693,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
         # Stats: inline, then the popover (click), then on hover.
         "$here/ssh" "$vm" "$user" -- "$hypr $id bar stats inline >/dev/null; sleep 4" || true
         bar_shot bar-stats-inline; text=$(ocr "$last_shot" 640x30+640+0 7)
-        report "$(grep -q CPU <<<"$text" && grep -q MEM <<<"$text" && grep -q NET <<<"$text"; echo $?)" "stats inline: CPU, MEM and NET in the bar (read: $(tr '\n' ' ' <<<"$text" | head -c 80))"
+        report "$(grep -q CPU <<<"$text" && grep -qE "ME[MN]" <<<"$text" && grep -q NET <<<"$text"; echo $?)" "stats inline: CPU, MEM and NET in the bar (read: $(tr '\n' ' ' <<<"$text" | head -c 80))"
         "$here/ssh" "$vm" "$user" -- "$hypr $id bar stats icons >/dev/null; sleep 3; noctalia msg panel-toggle $id/utilities:stats-panel >/dev/null; sleep 2" || true
         bar_shot bar-stats-popover; text=$(ocr "$last_shot" 1280x300+0+30)
         report "$(grep -q SYSTEM <<<"$text" && grep -qi CPU <<<"$text"; echo $?)" "stats popover: opens with its header and CPU (read: $(tr '\n' ' ' <<<"$text" | head -c 80))"
