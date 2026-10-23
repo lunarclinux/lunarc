@@ -116,7 +116,9 @@ boot_share=$MNT/usr/share/$DISTRO_ID/default/boot
 console_palette=$(cat "$boot_share/console-palette")
 install -Dm644 "$boot_share/wallpaper.png" "$MNT/boot/$DISTRO_ID/wallpaper.png"
 # The normal entry shows the splash; the fallback entry shows boot messages.
-base_cmdline="$root_args rootflags=subvol=@ rw $console_palette${EXTRA_CMDLINE:+ $EXTRA_CMDLINE}"
+# zswap off: Arch's kernel turns it on, but the only swap is zram, and zswap
+# in front of zram compresses every page twice (decision record 0054).
+base_cmdline="$root_args rootflags=subvol=@ rw zswap.enabled=0 $console_palette${EXTRA_CMDLINE:+ $EXTRA_CMDLINE}"
 cmdline="$base_cmdline quiet splash loglevel=3 rd.udev.log_level=3"
 cat > "$MNT/boot/limine.conf" <<CONF
 timeout: 3

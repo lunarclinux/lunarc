@@ -7,3 +7,12 @@
 font-name='Geist 11'
 document-font-name='Geist 11'
 monospace-font-name='Geist Mono 11'
+
+# File pickers (open, save, choose a folder) show a box to type a path in, not
+# only the folder buttons: a path like /mnt/nas/... is quicker to type than to
+# click to. GTK 4 and GTK 3 dialogs; Ctrl+L still switches.
+[org.gtk.gtk4.Settings.FileChooser]
+location-mode='filename-entry'
+
+[org.gtk.Settings.FileChooser]
+location-mode='filename-entry'

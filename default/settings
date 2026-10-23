@@ -8,6 +8,8 @@ theme.blur = on
 theme.terminal_opacity = frosted
 # Desktop notifications from programs in the terminal (Claude Code and others): on or off.
 terminal.notifications = off
+# The browser web apps (app install <web app>) open in: chromium, edge or chrome.
+app.web_browser = chromium
 # The bar's system stats: icons, hover or inline. The moon segment: on or off.
 bar.stats = icons
 bar.moon = off

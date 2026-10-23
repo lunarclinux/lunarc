@@ -433,6 +433,7 @@ if (( encrypt )); then
   check "TRIM passes through LUKS"     "echo '$password' | sudo -S -p '' cryptsetup status system | grep -qE 'flags: +.*discards'"
 fi
 check "weekly TRIM timer enabled"      'systemctl is-enabled --quiet fstrim.timer'
+check "zswap off (zram is the swap)"   'grep -qw zswap.enabled=0 /proc/cmdline && [ "$(cat /sys/module/zswap/parameters/enabled)" = N ]'
 check "hostname from distro.conf"      "test \"\$(cat /etc/hostname)\" = \"$(. "$repo/distro.conf"; echo "$DISTRO_ID")\""
 
 # Layer 2 and later: the desktop session.

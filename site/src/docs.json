@@ -33,6 +33,8 @@
      "parts": [{"file": "docs/manual/getting-started.md", "section": "Backups", "heading": false}]},
     {"slug": "privacy", "title": "Privacy and security", "description": "Every connection a fresh install makes, the firewall, the defaults, checking downloads.",
      "parts": [{"file": "docs/manual/privacy.md"}, {"file": "docs/manual/verify.md", "demote": true}]},
+    {"slug": "work", "title": "Lunarc at work", "description": "Company networks, VPN, work Wi-Fi, Microsoft 365, and what doesn't work.",
+     "parts": [{"file": "docs/manual/work.md", "heading": false}]},
     {"slug": "printing", "title": "Printing", "description": "Driverless network printers, other printers, how printing is set up.",
      "parts": [{"file": "docs/manual/getting-started.md", "section": "Printing", "heading": false}]},
     {"slug": "command", "title": "The lunarc command", "description": "Every subcommand, and where settings and files are kept.",
