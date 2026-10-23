@@ -16,6 +16,8 @@
 firefox          | browser   | Firefox                | repo     | firefox                     | default
 chromium         | browser   | Chromium               | repo     | chromium                    |
 brave            | browser   | Brave                  | aur      | brave-bin                   |
+edge             | browser   | Microsoft Edge (work sign-in that needs it) | aur | microsoft-edge-stable-bin | community package; sends Microsoft telemetry
+chrome           | browser   | Google Chrome          | aur      | google-chrome               | community package; sends Google telemetry
 zen              | browser   | Zen Browser            | aur      | zen-browser-bin             |
 
 # Files and documents
@@ -51,6 +53,16 @@ docker           | dev       | Containers (Podman, rootless, with docker and Com
 lazydocker       | dev       | lazydocker (Docker in the terminal) | repo | lazydocker         |
 lazygit          | dev       | lazygit (git in the terminal) | repo | lazygit                   |
 github-cli       | dev       | GitHub CLI (gh)        | repo     | github-cli                  |
+uv               | dev       | uv (Python packages and tools) | repo | uv                    |
+kubectl          | dev       | kubectl (Kubernetes)   | repo     | kubectl                     |
+aws-cli          | dev       | AWS CLI                | repo     | aws-cli-v2                  |
+azure-cli        | dev       | Azure CLI              | repo     | azure-cli                   | telemetry off (environment)
+opentofu         | dev       | OpenTofu (open Terraform fork) | repo | opentofu              |
+terraform        | dev       | Terraform              | repo     | terraform                   | BSL license; OpenTofu is the open fork
+cli-tools        | dev       | Modern command line: fzf, zoxide, eza, bat, ripgrep, fd | repo | fzf zoxide eza bat ripgrep fd | the shell starts fzf and zoxide when present
+starship         | dev       | Starship prompt (themed) | repo   | starship                    | the shell starts it when present
+atuin            | dev       | Atuin (shell history search) | repo | atuin                     | local only unless you turn on its sync
+net-tools        | dev       | Network tools: nmap, traceroute, dig | repo | nmap traceroute bind |
 postgres         | dev       | PostgreSQL (in a container) | dev      | db:postgres                 |
 mariadb          | dev       | MariaDB (in a container)    | dev      | db:mariadb                  |
 redis            | dev       | Redis (in a container)      | dev      | db:redis                    |
@@ -100,6 +112,12 @@ discord          | chat      | Discord                | repo     | discord      
 vesktop          | chat      | Vesktop (Discord client) | aur    | vesktop-bin                 |
 signal           | chat      | Signal                 | repo     | signal-desktop              |
 thunderbird      | chat      | Thunderbird            | repo     | thunderbird                 |
+teams            | chat      | Microsoft Teams (web app) | web   | https://teams.microsoft.com |
+outlook          | chat      | Outlook (web app)      | web      | https://outlook.office.com/mail |
+onenote          | documents | OneNote (web app)      | web      | https://www.onenote.com/notebooks |
+remmina          | sharing   | Remote Desktop (Remmina, RDP and VNC) | repo | remmina freerdp |
+citrix           | sharing   | Citrix Workspace       | aur      | icaclient                   | community package
+vpn-openconnect  | system    | Work VPN (Cisco AnyConnect, GlobalProtect, Fortinet) in the network menu | repo | networkmanager-openconnect | SSO/posture checks may need the vendor's client
 localsend        | sharing   | LocalSend              | aur      | localsend-bin               |
 syncthing        | sharing   | Syncthing              | repo     | syncthing                   |
 qbittorrent      | sharing   | qBittorrent            | repo     | qbittorrent                 |

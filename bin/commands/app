@@ -17,6 +17,9 @@ Usage: $DISTRO_ID app <command>
   export [file]         save your apps and a few settings to a file (default: stdout)
   import <file> [--dry-run] [--yes]
                         install what's in an exported list and apply its settings
+  web-browser [chromium|edge|chrome]
+                        the browser web apps open in (Edge for work sign-ins that
+                        need it); existing web apps switch too
 
 Categories: $(categories | tr '\n' ' ')
 USAGE
@@ -105,16 +108,33 @@ aur_install() {
   if [[ -t 0 ]]; then system_tx "install $*" yay -S --needed -- "$@"; else yay -S --needed -- "$@"; fi
 }
 
+# The browser web apps open in (`app web-browser`): Chromium by default; Edge
+# for work accounts whose sign-in needs it (Microsoft Conditional Access).
+# All three take the same app-window options.
+web_browser() {
+  case $(setting app.web_browser chromium) in
+    edge) echo "microsoft-edge-stable|edge" ;;
+    chrome) echo "google-chrome-stable|chrome" ;;
+    *) echo "chromium|chromium" ;;
+  esac
+}
+
+ensure_browser() {
+  local bin=${1%%|*} id=${1#*|}
+  command -v "$bin" >/dev/null && return 0
+  if [[ $id == chromium ]]; then install_packages chromium; else install_one "$id"; fi
+}
+
 web_install() { # web_install <id> <name> <url>
-  local file=$webapps/$DISTRO_ID-web-$1.desktop
-  if ! command -v chromium >/dev/null; then install_packages chromium; fi
+  local file=$webapps/$DISTRO_ID-web-$1.desktop browser
+  browser=$(web_browser); ensure_browser "$browser"
   mkdir -p "$webapps"
   cat > "$file" <<DESKTOP
 [Desktop Entry]
 Type=Application
 Name=$2
 Comment=$2 in its own window
-Exec=chromium --app=$3 --class=$DISTRO_ID-web-$1 --user-data-dir=${XDG_CONFIG_HOME:-$HOME/.config}/$DISTRO_ID/webapps/$1
+Exec=${browser%%|*} --app=$3 --class=$DISTRO_ID-web-$1 --user-data-dir=${XDG_CONFIG_HOME:-$HOME/.config}/$DISTRO_ID/webapps/$1
 Icon=applications-internet
 StartupWMClass=$DISTRO_ID-web-$1
 Categories=Network;
@@ -321,6 +341,17 @@ import_apps() { # import_apps <file> [--dry-run] [--yes]
 }
 
 case ${1:-} in
+  web-browser)
+    if [[ -z ${2:-} ]]; then setting app.web_browser chromium; exit 0; fi
+    case $2 in chromium|edge|chrome) ;; *) die "web-browser: chromium, edge or chrome" ;; esac
+    set_setting app.web_browser "$2"
+    browser=$(web_browser); ensure_browser "$browser"
+    # Web apps already added open in it too.
+    for f in "$webapps/$DISTRO_ID"-web-*.desktop; do
+      [[ -f $f ]] || continue
+      sed -i -E "s#^Exec=(chromium|microsoft-edge-stable|google-chrome-stable) #Exec=${browser%%|*} #" "$f"
+    done
+    info "web apps open in: $2" ;;
   list)
     if [[ -n ${2:-} ]]; then rows | awk -F'|' -v c="$2" '$2 == c' | print_rows
     else rows | print_rows; fi ;;
