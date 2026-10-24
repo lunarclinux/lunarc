@@ -11,6 +11,10 @@ Usage: $DISTRO_ID privacy [command]
 
   status                        what's on and off (the default)
   weather on|off                weather in the bar (looks up your city online)
+  weather location [where]      where it's for: a city ("Little Rock, AR"),
+                                lat,lon (no place lookup), auto (from your
+                                internet address) or time-zone (the default);
+                                asks when no place is given
   dns quad9|mullvad|cloudflare  encrypt DNS lookups (DNS over TLS) to that provider
   dns off                       use the network's own DNS server again
   connectivity on|off           the network check that detects Wi-Fi login pages
@@ -33,26 +37,110 @@ nm_check_conf=/etc/NetworkManager/conf.d/90-$DISTRO_ID-connectivity.conf
 
 weather_state() { if [[ -f $noctalia_config ]] && grep -qF "$mark_start" "$noctalia_config"; then echo on; else echo off; fi; }
 
-# Weather needs a place: the city of the time zone (only its name is sent, to
-# Noctalia's geocoder; the forecast comes from Open-Meteo). Imperial units
-# where those are the norm.
-weather_on() {
-  local zone city country unit=metric
-  [[ $(weather_state) == on ]] && { info "weather: already on"; return; }
+# Weather needs a place. Where it comes from (setting privacy.weather_location):
+#   time-zone   the city of the time zone (the default; old names like
+#               US/Central are followed to the real zone, America/Chicago)
+#   city:<name> a place you typed ("Little Rock, AR")
+#   coords:<lat>,<lon>  exact coordinates: no place lookup at all
+#   auto        from your internet address (Noctalia asks api.noctalia.dev)
+# A place name goes to Noctalia's geocoder (api.noctalia.dev); the forecast
+# comes from Open-Meteo, by coordinates. Imperial units where they're the norm.
+tz_zone() { # the time zone, with old alias names followed to the real zone
+  local zone k
   zone=$(timedatectl show -p Timezone --value 2>/dev/null || true)
-  city=${zone##*/}; city=${city//_/ }
-  [[ $zone == */* && -n $city ]] || die "no time zone set; set one first (timedatectl set-timezone Region/City)"
-  country=$(awk -v z="$zone" '$3 == z { print $1; exit }' /usr/share/zoneinfo/zone.tab 2>/dev/null)
-  case $country in US|LR|MM) unit=imperial ;; esac
+  for k in 1 2 3; do
+    if awk -F'\t' -v z="$zone" '$3 == z { f = 1 } END { exit !f }' /usr/share/zoneinfo/zone.tab 2>/dev/null; then break; fi
+    local real
+    real=$(awk -v z="$zone" '$1 == "L" && $3 == z { print $2; exit }' /usr/share/zoneinfo/tzdata.zi 2>/dev/null)
+    [[ -n $real ]] || break
+    zone=$real
+  done
+  printf '%s\n' "$zone"
+}
+
+weather_location() { setting privacy.weather_location time-zone; }
+
+# The [location] lines for a location setting, or an error.
+location_lines() { # location_lines <setting>
+  local zone city lat lon
+  case $1 in
+    time-zone|"")
+      zone=$(tz_zone); city=${zone##*/}; city=${city//_/ }
+      [[ $zone == */* && -n $city ]] || die "no time zone set; set one first (timedatectl set-timezone Region/City), or give a city"
+      printf 'address = "%s"\n' "$city" ;;
+    city:*)
+      city=${1#city:}
+      [[ $city =~ ^[[:alnum:][:space:].,\'-]{2,80}$ ]] || die "a city name: letters, spaces and . , ' - only"
+      printf 'address = "%s"\n' "$city" ;;
+    coords:*)
+      lat=${1#coords:}; lon=${lat#*,}; lat=${lat%%,*}
+      [[ $lat =~ ^-?[0-9]{1,2}(\.[0-9]+)?$ && $lon =~ ^-?[0-9]{1,3}(\.[0-9]+)?$ ]] || die "coordinates as latitude,longitude, e.g. 34.75,-92.29"
+      printf 'latitude = %s\nlongitude = %s\n' "$lat" "$lon" ;;
+    auto) printf 'auto_locate = true\n' ;;
+    *) die "unknown location: $1" ;;
+  esac
+}
+
+weather_unit() {
+  local country
+  country=$(awk -v z="$(tz_zone)" '$3 == z { print $1; exit }' /usr/share/zoneinfo/zone.tab 2>/dev/null)
+  case $country in US|LR|MM) echo imperial ;; *) echo metric ;; esac
+}
+
+# Writes the managed block for the current location setting (replacing it).
+write_weather() {
+  local lines
+  lines=$(location_lines "$(weather_location)")
   mkdir -p "${noctalia_config%/*}"; touch "$noctalia_config"
+  sed -i "\|^$mark_start\$|,\|^$mark_end\$|d" "$noctalia_config"
   if grep -qE '^\[(location|weather)\]' "$noctalia_config"; then
     die "your $noctalia_config already has its own [location] or [weather] section; set enabled = true under [weather] there"
   fi
-  printf '\n%s\n# Turned on with `%s privacy weather on`; `off` removes this block.\n[location]\naddress = "%s"\n\n[weather]\nenabled = true\nunit = "%s"\n%s\n' \
-    "$mark_start" "$DISTRO_ID" "$city" "$unit" "$mark_end" >> "$noctalia_config"
+  printf '\n%s\n# Turned on with `%s privacy weather on`; `off` removes this block.\n[location]\n%s\n\n[weather]\nenabled = true\nunit = "%s"\n%s\n' \
+    "$mark_start" "$DISTRO_ID" "$lines" "$(weather_unit)" "$mark_end" >> "$noctalia_config"
+}
+
+describe_location() {
+  case $(weather_location) in
+    time-zone) zone=$(tz_zone); printf '%s, from the time zone\n' "${zone##*/}" | tr '_' ' ' ;;
+    city:*) printf '%s\n' "${1:-$(weather_location)}" | sed 's/^city://' ;;
+    coords:*) printf 'coordinates %s\n' "$(weather_location | sed 's/^coords://')" ;;
+    auto) echo "found from your internet address" ;;
+  esac
+}
+
+weather_on() {
+  [[ $(weather_state) == on ]] && { info "weather: already on ($(describe_location))"; return; }
+  write_weather
   set_setting privacy.weather on
   bar_apply
-  info "weather: on ($city)"
+  info "weather: on ($(describe_location))"
+}
+
+# Choose where the weather is for: with an argument, or asked in a terminal.
+weather_set_location() { # weather_set_location [time-zone|auto|<lat>,<lon>|<city>]
+  local want=${1:-} choice
+  if [[ -z $want ]]; then
+    [[ -t 0 ]] || die "where? $DISTRO_ID privacy weather location <city>|<lat>,<lon>|auto|time-zone"
+    choice=$(gum choose --header "Weather for where? (now: $(describe_location))" \
+      "The city of my time zone" "A city I type" "Exact coordinates (no place lookup)" \
+      "Find it from my internet address") || exit 0
+    case $choice in
+      "The city of my time zone") want=time-zone ;;
+      "A city I type") want=$(gum input --header "City (e.g. Little Rock, AR)" --placeholder "City") || exit 0 ;;
+      "Exact coordinates"*) want=$(gum input --header "Latitude,longitude (e.g. 34.75,-92.29)" --placeholder "lat,lon") || exit 0 ;;
+      *) want=auto ;;
+    esac
+  fi
+  case $want in
+    time-zone|auto) ;;
+    *,*) [[ $want =~ ^[[:space:]]*-?[0-9.]+[[:space:]]*,[[:space:]]*-?[0-9.]+[[:space:]]*$ ]] && want="coords:${want//[[:space:]]/}" || want="city:$want" ;;
+    *) want="city:$want" ;;
+  esac
+  location_lines "$want" >/dev/null     # validates; dies with the reason
+  set_setting privacy.weather_location "$want"
+  if [[ $(weather_state) == on ]]; then write_weather; bar_apply; fi
+  info "weather location: $(describe_location)$([[ $(weather_state) == on ]] || echo " (weather is off: $DISTRO_ID privacy weather on)")"
 }
 
 weather_off() {
@@ -129,7 +217,7 @@ connectivity() { # connectivity on|off
 }
 
 status() {
-  printf '%-22s %s\n' "weather in the bar" "$(weather_state)"
+  printf '%-22s %s\n' "weather in the bar" "$(weather_state)$([[ $(weather_state) == on ]] && echo " ($(describe_location))")"
   printf '%-22s %s\n' "encrypted DNS" "$(dns_state)"
   printf '%-22s %s\n' "connectivity check" "$(connectivity_state)"
   printf '%-22s %s\n' "AUR search in menu" "$(setting privacy.aur_search on)"
@@ -143,7 +231,12 @@ status() {
 case ${1:-status} in
   status) status ;;
   weather)
-    case ${2:-} in on) weather_on ;; off) weather_off ;; *) die "weather on or off?" ;; esac ;;
+    case ${2:-} in
+      on) weather_on ;; off) weather_off ;;
+      location) weather_set_location "${*:3}" ;;
+      "") info "weather: $(weather_state)$([[ $(weather_state) == on ]] && echo " ($(describe_location))")" ;;
+      *) die "weather on, off, or location?" ;;
+    esac ;;
   dns)
     case ${2:-} in
       off) dns_off ;;

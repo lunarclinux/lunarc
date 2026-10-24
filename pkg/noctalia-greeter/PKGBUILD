@@ -14,6 +14,10 @@
 # session-list.patch (ours): session files named in NOCTALIA_GREETER_HIDE_SESSIONS
 # (file names, :-separated) are left out of the session list, and the session
 # picker is left out when only one session remains.
+# login-polish.patch (ours): a "wrong password" message goes away as soon as
+# typing starts again, and shows above the password field instead of below;
+# [appearance] show_password_toggle = false hides the eye that shows what's
+# typed (on by default; `<id> theme greeter show-password on|off`).
 #
 # A host build (pkg/build without --chroot) skips makedepends, so the build
 # machine may lack the libraries it builds against. Then the exact Arch
@@ -25,7 +29,7 @@
 pkgname=noctalia-greeter
 epoch=1
 pkgver=1.6.0
-pkgrel=3
+pkgrel=4
 pkgdesc="greetd login greeter in Noctalia's look, with a bundled wlroots compositor"
 arch=(x86_64)
 url="https://github.com/noctalia-dev/noctalia-greeter"
@@ -36,10 +40,12 @@ makedepends=(meson ninja nlohmann-json pkgconf stb wayland-protocols)
 options=(!debug)
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz"
         no-hold.patch
-        session-list.patch)
+        session-list.patch
+        login-polish.patch)
 sha256sums=('f23ebf07cbe4508971c08b0b81d2b5bfc4ec1ec45605d8f8fb01b799743a70b6'
             '1c4e98c66a4ee89715fbfc513b06bf488168d892782e2632745a709a5231b9af'
-            '09541ec750d7038f916ce62b62b4cc16b0970b3467b7b3af03bd4f0fbd307fd4')
+            '09541ec750d7038f916ce62b62b4cc16b0970b3467b7b3af03bd4f0fbd307fd4'
+            '32184fc65c0989c1e129a749d55bc2c5813a2c4bee62744f0b7b237dbf0f1175')
 
 # Build-only libraries, when this machine doesn't have them (signatures checked
 # against Arch's keyring when these were pinned).
@@ -75,6 +81,7 @@ _meson() {
 prepare() {
   patch -d "$pkgname-$pkgver" -p1 < no-hold.patch
   patch -d "$pkgname-$pkgver" -p1 < session-list.patch
+  patch -d "$pkgname-$pkgver" -p1 < login-polish.patch
   rm -rf buildlibs
   _have_buildlibs && return 0
   # /.arch-chroot: devtools' clean chroot, where depends and makedepends are installed.

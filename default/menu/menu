@@ -65,7 +65,8 @@ Setup | Terminal notifications: on | Claude Code and other programs; vanish afte
 Setup | Terminal notifications: off | the default | @DISTRO_ID@ terminal notifications off
 Setup | Coding agent | the default one | menu: agent
 Setup | Open the coding agent | SUPER+A | @DISTRO_ID@ agent open
-Setup | Privacy | what connects where | term: @DISTRO_ID@ privacy; echo; echo "Change: @DISTRO_ID@ privacy weather on|off, dns quad9|mullvad|cloudflare|off, connectivity on|off, aur-search on|off"
+Setup | Weather location | your city, coordinates or automatic | term: @DISTRO_ID@ privacy weather location
+Setup | Privacy | what connects where | term: @DISTRO_ID@ privacy; echo; echo "Change: @DISTRO_ID@ privacy weather on or off; dns quad9, mullvad, cloudflare or off; connectivity on or off; aur-search on or off"
 Setup | Firewall | what may connect in | term: @DISTRO_ID@ firewall status; echo; @DISTRO_ID@ firewall apps; echo; echo "Allow one: @DISTRO_ID@ firewall allow <app or port>"
 Setup | Firmware updates | BIOS, SSD, devices | term: @DISTRO_ID@ update firmware
 Setup | Shell settings | bar, launcher, notifications | noctalia msg settings-open

@@ -225,6 +225,11 @@ changing them changes it too (from the desktop, not over SSH; `lunarc theme
 greeter` does it again). If it ever can't start, a
 plain text login appears instead and works the same way.
 
+Once you start typing, an eye at the end of the password field shows what you've
+typed (click it again to hide it); `lunarc theme greeter show-password off`
+removes it. A message such as a wrong password shows above the field and goes
+away as soon as you type again.
+
 It starts the Lunarc desktop. If you install another desktop (GNOME, Plasma…),
 a session list appears under the password box to choose it; Lunarc is
 preselected each time.
