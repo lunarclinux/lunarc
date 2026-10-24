@@ -51,6 +51,14 @@ id = "sound"
 entry = "sound.luau"
 
 [[widget]]
+id = "network"
+entry = "network.luau"
+
+[[widget]]
+id = "bell"
+entry = "bell.luau"
+
+[[widget]]
 id = "divider"
 entry = "divider.luau"
 
@@ -99,6 +107,24 @@ entry = "stay-awake-shortcut.luau"
 [[shortcut]]
 id = "nightlight-shortcut"
 entry = "nightlight-shortcut.luau"
+
+# The network popover, under the network segment.
+[[panel]]
+id = "network-panel"
+entry = "network-panel.luau"
+width = 380
+height = 560
+placement = "floating"
+open_near_click = true
+
+# The notification popover, under the bell.
+[[panel]]
+id = "notify-panel"
+entry = "notify-panel.luau"
+width = 400
+height = 560
+placement = "floating"
+open_near_click = true
 
 # The sound popover, under the sound segment: output and microphone.
 [[panel]]
