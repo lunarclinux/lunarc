@@ -17,6 +17,13 @@ From the menu, installs and removals run in an ordinary terminal window you can 
 Either way a snapshot of the system is taken first, so an install can be undone like an
 update (see Updates and snapshots).
 
+**Debug packages.** Apps built from the AUR don't come with a separate `-debug`
+package of debug symbols on Lunarc (Arch's default makes one for every build).
+To get them back, for a readable backtrace when an app crashes, put
+`OPTIONS+=(debug)` in `~/.config/pacman/makepkg.conf` and rebuild the app
+(`yay -S --rebuild <app>`). Debug packages from before this change can be listed
+with `pacman -Qq | grep -- '-debug$'` and removed with `sudo pacman -Rns <name>`.
+
 ## The catalog
 
 `lunarc app list` shows the apps Lunarc knows how to install, by category, with a `*`
