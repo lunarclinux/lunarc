@@ -139,6 +139,19 @@ decoration = false
 keyboard_focus = "exclusive"
 capture_keys = ["Up", "Down", "Return", "BackSpace", "ctrl+r"]
 
+# The theme picker (`@DISTRO_ID@ theme pick`, SUPER+SHIFT+Space): every theme
+# as a picture, chosen with the arrow keys. Its own surface, like the menu.
+[[panel]]
+id = "themes"
+entry = "theme-picker.luau"
+width = 1180
+height = 620
+placement = "floating"
+position = "center"
+decoration = false
+keyboard_focus = "exclusive"
+capture_keys = ["Left", "Right", "Up", "Down", "Return"]
+
 # Now playing, under the media segment (Frosted Terminal popovers, decision
 # record 0043): drawn by the plugin like the menu, so it grows with up next.
 # Space plays or pauses, Left and Right seek.

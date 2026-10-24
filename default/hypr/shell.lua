@@ -7,6 +7,7 @@ local bind = dofile("/usr/share/@DISTRO_ID@/default/hypr/bind.lua")
 -- install, remove, update and system in one keyboard list, a panel of the
 -- distro's utilities plugin. Typing filters it, apps and deeper items included.
 bind(mod .. " + Space", "Menu: apps and everything else", shell("panel-toggle @DISTRO_ID@/utilities:menu"))
+bind(mod .. " + SHIFT + Space", "Pick a theme", shell("panel-toggle @DISTRO_ID@/utilities:themes"))
 bind(mod .. " + S", "Quick settings", shell("panel-toggle control-center"))
 bind(mod .. " + comma", "Shell settings", shell("settings-toggle"))
 -- The lock: the screensaver plays behind it (`@DISTRO_ID@ lock`); falls back to

@@ -13,6 +13,8 @@ Usage: $DISTRO_ID theme <command>
   list [--plain]             available themes (* marks the current one);
                              --plain prints "name<TAB>description" for scripts
   current                    the current theme
+  pick                       choose a theme from pictures of them all
+                             (SUPER+SHIFT+Space; arrow keys, Enter)
   set <theme> [dark|light]   switch theme; the mode defaults to the theme's own
   mode <dark|light>          switch the current theme between dark and light
   preview [theme]            colour swatches for every theme (or one) in the terminal
@@ -248,6 +250,9 @@ case ${1:-} in
         printf '%s %-12s %s\n' "$mark" "$name" "$(meta "$name" description)"
       fi
     done < <(theme_names) ;;
+  pick)
+    shell_ready || die "the desktop shell isn't running"
+    noctalia msg panel-toggle "$DISTRO_ID/utilities:themes" >/dev/null ;;
   current) printf '%s (%s)\n' "$(setting theme)" "$(setting theme.mode)" ;;
   set)
     name=${2:-}; [[ -n $name && -d $themes/$name ]] || die "unknown theme '${name}'; see '$DISTRO_ID theme list'"

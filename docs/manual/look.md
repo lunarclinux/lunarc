@@ -22,6 +22,7 @@ windows, terminals, GTK and Qt apps and the login screen, and its wallpaper.
 
 | Command | Does |
 |---|---|
+| `lunarc theme pick` | Pick from pictures of every theme (SUPER+SHIFT+Space, or Style → Theme in the menu): ←→ move, ↑↓ dark or light, Enter uses it |
 | `lunarc theme list` | The themes, with a line about each |
 | `lunarc theme set nord` | Switch theme (add `dark` or `light` to pick the variant) |
 | `lunarc theme mode light` | The current theme's light (or `dark`) colours |
