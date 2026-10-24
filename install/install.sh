@@ -174,6 +174,8 @@ if (( ! DRY_RUN )) && [[ -d $MNT/var/log ]]; then cp "$INSTALL_LOG" "$MNT/var/lo
 ui_header "Done"
 printf '  %s%s%s is installed.%s\n\n' "$C_BOLD" "$C_TEXT" "$DISTRO_NAME" "$C_OFF"
 printf '  %sRemove the USB stick, then restart to start using it.%s\n' "$C_TEXT" "$C_OFF"
+printf '  %sIf Bluetooth or Wi-Fi is missing afterwards, shut down fully and switch on again:%s\n' "$C_MUTED" "$C_OFF"
+printf '  %ssome wireless cards only reset when the power is off.%s\n' "$C_MUTED" "$C_OFF"
 if (( AUTOLOGIN && ! ENCRYPT )); then
   printf '  %sSaved passwords are locked until you type your password once after each start.%s\n' "$C_MUTED" "$C_OFF"
 fi

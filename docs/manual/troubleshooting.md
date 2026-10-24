@@ -27,6 +27,12 @@ in `/etc/pacman.conf`:
 The packages and the database are signed either way, so the source doesn't change
 what pacman accepts.
 
+**Bluetooth or Wi-Fi is missing after installing (or after using Windows).** Some
+combined Wi-Fi and Bluetooth cards keep the state the last system left them in, and a
+restart doesn't reset them. Shut down completely, wait a few seconds and switch on
+again. If you also use Windows, turning off its Fast Startup (Control Panel, Power
+Options, Choose what the power buttons do) stops it from leaving the card in that state.
+
 ## Starting up
 
 **The old system's boot menu opens instead of Lunarc's** (after installing over another
