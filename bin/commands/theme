@@ -20,6 +20,9 @@ Usage: $DISTRO_ID theme <command>
   wallpaper next|prev        cycle through them
   wallpaper set <n>          use wallpaper number n
   greeter                    use the current theme on the login screen too
+  greeter show-password [on|off]
+                             the eye in the login screen's password field that
+                             shows what's typed (on by default)
                              (done on every change; the last one chosen wins)
   shape [terminal|rounded]   window corners, the bar, menus and the login screen:
                              terminal (small corners, the bar edge to edge;
@@ -210,11 +213,12 @@ apply_wallpaper() { # apply_wallpaper <theme> <n>
 # The login screen shows the theme too: a root helper, allowed without a
 # password for the person at the computer. Elsewhere (SSH) it's refused, and
 # the theme still changes.
-greeter_apply() { # greeter_apply <theme> <mode> <wallpaper n> (and the current shape)
-  local helper=$DISTRO_LIB/greeter-theme
+greeter_apply() { # greeter_apply <theme> <mode> <wallpaper n> (and the current shape and password eye)
+  local helper=$DISTRO_LIB/greeter-theme reveal
   [[ -x $helper ]] || return 1
-  if (( EUID == 0 )); then "$helper" "$@" "$(shape)"
-  else timeout 10 pkexec --disable-internal-agent "$helper" "$@" "$(shape)"
+  reveal=$(setting login.show_password on); [[ $reveal == off ]] || reveal=on
+  if (( EUID == 0 )); then "$helper" "$@" "$(shape)" "$reveal"
+  else timeout 10 pkexec --disable-internal-agent "$helper" "$@" "$(shape)" "$reveal"
   fi
 }
 
@@ -314,6 +318,13 @@ case ${1:-} in
       info "terminal opacity: $choice ($(terminal_opacity))"
     fi ;;
   greeter)
+    if [[ ${2:-} == show-password ]]; then
+      case ${3:-} in
+        "") info "password eye on the login screen: $(setting login.show_password on)"; exit 0 ;;
+        on|off) set_setting login.show_password "$3" ;;
+        *) die "show-password on or off" ;;
+      esac
+    fi
     name=$(setting theme)
     greeter_apply "$name" "$(setting theme.mode)" "$(wallpaper_index "$name")" \
       || die "the login screen couldn't be changed from here; run this on the computer itself"

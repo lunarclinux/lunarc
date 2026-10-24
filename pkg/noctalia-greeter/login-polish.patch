@@ -1,0 +1,194 @@
+diff -ruN a/src/greeter/greeter_config_io.cpp b/src/greeter/greeter_config_io.cpp
+--- a/src/greeter/greeter_config_io.cpp	2026-10-24 07:24:00.379470568 -0500
++++ b/src/greeter/greeter_config_io.cpp	2026-10-24 07:24:00.385618847 -0500
+@@ -65,6 +65,7 @@
+     return key == "scheme"
+         || key == "password_style"
+         || key == "hide_logo"
++        || key == "show_password_toggle"
+         || key == "power_buttons_position"
+         || key == "scheme_selector_position"
+         || key == "theme_mode"
+@@ -228,6 +229,10 @@
+             if (const auto value = entryNode.value<bool>()) {
+               config.appearanceHideLogo = *value;
+             }
++          } else if (entryView == "show_password_toggle") {
++            if (const auto value = entryNode.value<bool>()) {
++              config.appearanceShowPasswordToggle = *value;
++            }
+           } else if (entryView == "power_buttons_position") {
+             config.appearancePowerButtonsPosition = stringValue(entryNode);
+           } else if (entryView == "scheme_selector_position") {
+@@ -497,6 +502,9 @@
+     if (config.appearanceHideLogo.has_value()) {
+       appearance.insert_or_assign("hide_logo", *config.appearanceHideLogo);
+     }
++    if (config.appearanceShowPasswordToggle.has_value()) {
++      appearance.insert_or_assign("show_password_toggle", *config.appearanceShowPasswordToggle);
++    }
+     insertString(
+         appearance, "power_buttons_position", config.appearancePowerButtonsPosition,
+         [](toml::table& table, std::string_view key, const std::string& value) {
+diff -ruN a/src/greeter/greeter_config_store.h b/src/greeter/greeter_config_store.h
+--- a/src/greeter/greeter_config_store.h	2026-10-24 07:24:00.379480138 -0500
++++ b/src/greeter/greeter_config_store.h	2026-10-24 07:24:00.385390215 -0500
+@@ -46,6 +46,7 @@
+     std::optional<std::string> appearanceScheme;
+     std::optional<std::string> appearancePasswordStyle;
+     std::optional<bool> appearanceHideLogo;
++    std::optional<bool> appearanceShowPasswordToggle;
+     // UI element positioning: "hidden", "bottom-left", "bottom-right", "top-left", "top-right"
+     std::optional<std::string> appearancePowerButtonsPosition;
+     std::optional<std::string> appearanceSchemeSelectorPosition;
+diff -ruN a/src/greeter/greeter_preferences.cpp b/src/greeter/greeter_preferences.cpp
+--- a/src/greeter/greeter_preferences.cpp	2026-10-24 07:24:00.379483498 -0500
++++ b/src/greeter/greeter_preferences.cpp	2026-10-24 07:24:00.385664357 -0500
+@@ -421,6 +421,9 @@
+     if (file.appearanceHideLogo.has_value()) {
+       prefs.hideLogo = *file.appearanceHideLogo;
+     }
++    if (file.appearanceShowPasswordToggle.has_value()) {
++      prefs.showPasswordToggle = *file.appearanceShowPasswordToggle;
++    }
+     prefs.powerButtonsPosition = file.appearancePowerButtonsPosition;
+     prefs.schemeSelectorPosition = file.appearanceSchemeSelectorPosition;
+     if (file.authAllowEmptyPassword.has_value()) {
+diff -ruN a/src/greeter/greeter_preferences.h b/src/greeter/greeter_preferences.h
+--- a/src/greeter/greeter_preferences.h	2026-10-24 07:24:00.379487768 -0500
++++ b/src/greeter/greeter_preferences.h	2026-10-24 07:24:00.385641177 -0500
+@@ -33,6 +33,8 @@
+     bool allowEmptyPassword = false;
+     int authRequestTimeoutSec = 60;
+     bool hideLogo = false;
++    // The eye in the password field that shows what's typed.
++    bool showPasswordToggle = true;
+     // UI element positioning: "hidden", "bottom-left", "bottom-right", "top-left", "top-right"
+     std::optional<std::string> powerButtonsPosition;
+     std::optional<std::string> schemeSelectorPosition;
+diff -ruN a/src/greeter/greeter_surface.cpp b/src/greeter/greeter_surface.cpp
+--- a/src/greeter/greeter_surface.cpp	2026-10-24 07:24:00.379529078 -0500
++++ b/src/greeter/greeter_surface.cpp	2026-10-24 07:24:00.386493583 -0500
+@@ -304,7 +304,14 @@
+   pwField->setPlaceholder("Type password");
+   pwField->setPasswordMode(true);
+   pwField->setControlHeight(Style::controlHeight());
+-  pwField->setOnChange([this](const std::string& value) { m_password = value; });
++  pwField->setOnChange([this](const std::string& value) {
++    m_password = value;
++    // An error ("wrong password") goes as soon as typing starts again, so the
++    // new keystrokes are clearly landing. Neutral hints (PAM info) stay.
++    if (!value.empty() && m_statusIsError && !m_status.empty() && !m_authenticating) {
++      updateStatus("", false);
++    }
++  });
+   pwField->setOnSubmit([this](const std::string&) { tryAuthenticate(); });
+   m_passwordField = pwField.get();
+   m_passwordField->setZIndex(6);
+@@ -1201,7 +1208,10 @@
+     );
+     headerY += subtitleGap;
+   }
+-  const float contentTop = panelY + panelTopPadding + headerBlockHeight;
++  // The status line sits above the password field (between the user name and
++  // the field), so it's read before typing again; the field moves down for it.
++  const float statusTop = panelY + panelTopPadding + headerBlockHeight;
++  const float contentTop = statusTop + statusBlockHeight;
+ 
+   if (m_panelDivider != nullptr)
+     m_panelDivider->setVisible(false);
+@@ -1337,7 +1347,7 @@
+   }
+ 
+   if (hasStatus) {
+-    const float statusY = contentTop + contentBlockHeight + statusGap;
++    const float statusY = statusTop;
+     m_statusLabel->setVisible(true);
+     m_statusLabel->setPosition((contentLeft), (statusY));
+   } else {
+@@ -2079,6 +2089,10 @@
+   }
+ 
+   m_hideLogo = prefs.hideLogo;
++  m_showPasswordToggle = prefs.showPasswordToggle;
++  if (m_passwordField != nullptr) {
++    m_passwordField->setRevealAllowed(m_showPasswordToggle);
++  }
+   m_powerButtonsPosition = prefs.powerButtonsPosition.value_or("bottom-right");
+   m_schemeSelectorPosition = prefs.schemeSelectorPosition.value_or("top-right");
+ }
+diff -ruN a/src/greeter/greeter_surface.h b/src/greeter/greeter_surface.h
+--- a/src/greeter/greeter_surface.h	2026-10-24 07:24:00.379543998 -0500
++++ b/src/greeter/greeter_surface.h	2026-10-24 07:24:00.385808658 -0500
+@@ -266,6 +266,7 @@
+   bool m_wallpaperDirty = false;
+   bool m_hasWallpaper = false;
+   bool m_hideLogo = false;
++  bool m_showPasswordToggle = true;
+   // UI element positioning: "hidden", "bottom-left", "bottom-right", "top-left", "top-right"
+   std::string m_powerButtonsPosition;
+   std::string m_schemeSelectorPosition;
+diff -ruN a/src/ui/controls/input.cpp b/src/ui/controls/input.cpp
+--- a/src/ui/controls/input.cpp	2026-10-24 07:24:00.379940231 -0500
++++ b/src/ui/controls/input.cpp	2026-10-24 07:24:00.385782958 -0500
+@@ -155,7 +155,23 @@
+   applyVisualState();
+ }
+ 
++void Input::setRevealAllowed(bool allowed) {
++  if (m_revealAllowed == allowed) {
++    return;
++  }
++  m_revealAllowed = allowed;
++  if (!m_revealAllowed && m_revealPassword) {
++    m_revealPassword = false;
++    m_revealIcon->setCodepoint(GlyphRegistry::lookup("eye"));
++    updateDisplayText();
++  }
++  markLayoutDirty();
++}
++
+ void Input::toggleReveal() {
++  if (!m_revealAllowed) {
++    return;
++  }
+   m_revealPassword = !m_revealPassword;
+   m_revealIcon->setCodepoint(GlyphRegistry::lookup(m_revealPassword ? "eye-off" : "eye"));
+   updateDisplayText();
+@@ -486,7 +502,7 @@
+     m_inputArea->setSize(w, h);
+   }
+ 
+-  const bool showReveal = m_passwordMode && !m_value.empty();
++  const bool showReveal = m_passwordMode && m_revealAllowed && !m_value.empty();
+   if (m_revealIcon != nullptr && m_revealArea != nullptr) {
+     m_revealIcon->setVisible(showReveal);
+     m_revealArea->setEnabled(showReveal);
+@@ -702,7 +718,7 @@
+ }
+ 
+ float Input::revealSlotWidth() const noexcept {
+-  if (!m_passwordMode || m_value.empty()) {
++  if (!m_passwordMode || !m_revealAllowed || m_value.empty()) {
+     return 0.0f;
+   }
+   return std::round(m_fontSize * kRevealIconScale) + Style::spaceMd() + Style::spaceSm();
+diff -ruN a/src/ui/controls/input.h b/src/ui/controls/input.h
+--- a/src/ui/controls/input.h	2026-10-24 07:24:00.379946401 -0500
++++ b/src/ui/controls/input.h	2026-10-24 07:24:00.385690657 -0500
+@@ -29,6 +29,7 @@
+   void setFontSize(float size);
+   void setControlHeight(float height);
+   void setPasswordMode(bool enabled);
++  void setRevealAllowed(bool allowed);
+   void setInvalid(bool invalid);
+   void setEnabled(bool enabled);
+   void setBold(bool bold);
+@@ -102,6 +103,7 @@
+   float m_controlHeight = 36.0f;
+   bool m_passwordMode = false;
+   bool m_revealPassword = false;
++  bool m_revealAllowed = true;
+   bool m_invalid = false;
+   bool m_enabled = true;
+   bool m_embeddedStyle = false;

@@ -5,8 +5,9 @@
 # password, and nobody else. The arguments only pick among installed themes,
 # and everything written comes from the distro's own files.
 #
-#   greeter-theme [<theme> <dark|light> <wallpaper number> [terminal|rounded]]
-#   (none: the default theme; the shape defaults to terminal)
+#   greeter-theme [<theme> <dark|light> <wallpaper number> [terminal|rounded [on|off]]]
+#   (none: the default theme; the shape defaults to terminal; on|off: the eye
+#   in the password field that shows what's typed, on by default)
 #
 # Writes /var/lib/<distro id>/greeter.toml; the greeter reads it through a link
 # from its own state folder (owned by the greeter user, so nothing is written there).
@@ -15,13 +16,14 @@ die() { echo "greeter-theme: $*" >&2; exit 2; }
 (( EUID == 0 )) || { echo "greeter-theme: must run as root" >&2; exit 1; }
 share=/usr/share/@DISTRO_ID@
 default() { awk -F' *= *' -v k="$1" '$1 == k { print $2; exit }' "$share/default/settings"; }
-shape=terminal
+shape=terminal reveal=on
 case $# in
   0) name=$(default theme) mode=$(default theme.mode) n=1 ;;
-  3|4) name=$1 mode=$2 n=$3 shape=${4:-terminal} ;;
-  *) die "usage: greeter-theme [<theme> <dark|light> <wallpaper number> [terminal|rounded]]" ;;
+  3|4|5) name=$1 mode=$2 n=$3 shape=${4:-terminal} reveal=${5:-on} ;;
+  *) die "usage: greeter-theme [<theme> <dark|light> <wallpaper number> [terminal|rounded [on|off]]]" ;;
 esac
 [[ $shape == terminal || $shape == rounded ]] || die "shape must be terminal or rounded"
+[[ $reveal == on || $reveal == off ]] || die "the password eye is on or off"
 [[ $name =~ ^[a-z0-9][a-z0-9-]*$ && -f $share/themes/$name/palette.json ]] || die "unknown theme '$name'"
 [[ $mode == dark || $mode == light ]] || die "mode must be dark or light"
 palette=$share/themes/$name/palette.json
@@ -82,7 +84,8 @@ trap 'rm -f "$tmp"' EXIT
   printf '[session]\ndefault = "@DISTRO_NAME@"\n\n'
   printf '[appearance]\nscheme = "Synced"\ntheme_mode = "%s"\nfont_family = "Geist Mono"\n' "$mode"
   printf 'corner_radius_scale = %s\n' "$radius"
-  printf 'hide_logo = true\nscheme_selector_position = "hidden"\n\n'
+  printf 'hide_logo = true\nscheme_selector_position = "hidden"\n'
+  printf 'show_password_toggle = %s\n\n' "$([[ $reveal == on ]] && echo true || echo false)"
   printf '[appearance.palette]\n%s\n\n' "$colours"
   printf '[appearance.wallpaper]\n'
   if [[ -n $wallpaper ]]; then printf 'path = "%s"\nfill_mode = "crop"\n' "$wallpaper"; fi
