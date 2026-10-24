@@ -36,7 +36,7 @@ function M.status(cb)
       if f[2] == "wifi" then st.wifiDevice = f[1] end
     end
     noctalia.runAsync({ "nmcli", "radio", "wifi" }, function(r2)
-      st.radio = noctalia.trim(r2.stdout or "") == "enabled"
+      st.radio = noctalia.string.trim(r2.stdout or "") == "enabled"
       cb(st)
     end)
   end)

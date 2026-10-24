@@ -35,8 +35,8 @@ function M.load(cb)
     end)
   end
   list("sinks", "sinks"); list("sources", "sources")
-  noctalia.runAsync({ "pactl", "get-default-sink" }, function(r) out.sink = noctalia.trim(r.stdout or ""); done() end)
-  noctalia.runAsync({ "pactl", "get-default-source" }, function(r) out.source = noctalia.trim(r.stdout or ""); done() end)
+  noctalia.runAsync({ "pactl", "get-default-sink" }, function(r) out.sink = noctalia.string.trim(r.stdout or ""); done() end)
+  noctalia.runAsync({ "pactl", "get-default-source" }, function(r) out.source = noctalia.string.trim(r.stdout or ""); done() end)
 end
 
 function M.find(list, name)

@@ -35,7 +35,7 @@ function M.load(cb)
 end
 
 function M.seen(cb)
-  noctalia.readFileAsync(M.seenFile, function(text, _err) cb(tonumber(text and noctalia.trim(text)) or 0) end)
+  noctalia.readFileAsync(M.seenFile, function(text, _err) cb(tonumber(text and noctalia.string.trim(text)) or 0) end)
 end
 
 function M.markSeen()
@@ -54,7 +54,7 @@ end
 
 function M.dnd(cb)
   noctalia.runAsync({ "noctalia", "msg", "notification-dnd-status" }, function(r)
-    cb(noctalia.trim(r.stdout or "") == "on")
+    cb(noctalia.string.trim(r.stdout or "") == "on")
   end)
 end
 
