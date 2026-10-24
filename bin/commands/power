@@ -17,6 +17,12 @@ Usage: $DISTRO_ID power <command>
   hibernate enable|disable    hibernation (encrypted installs only)
   hibernate                   show whether hibernation is on
   hibernate now               hibernate now (when it's on)
+  mode [battery|auto|performance]
+                              laptop performance: battery (the default: the
+                              built-in screen at its usual rate), auto (plugged
+                              in: its fastest refresh rate and the performance
+                              power profile), or performance (always, even on
+                              battery: shorter battery life)
 
 Some batteries take a level (on = 80%); others, like Lenovo's, only have
 battery care on or off and the firmware picks the level (about 60-80%).
@@ -150,13 +156,36 @@ notify() { # notify <urgency> <title> <body>
 # Two alerts after Noctalia's own low-battery warning (20%): a persistent one,
 # and a last one before UPower's critical action (at 2% it hibernates when
 # hibernation is on, otherwise it shuts down to protect the battery).
+# Apply the performance mode now: the built-in screen's refresh rate (through
+# display's default for it) and, in auto and performance, the power profile.
+apply_mode() {
+  local mode
+  mode=$(setting power.mode battery)
+  if [[ -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then "/usr/bin/$DISTRO_ID" display apply >/dev/null 2>&1 || true; fi
+  command -v powerprofilesctl >/dev/null || return 0
+  case $mode in
+    performance) powerprofilesctl set performance 2>/dev/null || true ;;
+    auto) if on_mains; then powerprofilesctl set performance 2>/dev/null || true
+          else powerprofilesctl set balanced 2>/dev/null || true; fi ;;
+  esac
+}
+
 battery_watch() {
-  local critical final bat capacity status warned_critical=0 warned_final=0
+  local critical final bat capacity status warned_critical=0 warned_final=0 mains last="" tick=0
   critical=$(setting power.battery_critical 10)
   final=$(setting power.battery_final 5)
   bat=$(batteries | head -1)
   [[ -n $bat ]] || exit 0
-  while sleep 60; do
+  # Every 15 s: plugging in or out switches the auto performance mode; the
+  # battery alerts are looked at every minute.
+  while sleep 15; do
+    if [[ $(setting power.mode battery) == auto ]]; then
+      if on_mains; then mains=1; else mains=0; fi
+      if [[ -n $last && $mains != "$last" ]]; then apply_mode; fi
+      last=$mains
+    fi
+    tick=$(( (tick + 1) % 4 ))
+    (( tick == 0 )) || continue
     capacity=$(<"$bat/capacity") status=$(<"$bat/status")
     if [[ $status != Discharging ]]; then
       warned_critical=0 warned_final=0
@@ -227,6 +256,21 @@ case ${1:-} in
     esac ;;
   lid) lid "${2:-}" ;;
   battery-watch) battery_watch ;;
+  mode)
+    case ${2:-} in
+      "") info "performance mode: $(setting power.mode battery)$(on_mains && echo ", plugged in" || echo ", on battery")" ;;
+      battery|auto|performance)
+        set_setting power.mode "$2"
+        apply_mode
+        # Back to battery: the profile goes back to the normal one.
+        if [[ $2 == battery ]] && command -v powerprofilesctl >/dev/null; then powerprofilesctl set balanced 2>/dev/null || true; fi
+        case $2 in
+          battery) info "performance mode: battery (the built-in screen at its usual rate)" ;;
+          auto) info "performance mode: auto (fastest refresh and the performance profile while plugged in)" ;;
+          performance) info "performance mode: performance (always; the battery lasts less)" ;;
+        esac ;;
+      *) die "mode battery, auto or performance?" ;;
+    esac ;;
   idle-watch) idle_watch ;;
   -h|--help|"") usage ;;
   *) die "unknown power command: $1" ;;

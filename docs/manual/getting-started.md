@@ -261,6 +261,13 @@ CTRL+ALT+L to start it again. To use Noctalia's lock screen instead, set
 - **Hibernate:** `lunarc power hibernate enable` (encrypted installs only, since the hibernation image is a copy of everything in memory). Then Power › Hibernate in the menu, or `lunarc power hibernate now`.
 - `lunarc power status` shows all of this at a glance.
 
+**Performance mode.** By default a laptop's own screen runs at its usual refresh rate
+to save battery, even when it can go faster. `lunarc power mode auto` gives it its
+fastest refresh rate and the performance power profile while plugged in, and goes
+back to normal on battery (it switches within about 15 seconds of plugging in or
+out); `lunarc power mode performance` keeps them on even on battery, and
+`lunarc power mode battery` is the default. Also in SUPER+Space › Setup.
+
 ## Dictation
 
 Click the microphone in the bar (or press SUPER+CTRL+D), speak, and click again: the words are typed into the window you're in. Speech is turned into text on this computer by whisper.cpp; nothing is sent anywhere.

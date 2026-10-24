@@ -55,6 +55,9 @@ Setup | Silence notifications | on or off | noctalia msg notification-dnd-toggle
 Setup | Low Gravity | float this workspace | @DISTRO_ID@ gravity toggle
 Setup | Dictation | speak to type | @DISTRO_ID@ dictate toggle
 Setup | Dictation: install | the speech engine, once | term: @DISTRO_ID@ dictate setup
+Setup | Laptop performance: battery | the screen at its usual rate; the default | @DISTRO_ID@ power mode battery
+Setup | Laptop performance: auto | fastest when plugged in | @DISTRO_ID@ power mode auto
+Setup | Laptop performance: always | even on battery | @DISTRO_ID@ power mode performance
 Setup | Power profile | next profile | noctalia msg power-cycle
 Setup | Reminders | upcoming | noctalia msg panel-toggle @DISTRO_ID@/utilities:reminders-panel
 Setup | Backups | where and how often | @DISTRO_ID@ setup backups
