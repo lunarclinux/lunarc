@@ -183,6 +183,9 @@ case $part in
     install -d -m750 "$dest/etc/sudoers.d"   # sudo's own package creates it 750
     put "$src/etc/sudoers.d/10-wheel" "$dest/etc/sudoers.d/10-$id-wheel" 440
     put "$src/etc/systemd/zram-generator.conf" "$dest/etc/systemd/zram-generator.conf"
+    # makepkg without separate -debug packages for AUR builds (decision record
+    # 0055); a backup file, so a local edit survives updates.
+    put "$src/etc/makepkg.conf.d/no-debug.conf" "$dest/etc/makepkg.conf.d/$id.conf"
     # Firefox's system policies: no telemetry, studies or sponsored content,
     # strict tracking protection, HTTPS-only, uBlock Origin (decision record 0031).
     put "$src/etc/firefox/policies.json" "$dest/etc/firefox/policies/policies.json"

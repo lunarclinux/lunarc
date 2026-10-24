@@ -17,6 +17,7 @@ backup=(
   "etc/sudoers.d/10-$DISTRO_ID-wheel"
   "etc/firefox/policies/policies.json"
   "etc/NetworkManager/conf.d/50-$DISTRO_ID-privacy.conf"
+  "etc/makepkg.conf.d/$DISTRO_ID.conf"
 )
 
 package() {
