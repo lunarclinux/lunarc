@@ -26,14 +26,32 @@ step_run() {
   ui_step "$STEP" "$STEPS" "Privacy"
   ui_text "$C_TEXT" "$DISTRO_NAME sends nothing about you anywhere: no telemetry, no usage statistics, nothing from the apps we include. Three optional things need the internet:"
   printf '\n'
+  local zone city
+  zone=$(timedatectl show -p Timezone --value 2>/dev/null || true)
+  # Old names (US/Central) are links to the real zone (America/Chicago).
+  city=$(awk -v z="$zone" '$1 == "L" && $3 == z { print $2; exit }' /usr/share/zoneinfo/tzdata.zi 2>/dev/null || true)
+  zone=${city:-$zone}; city=${zone##*/}; city=${city//_/ }
   ui_text "$C_BOLD$C_TEXT" "Weather in the bar"
-  ui_text "$C_MUTED" "Looks up your city (from your time zone) to show the weather. Only the city name is sent."
+  ui_text "$C_MUTED" "Shows the forecast for a place. The place name is looked up online (only the name is sent); coordinates skip that lookup; finding it from your internet address asks a location service."
   printf '\n'
-  choice=$(privacy_choose "Show the weather" "No weather")
-  if [[ $choice == "Show the weather" ]]; then
-    "/usr/bin/$DISTRO_ID" privacy weather on || true
-  else
+  choice=$(privacy_choose "Weather for my time zone's city${city:+ ($city)}" "Weather for a city I type" \
+    "Weather for exact coordinates" "Weather for where my internet address says I am" "No weather")
+  case $choice in
+    *"time zone"*) "/usr/bin/$DISTRO_ID" privacy weather location time-zone >/dev/null || true ;;
+    *"city I type"*)
+      if command -v gum >/dev/null; then city=$(gum input --header "City (e.g. Little Rock, AR)" --placeholder "City" || true)
+      else read -rp "  City (e.g. Little Rock, AR): " city || city=""; fi
+      if [[ -n $city ]]; then "/usr/bin/$DISTRO_ID" privacy weather location "$city" >/dev/null || choice="No weather"; else choice="No weather"; fi ;;
+    *coordinates*)
+      if command -v gum >/dev/null; then city=$(gum input --header "Latitude,longitude (e.g. 34.75,-92.29)" --placeholder "lat,lon" || true)
+      else read -rp "  Latitude,longitude: " city || city=""; fi
+      if [[ -n $city ]]; then "/usr/bin/$DISTRO_ID" privacy weather location "$city" >/dev/null || choice="No weather"; else choice="No weather"; fi ;;
+    *"internet address"*) "/usr/bin/$DISTRO_ID" privacy weather location auto >/dev/null || true ;;
+  esac
+  if [[ $choice == "No weather" ]]; then
     "/usr/bin/$DISTRO_ID" privacy weather off >/dev/null || true
+  else
+    "/usr/bin/$DISTRO_ID" privacy weather on || true
   fi
 
   ui_step "$STEP" "$STEPS" "Privacy"
@@ -61,6 +79,6 @@ step_run() {
   fi
   set_setting privacy.asked yes
   printf '\n'
-  ui_text "$C_MUTED" "Change these any time: '$DISTRO_ID privacy' and '$DISTRO_ID update auto-check', or the menu's Setup › Privacy and System › Check for updates daily."
+  ui_text "$C_MUTED" "Change these any time: '$DISTRO_ID privacy' (and '$DISTRO_ID privacy weather location' for the place) and '$DISTRO_ID update auto-check', or the menu's Setup › Privacy, Setup › Weather location and System › Check for updates daily."
   ui_continue
 }

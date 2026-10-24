@@ -32,7 +32,7 @@ features below.
 |---|---|---|
 | Updates | your Arch mirrors, `pkgs.lunarclinux.com` (GitHub releases), the AUR for AUR apps | `lunarc update` (and `update check`) |
 | Firmware updates | the Linux Vendor Firmware Service (fwupd.org) | `lunarc update firmware` |
-| Weather in the bar (off by default) | `api.noctalia.dev` (your city name, from the time zone) and `api.open-meteo.com` (coordinates) | after `lunarc privacy weather on` or choosing it at first login; the forecast then every 30 minutes |
+| Weather in the bar (off by default) | `api.noctalia.dev` (a city name: your time zone's or one you typed; with `auto`, your internet address is used to find you; with coordinates, nothing) and `api.open-meteo.com` (coordinates) | after `lunarc privacy weather on` or choosing it at first login; the forecast then every 30 minutes |
 | Encrypted DNS (off by default) | the provider you pick: Quad9, Mullvad or Cloudflare (DNS over TLS) | after `lunarc privacy dns <provider>` |
 | Installing apps | Arch mirrors, the AUR, the app's own site (web apps) | `lunarc app install`, `lunarc package install`, the menu's Install |
 | Daily update check (off by default) | your Arch mirrors and `pkgs.lunarclinux.com` (the package lists only; the AUR isn't asked) | once a day, after `lunarc update auto-check on`, choosing it at first login, or System › Check for updates daily in the menu |
@@ -50,7 +50,7 @@ features below.
 | Plugins from Noctalia's catalogs | GitHub (`noctalia-dev/official-plugins`, `community-plugins`) | only after you add those plugin sources; the plugins that come with Lunarc are on this computer |
 | Calendars | your calendar provider (Google through Noctalia's sign-in relay at `api.noctalia.dev`, iCloud, your CalDAV server or calendar link) | once you add an account in Settings › Calendar |
 | Your public IP address in the network tab (off by default) | `api.noctalia.dev` | when you turn on Settings › Security › Show WAN IP: then at each network or VPN change |
-| Locating by IP address (off by default) | `api.noctalia.dev` | only if you turn on Settings › Location › Auto-Locate (IP); Lunarc's weather uses your city instead |
+| Locating by IP address (off by default) | `api.noctalia.dev` | only if you turn on Settings › Location › Auto-Locate (IP); Lunarc's weather uses a city or coordinates unless you choose `lunarc privacy weather location auto` |
 | Cover art from the web (off by default) | the address the music player gives (YouTube thumbnails from `i.ytimg.com`) | after setting `remote_art = true` under `[shell.mpris]`; until then only art the player saved on this computer shows |
 | Notification icons from the web (off by default) | the address in the notification | after setting `remote_icons = true` under `[notification]` |
 | Currency rates in the launcher's calculator (off by default) | the European Central Bank, Coinbase, FloatRates, mycurrency.net and currency-api (libqalculate's sources) | after setting `fetch_exchange_rates = true` under `[shell.launcher]` |
@@ -96,6 +96,7 @@ command. `lunarc security watch off` stops it.
 |---|---|
 | see the switches | `lunarc privacy` |
 | show the weather / stop | `lunarc privacy weather on` / `off` |
+| weather for another place | `lunarc privacy weather location "Little Rock, AR"`, `34.75,-92.29` (no place lookup), `auto` or `time-zone` (asks if you leave it out; also Setup › Weather location) |
 | encrypt DNS / stop | `lunarc privacy dns quad9` (or `mullvad`, `cloudflare`) / `off` |
 | stop the connectivity check | `lunarc privacy connectivity off` |
 | let something in / close it | `lunarc firewall allow <app or port>` / `deny` |
