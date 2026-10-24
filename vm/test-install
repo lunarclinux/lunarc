@@ -723,7 +723,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
         text=$(ocr "$last_shot" "200x30+$((r + 1))+0" 7)
         light=$(magick "$last_shot" -crop "200x22+$((r + 1))+4" +repage -fuzz 10% -fill black +opaque '#e6e2d6' -fill white -opaque '#e6e2d6' -colorspace gray -format '%[fx:round(mean*w*h)]' info:)
         gold=$(magick "$last_shot" -crop "200x22+$((r + 1))+4" +repage -fuzz 12% -fill black +opaque '#ebc77a' -fill white -opaque '#ebc77a' -colorspace gray -format '%[fx:round(mean*w*h)]' info:)
-        report "$(grep -qE '(^|[^0-9])110?([^0-9]|$)' <<<"$text" && grep -qE '[0-9]+ ?%' <<<"$text" && (( light >= 8 && gold >= 8 )); echo $?)" "weather: '11°' (OCR reads ° as 0) in the text colour, then the moon in amber (read: $(tr '\n' ' ' <<<"$text"); light $light, amber $gold)"
+        report "$(grep -qE '(^|[^0-9])110?([^0-9]|$)' <<<"$text" && grep -qE '[0-9]+ ?[A-Za-z]? ?%' <<<"$text" && (( light >= 8 && gold >= 8 )); echo $?)" "weather: '11°' (OCR reads ° as 0) in the text colour, then the moon in amber (read: $(tr '\n' ' ' <<<"$text"); light $light, amber $gold)"
         "$here/ssh" "$vm" "$user" -- "$hypr $id bar moon off >/dev/null; sleep 3" || true
         bar_shot bar-weather-alone; text=$(ocr "$last_shot" "200x30+$((r + 1))+0" 7)
         report "$(grep -qE '(^|[^0-9])110?([^0-9]|$)' <<<"$text" && ! grep -qE '[0-9]+ ?%' <<<"$text"; echo $?)" "weather: alone, without the moon (read: $(tr '\n' ' ' <<<"$text"))"
