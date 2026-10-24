@@ -31,6 +31,10 @@ Usage: $DISTRO_ID theme <command>
   opacity [solid|frosted|clear|<0.3-1>|default]
                              how much the terminal shows the wallpaper: solid (none),
                              frosted (the theme's own; the default), clear, or a number
+  folders [auto|blue|<colour>]
+                             folder icons: auto (the Papirus colour nearest the
+                             theme's accent; the default), blue (Papirus' own),
+                             or one of: $FOLDER_COLORS
   token <path>               print one of the current theme's design tokens,
                              e.g. color.accent.amber or geometry.current.paneRadius
                              (geometry.current: the set for the current shape)
@@ -161,6 +165,113 @@ write_look() {
   tmp=$(mktemp "$STYLE.XXXXXX"); chmod 644 "$tmp"
   jq --arg shape "$(shape)" --arg blur "$(blur)" '{shape: $shape, blur: ($blur == "on"), geometry: .geometry[$shape]}' "$TOKENS" > "$tmp" \
     && mv "$tmp" "$STYLE" || { rm -f "$tmp"; return 1; }
+  write_gtk || return 1
+  write_icons || return 1
+}
+
+# GTK apps (Files and the rest): Noctalia's colours (noctalia.css) paint the
+# sidebar, popovers and cards in a lifted surface colour; this file, imported
+# after it, puts them on the theme's deep background with its hairline, as the
+# bar and the shell's popovers are. GTK 4 apps read new colours when they start.
+GTK_CONFIG=${XDG_CONFIG_HOME:-$HOME/.config}
+write_gtk() {
+  local v css tmp main
+  for v in 3 4; do
+    css=$GTK_CONFIG/gtk-$v.0/$DISTRO_ID.css main=$GTK_CONFIG/gtk-$v.0/gtk.css
+    mkdir -p "${css%/*}"
+    tmp=$(mktemp "$css.XXXXXX"); chmod 644 "$tmp"
+    jq -r --arg v "$v" "$LOOK_JQ"'
+      .color as $c | ($c.bg.deep | over($c.bg.deep)) as $deep | ($c.border.hairline) as $line
+      | "mix(@view_bg_color, \($c.text.primary | over($c.bg.deep)), 0.04)" as $card
+      | "/* Written by `'"$DISTRO_ID"' theme` from the theme'"'"'s design tokens; rewritten on",
+        "   every theme change. Your own GTK styles go in gtk.css, after the imports. */",
+        "@define-color sidebar_bg_color \($deep);",
+        "@define-color sidebar_border_color \($line);",
+        "@define-color secondary_sidebar_bg_color \($deep);",
+        "@define-color popover_bg_color \($deep);",
+        "@define-color overview_bg_color \($deep);",
+        "@define-color card_bg_color \($card);",
+        (if $v == "4" then
+          ":root {",
+          "  --sidebar-bg-color: \($deep);",
+          "  --sidebar-border-color: \($line);",
+          "  --secondary-sidebar-bg-color: \($deep);",
+          "  --popover-bg-color: \($deep);",
+          "  --overview-bg-color: \($deep);",
+          "  --card-bg-color: \($card);",
+          "}"
+        else empty end)' "$TOKENS" > "$tmp" && mv "$tmp" "$css" || { rm -f "$tmp"; return 1; }
+    # gtk.css imports Noctalia's colours (Noctalia adds that line when it is
+    # missing), then this file; anything else in it stays.
+    if [[ ! -e $main ]]; then
+      printf '@import url("noctalia.css");\n@import url("%s.css");\n' "$DISTRO_ID" > "$main"
+    elif ! grep -qF "@import url(\"$DISTRO_ID.css\");" "$main"; then
+      if grep -qF 'noctalia.css' "$main"; then
+        sed -i "/noctalia\.css/a @import url(\"$DISTRO_ID.css\");" "$main"
+      else
+        printf '@import url("noctalia.css");\n@import url("%s.css");\n' "$DISTRO_ID" >> "$main"
+      fi
+    fi
+  done
+}
+
+# Folder icons in the theme's accent: Papirus' folders are blue; a small icon
+# theme of links to another of Papirus' folder colours, inheriting the rest of
+# Papirus (papirus-folders' approach, in your own icons folder, so updates to
+# Papirus don't undo it). theme.folders: auto (the Papirus colour nearest the
+# accent), blue (Papirus' own) or another Papirus colour.
+ICONS=${XDG_DATA_HOME:-$HOME/.local/share}/icons
+PAPIRUS=/usr/share/icons/Papirus
+FOLDER_COLORS='black bluegrey blue brown cyan darkcyan deeporange green grey indigo magenta orange palebrown paleorange pink red teal violet yellow'
+folder_color() {
+  local v; v=$(setting theme.folders auto)
+  if [[ $v != auto ]]; then printf '%s\n' "$v"; return; fi
+  # The nearest by the folders' front colour.
+  local c pick='' best=999999 r g b fr fg fb d accent
+  accent=$(jq -r '.color.accent.amber' "$TOKENS") || return 1
+  r=$((16#${accent:1:2})) g=$((16#${accent:3:2})) b=$((16#${accent:5:2}))
+  for c in $FOLDER_COLORS; do
+    fr=$(grep -oE 'fill:#[0-9a-fA-F]{6}' "$PAPIRUS/64x64/places/folder-$c.svg" 2>/dev/null | sed -n 3p) || true
+    [[ -n $fr ]] || continue
+    fr=${fr#fill:#}; fg=$((16#${fr:2:2})) fb=$((16#${fr:4:2})); fr=$((16#${fr:0:2}))
+    d=$(( (fr - r) ** 2 + (fg - g) ** 2 + (fb - b) ** 2 ))
+    if (( d < best )); then best=$d pick=$c; fi
+  done
+  printf '%s\n' "${pick:-blue}"
+}
+write_icons() {
+  [[ -d $PAPIRUS ]] || return 0
+  local base=Papirus-Dark color name dst stamp tmp s src link target dirs='' sections='' qt
+  [[ $(setting theme.mode dark) == light ]] && base=Papirus-Light
+  color=$(folder_color) || return 1
+  name=$base
+  if [[ $color != blue && -f $PAPIRUS/64x64/places/folder-$color.svg ]]; then
+    name=$DISTRO_ID-$base dst=$ICONS/$name
+    stamp="X-Folders=$color $(stat -c %Y "$PAPIRUS/index.theme")"
+    if ! grep -qxF "$stamp" "$dst/index.theme" 2>/dev/null; then
+      mkdir -p "$ICONS"; tmp=$(mktemp -d "$ICONS/.$name.XXXXXX"); chmod 755 "$tmp"
+      for s in 32x32 48x48 64x64; do
+        src=$PAPIRUS/$s/places
+        [[ -d $src ]] || continue
+        mkdir -p "$tmp/$s/places"; ln -s "$s" "$tmp/$s@2x"
+        while IFS= read -r link; do
+          target=$(readlink "$src/$link"); target=${target/-blue/-$color}
+          [[ -e $src/$target ]] && ln -s "$src/$target" "$tmp/$s/places/$link"
+        done < <(find "$src" -maxdepth 1 -type l -lname '*-blue*' -printf '%f\n')
+        dirs+="$s/places,$s@2x/places,"
+        sections+=$'\n'"[$s/places]"$'\n'"Context=Places"$'\n'"Size=${s%x*}"$'\n'"Type=Fixed"$'\n'
+        sections+=$'\n'"[$s@2x/places]"$'\n'"Context=Places"$'\n'"Size=${s%x*}"$'\n'"Scale=2"$'\n'"Type=Fixed"$'\n'
+      done
+      printf '[Icon Theme]\nName=%s\nComment=%s with %s folders, written by `%s theme`\nInherits=%s\nHidden=true\nDirectories=%s\n%s\n%s' \
+        "$name" "$base" "$color" "$DISTRO_ID" "$base" "${dirs%,}" "$stamp" "$sections" > "$tmp/index.theme"
+      gtk-update-icon-cache -f -q "$tmp" 2>/dev/null || true
+      rm -rf "$dst.old"; [[ -e $dst ]] && mv "$dst" "$dst.old"
+      mv "$tmp" "$dst"; rm -rf "$dst.old"
+    fi
+  fi
+  gsettings set org.gnome.desktop.interface icon-theme "$name"
+  qt=${XDG_CONFIG_HOME:-$HOME/.config}/qt6ct/qt6ct.conf
+  if [[ -f $qt ]]; then sed -i "s/^icon_theme=.*/icon_theme=$name/" "$qt"; fi
 }
 
 # Hyprland and running Ghostty windows pick the new look up; the bar gets its
@@ -317,6 +428,12 @@ case ${1:-} in
     else
       info "terminal opacity: $choice ($(terminal_opacity))"
     fi ;;
+  folders)
+    if [[ -z ${2:-} ]]; then info "$(setting theme.folders auto): $(folder_color)"; exit 0; fi
+    [[ $2 == auto || " $FOLDER_COLORS " == *" $2 "* ]] || die "folders: auto, or one of: $FOLDER_COLORS"
+    set_setting theme.folders "$2"
+    write_icons || die "the folder icons could not be written"
+    info "folders: $2 ($(folder_color))" ;;
   greeter)
     if [[ ${2:-} == show-password ]]; then
       case ${3:-} in
