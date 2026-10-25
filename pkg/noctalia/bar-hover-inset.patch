@@ -1,0 +1,45 @@
+diff --git a/src/shell/bar/bar.cpp b/src/shell/bar/bar.cpp
+index ba7c15d..6894d06 100644
+--- a/src/shell/bar/bar.cpp
++++ b/src/shell/bar/bar.cpp
+@@ -1343,27 +1343,22 @@ namespace {
+           Node::absolutePosition(root, rootX, rootY);
+           rootX -= underlayX;
+           rootY -= underlayY;
+-          const float mainExtent = isVertical ? root->height() : root->width();
+-          const float pad = mainExtent > 0.5F ? widget->barCapsuleSpec().padding * widget->contentScale() : 0.0F;
+-          const float hoverW = isVertical ? capsuleCross : root->width() + 2.0F * pad;
+-          const float hoverH = isVertical ? root->height() + 2.0F * pad : capsuleCross;
++          // Lunarc (bar-hover-inset.patch): a capsule-less widget draws its own
++          // padding and hairlines, so its pill sits inside the widget, a little in
++          // from each edge, around what it shows; it never reaches into its
++          // neighbours, and the hit target keeps the widget's own size.
++          const float scale = widget->contentScale();
++          const float insetMain = 5.0F * scale;
++          const float insetCross = 4.0F * scale;
++          const float cross = std::max(0.0F, capsuleCross - 2.0F * insetCross);
++          const float hoverW = isVertical ? cross : std::max(0.0F, root->width() - 2.0F * insetMain);
++          const float hoverH = isVertical ? std::max(0.0F, root->height() - 2.0F * insetMain) : cross;
+           box->setPosition(
+-              isVertical ? rootX + (root->width() - capsuleCross) * 0.5F : rootX - pad,
+-              isVertical ? rootY - pad : rootY + (root->height() - capsuleCross) * 0.5F
++              isVertical ? rootX + (root->width() - cross) * 0.5F : rootX + insetMain,
++              isVertical ? rootY + insetMain : rootY + (root->height() - cross) * 0.5F
+           );
+           box->setSize(hoverW, hoverH);
+-          box->setRadius(widget->resolvedBarCapsuleRadius(hoverW, hoverH));
+-          if (auto* area = dynamic_cast<InputArea*>(root)) {
+-            auto outset = area->hitTestOutset();
+-            if (isVertical) {
+-              outset.top += pad;
+-              outset.bottom += pad;
+-            } else {
+-              outset.left += pad;
+-              outset.right += pad;
+-            }
+-            area->setHitTestOutset(outset);
+-          }
++          box->setRadius(std::max(widget->resolvedBarCapsuleRadius(hoverW, hoverH), std::min(4.0F * scale, cross * 0.5F)));
+         }
+       };
+       placeGhostPills(instance.startWidgets);
