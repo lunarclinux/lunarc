@@ -353,6 +353,7 @@ if "$here/ssh" "$vm" "$user" -- "pacman -Q $id >/dev/null 2>&1"; then
   check "printing after the migration"   "$(sed -e "s/@ID@/$id/g" -e "s/@PW@/$password/g" "$here/checks/printing.sh")"
   check "network privacy settings"      "NetworkManager --print-config | grep -qx 'wifi.cloned-mac-address=stable' && NetworkManager --print-config | grep -qx 'ipv6.ip6-privacy=2' && NetworkManager --print-config | grep -qx 'ipv4.dhcp-send-hostname=false'"
   check "kernel hardening applied"      "[ \$(sysctl -n kernel.kptr_restrict) = 2 ] && [ \$(sysctl -n kernel.unprivileged_bpf_disabled) = 1 ] && [ \$(sysctl -n kernel.kexec_load_disabled) = 1 ] && [ \$(sysctl -n kernel.yama.ptrace_scope) = 1 ]"
+  check "MT7921 Wi-Fi: no ASPM (when that card is present)" "modprobe -c | grep -qx 'options mt7921e disable_aspm=1'"
   check "calculator downloads nothing"  "[ \$(gsettings get org.gnome.calculator refresh-interval) = 0 ]"
   check "firmware checks only on request" "pacman -Q fwupd >/dev/null && ! systemctl is-enabled --quiet fwupd-refresh.timer"
   check "home folder private"           "[ \$(stat -c %a ~) = 700 ]"
@@ -933,11 +934,11 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
         "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg panel-close >/dev/null 2>&1; $id workspaces go 9; sleep 1" || true
         click 640 600; shot popover-rest; rest=$last_shot
 
-        # The calendar: the clock opens Noctalia's calendar on its own, under it.
+        # The calendar: the clock opens the calendar popover, under it.
         click "$((sw / 2))" 15
-        check "calendar: a click on the clock opens it" "$hypr noctalia msg status | jq -e '.activePanelId == \"control-center\"' >/dev/null"
+        check "calendar: a click on the clock opens it" "$hypr noctalia msg status | jq -e '.activePanelId == \"$id/utilities:calendar-panel\"' >/dev/null"
         shot calendar; read -r bw bh bx by < <(popover_box "$last_shot" "$rest") || true
-        report "$(( ${bw:-0} > 300 && bw < 640 && by >= 34 && by <= 48 ? 0 : 1 ))" "calendar: under the bar, without the tab list (${bw:-?}x${bh:-?} at ${bx:-?},${by:-?})"
+        report "$(( ${bw:-0} > 300 && bw < 640 && by >= 34 && by <= 48 ? 0 : 1 ))" "calendar: under the bar (${bw:-?}x${bh:-?} at ${bx:-?},${by:-?})"
         report "$(centred_under "${bw:-0}" "${bx:-0}" "$((sw / 2))"; echo $?)" "calendar: centred under the clock"
         # Its cards are the design's dark inset cards: none of the palette's
         # lighter surface_variant (Moonlit #1d2742) that Noctalia fills them with.
@@ -946,6 +947,8 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
         month=$("$here/ssh" "$vm" "$user" -- "date +%B")
         text=$(read_text "$last_shot" "${bw:-600}x${bh:-400}+${bx:-340}+${by:-38}")
         report "$(grep -qi "$month" <<<"$text"; echo $?)" "calendar: shows this month ($month; read: $(head -c 80 <<<"$text"))"
+        report "$(grep -q 'CALENDAR' <<<"$text"; echo $?)" "calendar: in the popovers' look (── CALENDAR header)"
+        check "calendar: the week starts on the locale's first day" "$hypr rm -f \$XDG_RUNTIME_DIR/$id-calendar.json; noctalia msg plugin $id/utilities:calendar-panel all dump >/dev/null 2>&1; sleep 0.5; [ \"\$(jq -r .first_day \$XDG_RUNTIME_DIR/$id-calendar.json)\" = \"\$(( \$(locale first_weekday) - 1 ))\" ]"
         key KEY_ESC
         check "calendar: Escape closes it" "$hypr sleep 0.5; noctalia msg status | jq -e '.panelOpen == false' >/dev/null"
 

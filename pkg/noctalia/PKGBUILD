@@ -41,10 +41,10 @@
 # backported): the launcher's calculator no longer runs libqalculate's
 # command(), plot(), load() or export(). It evaluates as you type, so a pasted
 # "calculation" could run a program before Enter (CVE review 2026-10-24).
-# bar-hover-inset.patch (ours): the bar's hover pill for a capsule-less widget
-# (all of the distro's segments) sat 8px out past both edges at full bar
-# height, over its neighbours; it sits inside the widget now, 5px in along the
-# bar and 4px across, with small round corners.
+# bar-hover-fit.patch (ours): the bar's hover pill for a capsule-less widget
+# (all of the distro's segments) sat 8px out past both edges, over its
+# neighbours; it is exactly the widget now, full bar height, edge to edge, like
+# the tray's and the power button's.
 # no-background-fetch.patch (ours, decision record 0031): nothing is downloaded
 # for a feature that isn't in use. Upstream fetches the community palette
 # catalog (api.noctalia.dev/palettes) at every start and theme change; now only
@@ -109,7 +109,7 @@ source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz"
         surface-colors.patch
         no-background-fetch.patch
         launcher-calc-no-commands.patch
-        bar-hover-inset.patch)
+        bar-hover-fit.patch)
 sha256sums=('5418f6b759de96e56a4bbca809c5a4c60a8a9594bdf67ecb8c5a341f97c221d1'
             'baafe5aff5cbbf08d09ea0f39dac475345f99778ca603d5c3a1099f0abd85af6'
             'f499c11d674575d48d131aa50de2d6b2744737dcea64e1c7e90a155b66310720'
@@ -118,7 +118,7 @@ sha256sums=('5418f6b759de96e56a4bbca809c5a4c60a8a9594bdf67ecb8c5a341f97c221d1'
             '8af842019c69c0a80be6c240003445c536cd7be7c3d3981351eab1674d9fce3f'
             '5e37dca32aa75bfd0d87f87d0355987fabd888f3daea81c1e3e9aaa3cd21d31d'
             '936bffabdfcac6abd916554b9a85808446a43df5a8709a615ca64094dba93dc0'
-            'acaa071bd054e9c4916f89a6204c05ae9ae0cada9ae94e2d77d029b4badf63c4')
+            '4cccf900fa310ba82aaea1392bfb37d4dc4b84b029b1453eab60a70051b8fca2')
 
 _archive=https://archive.archlinux.org/packages
 _buildlibs=(libqalculate-5.13.2-1-x86_64 libical-4.0.7-1-x86_64
@@ -157,7 +157,7 @@ prepare() {
   patch -d "$pkgname-$pkgver" -p1 < surface-colors.patch
   patch -d "$pkgname-$pkgver" -p1 < no-background-fetch.patch
   patch -d "$pkgname-$pkgver" -p1 < launcher-calc-no-commands.patch
-  patch -d "$pkgname-$pkgver" -p1 < bar-hover-inset.patch
+  patch -d "$pkgname-$pkgver" -p1 < bar-hover-fit.patch
   rm -rf buildlibs
   _have_buildlibs && return 0
   # /.arch-chroot: devtools' clean chroot, where depends and makedepends are installed.

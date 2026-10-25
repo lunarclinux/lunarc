@@ -166,6 +166,9 @@ case $part in
     put "$src/etc/sysctl.d/gaming.conf" "$dest/usr/lib/sysctl.d/80-$id-gaming.conf"
     put "$src/etc/sysctl.d/memory.conf" "$dest/usr/lib/sysctl.d/80-$id-memory.conf"
     put "$src/etc/modules-load.d/ntsync.conf" "$dest/usr/lib/modules-load.d/$id-ntsync.conf"
+    # MediaTek MT7921/MT7922 Wi-Fi: no PCIe power saving, which breaks resume
+    # from suspend (sorts before /etc/modprobe.d/mt7921e.conf, which can undo it).
+    put "$src/etc/modprobe.d/mt7921e.conf" "$dest/usr/lib/modprobe.d/$id-mt7921e.conf"
     put "$src/default/privacy/gschema.override" "$dest/usr/share/glib-2.0/schemas/90_$id.gschema.override"
     # App fonts: GTK apps in Geist and Geist Mono (defaults; the user's choice wins).
     put "$src/default/look/gschema.override" "$dest/usr/share/glib-2.0/schemas/91_$id-look.gschema.override"
