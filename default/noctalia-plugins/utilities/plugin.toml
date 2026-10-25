@@ -140,7 +140,7 @@ open_near_click = true
 id = "calendar-panel"
 entry = "calendar-panel.luau"
 width = 320
-height = 372
+height = 352
 placement = "floating"
 open_near_click = true
 

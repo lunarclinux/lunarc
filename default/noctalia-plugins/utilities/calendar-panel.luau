@@ -119,9 +119,14 @@ function onOpen(_context)
   noctalia.state.set("calendar-open", true)
   readToday()
   shown = { y = today.y, m = today.m }
-  local ok, accounts = pcall(noctalia.getSetting, "calendar.account")
-  hasAccounts = ok and type(accounts) == "table" and next(accounts) ~= nil
   render()
+  -- Any calendar account, in any of Noctalia's config files (asking
+  -- getSetting for a key that isn't there logs a warning on every open).
+  noctalia.runAsync({ "sh", "-c", 'grep -qs "^[[:space:]]*\\[calendar\\.account\\." "${XDG_CONFIG_HOME:-$HOME/.config}"/noctalia/*.toml' },
+    function(r)
+      local has = r.exitCode == 0
+      if has ~= hasAccounts then hasAccounts = has; render() end
+    end)
   -- The locale's first day of the week (1 = the day `locale week-1stday` names,
   -- a Sunday in glibc's locales).
   noctalia.runAsync({ "locale", "first_weekday" }, function(r)
