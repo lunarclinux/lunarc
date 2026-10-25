@@ -10,6 +10,10 @@
 # ~/.local/share/<id>-signing/gnupg), gh with write access, and the Cloudflare
 # token (~/.config/cloudflare-<id>-token). Without the token it stops after
 # signing the ISO and prints what's left.
+#
+# Before anything is published, tools/cve-check reads the fresh build: a
+# known vulnerability in a package we build ourselves stops the release
+# (RELEASE_SKIP_CVE_CHECK=1 to go ahead anyway, after reading it).
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd); cd "$root"
 source distro.conf
@@ -25,6 +29,12 @@ git pull -q --ff-only
 
 step "1/6 packages in the clean chroot (sudo once; the key passphrase to sign)"
 pkg/build --chroot
+
+step "checking what we build for known vulnerabilities (tools/cve-check)"
+if ! tools/cve-check; then
+  [[ ${RELEASE_SKIP_CVE_CHECK:-} == 1 ]] || fail "a package we build is affected (above); fix it, or RELEASE_SKIP_CVE_CHECK=1 tools/release"
+  echo "release: going ahead (RELEASE_SKIP_CVE_CHECK=1)"
+fi
 
 step "2/6 publishing the package repository"
 tools/publish
