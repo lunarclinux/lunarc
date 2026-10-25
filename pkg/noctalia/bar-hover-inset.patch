@@ -10,7 +10,7 @@ index ba7c15d..6894d06 100644
 -          const float pad = mainExtent > 0.5F ? widget->barCapsuleSpec().padding * widget->contentScale() : 0.0F;
 -          const float hoverW = isVertical ? capsuleCross : root->width() + 2.0F * pad;
 -          const float hoverH = isVertical ? root->height() + 2.0F * pad : capsuleCross;
-+          // Lunarc (bar-hover-inset.patch): a capsule-less widget draws its own
++          // The distro's bar-hover-inset.patch: a capsule-less widget draws its own
 +          // padding and hairlines, so its pill sits inside the widget, a little in
 +          // from each edge, around what it shows; it never reaches into its
 +          // neighbours, and the hit target keeps the widget's own size.
