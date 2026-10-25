@@ -531,7 +531,8 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     check "Geist Mono has weight 200"     "fc-list 'Geist Mono:weight=40' family style | grep -q ExtraLight && [ \"\$(fc-match -f '%{family[0]} %{weight}' 'Geist Mono:weight=40')\" = 'Geist Mono 40' ]"
     check "switch theme to tide"          "$hypr $id theme set tide >/dev/null && sleep 2 && grep -q '6cb6d9' ~/.config/$id/hypr/look.lua && grep -qi '10161d' ~/.config/ghostty/themes/noctalia"
     screenshot tide
-    check "switch to paper (light)"       "$hypr $id theme set paper >/dev/null && sleep 2 && noctalia msg theme-mode-get | grep -q light && [ \"\$(gsettings get org.gnome.desktop.interface icon-theme)\" = \"'$id-Papirus-Light'\" ]"
+    # Paper's accent is blue, so its folders are Papirus' own (no derived icon theme).
+    check "switch to paper (light)"       "$hypr $id theme set paper >/dev/null && sleep 2 && noctalia msg theme-mode-get | grep -q light && [ \"\$(gsettings get org.gnome.desktop.interface icon-theme)\" = \"'Papirus-Light'\" ]"
     screenshot paper
     check "all themes listed"             "[ \$($id theme list --plain | wc -l) -ge 17 ] && $id theme list --plain | grep -qP '^catppuccin\t'"
     check "switch to catppuccin"          "$hypr $id theme set catppuccin >/dev/null && sleep 2 && grep -q 'cba6f7' ~/.config/$id/hypr/look.lua && grep -qi '1e1e2e' ~/.config/ghostty/themes/noctalia"
@@ -1025,7 +1026,8 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
         # How much room is left depends on the workspaces earlier steps
         # opened: the media text is whole, shortened with an ellipsis, or gone
         # (the title gives way first), but never cut off part-way.
-        if grep -qE 'Low T.*(…|\.)[^A-Za-z]*$' <<<"$text"; then state="shortened with an ellipsis"
+        # (OCR reads the ellipsis as dots or an underscore.)
+        if grep -qE 'Low T.*(…|\.|_)[^A-Za-z]*$' <<<"$text"; then state="shortened with an ellipsis"
         elif grep -q 'Saltmarsh' <<<"$text"; then state="whole"
         elif ! grep -q 'Low T' <<<"$text"; then state="hidden (no room)"
         else state=""; fi
