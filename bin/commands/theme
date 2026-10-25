@@ -233,7 +233,7 @@ folder_color() {
   accent=$(jq -r '.color.accent.amber' "$TOKENS") || return 1
   for c in $FOLDER_COLORS; do
     f=$(grep -oE 'fill:#[0-9a-fA-F]{6}' "$PAPIRUS/64x64/places/folder-$c.svg" 2>/dev/null | sed -n 3p) || true
-    [[ -n $f ]] && list+="$c ${f#fill:#}"$'\n'
+    if [[ -n $f ]]; then list+="$c ${f#fill:#}"$'\n'; fi
   done
   awk -v a="${accent#\#}" '
     function hsv(h,   r, g, b, mx, mn, d) {
@@ -271,7 +271,7 @@ write_icons() {
         mkdir -p "$tmp/$s/places"; ln -s "$s" "$tmp/$s@2x"
         while IFS= read -r link; do
           target=$(readlink "$src/$link"); target=${target/-blue/-$color}
-          [[ -e $src/$target ]] && ln -s "$src/$target" "$tmp/$s/places/$link"
+          if [[ -e $src/$target ]]; then ln -s "$src/$target" "$tmp/$s/places/$link"; fi
         done < <(find "$src" -maxdepth 1 -type l -lname '*-blue*' -printf '%f\n')
         dirs+="$s/places,$s@2x/places,"
         sections+=$'\n'"[$s/places]"$'\n'"Context=Places"$'\n'"Size=${s%x*}"$'\n'"Type=Fixed"$'\n'
