@@ -23,6 +23,7 @@ secring*
 # Package build output (release builds; test builds)
 pkg/out/
 pkg/out-test/
+pkg/out-dev/
 iso/out/
 
 # Website build output (tools/make-site)
