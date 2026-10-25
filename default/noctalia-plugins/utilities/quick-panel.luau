@@ -179,6 +179,8 @@ function onExit(_signal, _reason) noctalia.state.set("quick-open", false) end
 
 function onIpc(event, _payload)
   if event == "refresh" and isOpen then readItems() end
+  -- Setup > Quick settings opens it ready to edit.
+  if event == "edit" and isOpen then editing = true; readItems(); render() end
   if event ~= "dump" then return end
   local dir = noctalia.getenv("XDG_RUNTIME_DIR")
   if not dir or dir == "" then return end

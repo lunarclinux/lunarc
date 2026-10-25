@@ -57,7 +57,7 @@ M.items = {
     init = function(cb) common.run({ "nightlight", "apply" }, function(_) cb() end) end,
   }),
   switch({
-    id = "silence", label = "Do not disturb", title = "Notifications go to the list without popping up",
+    id = "silence", label = "Silence", title = "Do not disturb: notifications go to the list without popping up",
     bar = "silence", icons = { "bell-off", "bell" },
     read = function(cb) msg({ "notification-dnd-status" }, function(out) cb({ on = out == "on" }) end) end,
     set = function(on, cb) msg({ "notification-dnd-set", on and "on" or "off" }, function(_) cb() end) end,
@@ -86,7 +86,7 @@ M.items = {
     set = function(on, cb) common.run({ "theme", "mode", on and "dark" or "light" }, function(_) cb() end) end,
   }),
   switch({
-    id = "mic", label = "Mic off", title = "Mutes the microphone", bar = "qs-mic",
+    id = "mic", label = "Mute mic", title = "Mutes the microphone", bar = "qs-mic",
     icons = { "microphone-off", "microphone" },
     read = function(cb)
       sh({ "pactl", "get-source-mute", "@DEFAULT_SOURCE@" }, function(out) cb({ on = out == "Mute: yes" }) end)

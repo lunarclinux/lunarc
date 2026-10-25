@@ -164,7 +164,7 @@ open_near_click = true
 id = "quick-panel"
 entry = "quick-panel.luau"
 width = 400
-height = 440
+height = 400
 placement = "floating"
 position = "top_right"
 

@@ -751,8 +751,13 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       d=$(qs_dump)
       report "$(jq -e '.open and (.version | test("^'"$(. "$repo/distro.conf"; echo "$DISTRO_NAME")"' 0\\.")) and .panel == ["wifi","bluetooth","stay-awake","nightlight","silence","power","dark","mic"] and (.states.silence.on == false) and (.states["stay-awake"] | type == "object")' >/dev/null 2>&1 <<<"$d"; echo $?)" "quick settings: our popover, its tiles and the version (read: $(head -c 160 <<<"$d"))"
       screenshot quick-panel
+      "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg plugin $id/utilities:quick-panel all edit >/dev/null; sleep 2" || true
+      d=$(qs_dump)
+      report "$(jq -e '.editing and (.bar | length) == 7' >/dev/null 2>&1 <<<"$d"; echo $?)" "quick settings: Edit shows where each one goes (read: $(head -c 80 <<<"$d"))"
+      screenshot quick-panel-edit
       "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg panel-close >/dev/null 2>&1" || true
-      check "quick settings: placed in the bar too, and back" "$hypr $id quick wifi both >/dev/null && sleep 2 && noctalia config export | grep -qE '^center *=.*qs-wifi' && [ \"\$($id quick wifi)\" = both ] && $id quick reset >/dev/null && sleep 2 && ! noctalia config export | grep -qE '^center *=.*qs-wifi' && [ \"\$($id quick wifi)\" = panel ]"
+      # (The export prints a long list over several lines: read it flattened.)
+      check "quick settings: placed in the bar too, and back" "$hypr centre() { noctalia config export | tr -d ' \\n' | grep -o 'center=\\[[^]]*\\]'; }; $id quick wifi both >/dev/null && sleep 2 && centre | grep -q qs-wifi && [ \"\$($id quick wifi)\" = both ] && $id quick reset >/dev/null && sleep 2 && ! centre | grep -q qs-wifi && [ \"\$($id quick wifi)\" = panel ]; rc=\$?; $id quick reset >/dev/null; exit \$rc"
       "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg panel-close >/dev/null" || true
       # Workspaces (decision record 0037): numbers, the active one as its moon
       # phase, a gold dot for a window asking for attention.

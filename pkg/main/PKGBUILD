@@ -26,5 +26,5 @@ done
 depends+=("$DISTRO_ID-settings")
 
 package() {
-  PLUGIN_SET="$pkgver-$pkgrel" bash "$DISTRO_SRC/pkg/files.sh" main "$DISTRO_SRC" "$pkgdir"
+  PLUGIN_SET="$pkgver-$pkgrel" DISTRO_VERSION="$pkgver" bash "$DISTRO_SRC/pkg/files.sh" main "$DISTRO_SRC" "$pkgdir"
 }
