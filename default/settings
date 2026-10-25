@@ -6,6 +6,8 @@ theme.shape = terminal
 theme.blur = on
 # How much the terminal shows the wallpaper: solid, frosted (the theme's own), clear, or 0.3-1.
 theme.terminal_opacity = frosted
+# Folder icons: auto (the Papirus colour nearest the theme's accent), blue, or a Papirus colour.
+theme.folders = auto
 # Desktop notifications from programs in the terminal (Claude Code and others): on or off.
 terminal.notifications = off
 # The browser web apps (app install <web app>) open in: chromium, edge or chrome.

@@ -518,7 +518,9 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     check "default theme applied"         "$hypr $id theme current | grep -q '^moonlit (dark)'; noctalia msg color-scheme-get | grep -q 'custom $id-moonlit'"
     check "terminal theme generated"      'test -s ~/.config/ghostty/themes/noctalia'
     check "Hyprland borders from theme"   "$hypr grep -q 'ebc77acc' ~/.config/$id/hypr/look.lua && hyprctl getoption general:col.active_border | grep -qi ccebc77a && ! test -e ~/.config/hypr/noctalia.lua"
-    check "GTK follows theme"             'test -s ~/.config/gtk-4.0/noctalia.css && [ "$(gsettings get org.gnome.desktop.interface icon-theme)" = "'"'"'Papirus-Dark'"'"'" ]'
+    check "GTK follows theme"             'test -s ~/.config/gtk-4.0/noctalia.css && [ "$(gsettings get org.gnome.desktop.interface icon-theme)" = "'"'"''"$id"'-Papirus-Dark'"'"'" ]'
+    check "GTK sidebar on the deep background" 'grep -q "^@define-color sidebar_bg_color #" ~/.config/gtk-4.0/'"$id"'.css && grep -qx "@import url(\"'"$id"'.css\");" ~/.config/gtk-4.0/gtk.css'
+    check "folders in the accent's colour" 'readlink ~/.local/share/icons/'"$id"'-Papirus-Dark/64x64/places/folder.svg | grep -q folder-paleorange.svg'
     check "apps in the desktop's fonts (GTK, Qt)" "[ \"\$(gsettings get org.gnome.desktop.interface font-name)\" = \"'Geist 11'\" ] && [ \"\$(gsettings get org.gnome.desktop.interface monospace-font-name)\" = \"'Geist Mono 11'\" ] && grep -q '^general=\"Geist,11' ~/.config/qt6ct/qt6ct.conf"
     check "default terminal is ghostty"   "$id terminal list | grep -qE '^\* ghostty +installed'"
     # Design tokens (decision record 0043): the current theme's, as a file; Moonlit's are the design's own.
@@ -529,7 +531,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     check "Geist Mono has weight 200"     "fc-list 'Geist Mono:weight=40' family style | grep -q ExtraLight && [ \"\$(fc-match -f '%{family[0]} %{weight}' 'Geist Mono:weight=40')\" = 'Geist Mono 40' ]"
     check "switch theme to tide"          "$hypr $id theme set tide >/dev/null && sleep 2 && grep -q '6cb6d9' ~/.config/$id/hypr/look.lua && grep -qi '10161d' ~/.config/ghostty/themes/noctalia"
     screenshot tide
-    check "switch to paper (light)"       "$hypr $id theme set paper >/dev/null && sleep 2 && noctalia msg theme-mode-get | grep -q light && [ \"\$(gsettings get org.gnome.desktop.interface icon-theme)\" = \"'Papirus-Light'\" ]"
+    check "switch to paper (light)"       "$hypr $id theme set paper >/dev/null && sleep 2 && noctalia msg theme-mode-get | grep -q light && [ \"\$(gsettings get org.gnome.desktop.interface icon-theme)\" = \"'$id-Papirus-Light'\" ]"
     screenshot paper
     check "all themes listed"             "[ \$($id theme list --plain | wc -l) -ge 17 ] && $id theme list --plain | grep -qP '^catppuccin\t'"
     check "switch to catppuccin"          "$hypr $id theme set catppuccin >/dev/null && sleep 2 && grep -q 'cba6f7' ~/.config/$id/hypr/look.lua && grep -qi '1e1e2e' ~/.config/ghostty/themes/noctalia"

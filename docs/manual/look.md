@@ -27,6 +27,13 @@ windows, terminals, GTK and Qt apps and the login screen, and its wallpaper.
 | `lunarc theme mode light` | The current theme's light (or `dark`) colours |
 | `lunarc theme preview` | Colour swatches of every theme, in the terminal |
 | `lunarc theme current` | The theme and mode in use |
+| `lunarc theme folders` | Folder icons: `auto` (the colour nearest the theme's accent), `blue`, or another Papirus colour |
+
+In Files and other GTK apps the sidebar and popovers sit on the theme's deep
+background with a hairline, as the bar does (`~/.config/gtk-4.0/lunarc.css`, written on
+every theme change; your own styles go in `gtk.css`). Folders follow the accent:
+gold on Moonlit, violet on Catppuccin. `lunarc theme folders blue` keeps Papirus' own.
+Apps that are open pick a new theme up when they start again.
 
 ## Wallpapers
 
