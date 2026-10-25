@@ -47,6 +47,18 @@ id = "stats"
 entry = "stats.luau"
 
 [[widget]]
+id = "sound"
+entry = "sound.luau"
+
+[[widget]]
+id = "network"
+entry = "network.luau"
+
+[[widget]]
+id = "bell"
+entry = "bell.luau"
+
+[[widget]]
 id = "divider"
 entry = "divider.luau"
 
@@ -95,6 +107,42 @@ entry = "stay-awake-shortcut.luau"
 [[shortcut]]
 id = "nightlight-shortcut"
 entry = "nightlight-shortcut.luau"
+
+# The network popover, under the network segment.
+[[panel]]
+id = "network-panel"
+entry = "network-panel.luau"
+width = 380
+height = 560
+placement = "floating"
+open_near_click = true
+
+# The notification popover, under the bell.
+[[panel]]
+id = "notify-panel"
+entry = "notify-panel.luau"
+width = 400
+height = 560
+placement = "floating"
+open_near_click = true
+
+# The sound popover, under the sound segment: output and microphone.
+[[panel]]
+id = "sound-panel"
+entry = "sound-panel.luau"
+width = 380
+height = 400
+placement = "floating"
+open_near_click = true
+
+# The weather popover, under the weather segment (pop.luau's look).
+[[panel]]
+id = "weather-panel"
+entry = "weather-panel.luau"
+width = 360
+height = 520
+placement = "floating"
+open_near_click = true
 
 # The stats popover: one that closes on an outside click (icons mode), one
 # that never takes the pointer or keyboard away, opened and closed by hovering

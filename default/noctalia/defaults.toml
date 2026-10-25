@@ -165,7 +165,7 @@ capsule_thickness = 1.0
 capsule_radius = 0
 start  = ["menu", "workspaces", "window", "media"]
 center = ["toggles", "stay-awake", "night-light", "gravity", "silence", "reminders", "recorder", "dictate", "clock"]  # + "moon", "weather" when turned on (bar_apply)
-end    = ["tray", "ai-usage", "crashes", "stats", "notifications", "keyboard_layout", "network", "volume", "battery", "power-divider", "session"]
+end    = ["tray", "ai-usage", "crashes", "stats", "bell", "keyboard_layout", "net", "sound", "battery", "power-divider", "session"]
 
 [widget.menu]
 type = "@DISTRO_ID@/utilities:menu-button"
@@ -259,8 +259,7 @@ capsule = false
 type = "@DISTRO_ID@/utilities:weather"
 capsule = false
 
-[widget.weather.actions]
-left = "panel-toggle control-center weather"
+# Its click opens the weather popover (weather.luau's onClick).
 
 # Was after Noctalia's weather widget; kept for bar blocks written before the
 # weather segment, until `@DISTRO_ID@` rewrites them.
@@ -271,6 +270,22 @@ interactive = false
 
 [widget.stats]
 type = "@DISTRO_ID@/utilities:stats"
+capsule = false
+
+# The bell and the network, as segments with the distro's own popovers (the bell keeps
+# its amber dot for unread; right-click toggles Do Not Disturb).
+[widget.bell]
+type = "@DISTRO_ID@/utilities:bell"
+capsule = false
+
+[widget.net]
+type = "@DISTRO_ID@/utilities:network"
+capsule = false
+
+# Sound: the output's icon and volume as a segment; scroll for volume, click for
+# the sound popover (output, microphone), right-click to mute.
+[widget.sound]
+type = "@DISTRO_ID@/utilities:sound"
 capsule = false
 
 [widget.tray]

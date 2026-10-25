@@ -601,7 +601,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       check "bar: top highlight and sheen on"  "$hypr noctalia config export | grep -qx 'top_highlight = true' && noctalia config export | grep -qx 'surface_sheen = true'"
       check "bar: terminal shape, 30px edge to edge" "$hypr noctalia config export | sed -n '/^\\[bar.default\\]/,/^\\[/p' > /tmp/bar; grep -qx 'thickness = 30' /tmp/bar && grep -qx 'radius = 0' /tmp/bar && grep -qx 'margin_edge = 0' /tmp/bar && hyprctl monitors -j | jq -e '.[0].reserved[1] == 30' >/dev/null"
       check "bar: rounded shape, a 34px pill 8px in" "$hypr $id theme shape rounded >/dev/null; sleep 2; noctalia config export | sed -n '/^\\[bar.default\\]/,/^\\[/p' > /tmp/bar; $id theme shape terminal >/dev/null; grep -qx 'thickness = 34' /tmp/bar && grep -qx 'radius = 17' /tmp/bar && grep -qx 'margin_edge = 8' /tmp/bar && grep -qx 'margin_ends = 8' /tmp/bar"
-      check "bar: moon and weather off by default, bell and power on" "$hypr x=\$(noctalia config export | tr -d '\\n'); c=\$(grep -oE 'center = \\[[^]]*\\]' <<<\"\$x\" | head -1); e=\$(grep -oE 'end = \\[[^]]*\\]' <<<\"\$x\" | head -1); echo \"\$c \$e\"; grep -q clock <<<\"\$c\" && ! grep -qE 'moon|weather' <<<\"\$c\" && grep -q notifications <<<\"\$e\" && grep -q session <<<\"\$e\""
+      check "bar: moon and weather off by default, bell and power on" "$hypr x=\$(noctalia config export | tr -d '\\n'); c=\$(grep -oE 'center = \\[[^]]*\\]' <<<\"\$x\" | head -1); e=\$(grep -oE 'end = \\[[^]]*\\]' <<<\"\$x\" | head -1); echo \"\$c \$e\"; grep -q clock <<<\"\$c\" && ! grep -qE 'moon|weather' <<<\"\$c\" && grep -q bell <<<\"\$e\" && grep -q session <<<\"\$e\""
       check "bar: moon setting adds and removes it" "$hypr $id bar moon on >/dev/null && sleep 1 && noctalia config export | tr -d '\\n' | grep -oE 'center = \\[[^]]*\\]' | grep -q moon && $id bar moon off >/dev/null && sleep 1 && ! noctalia config export | tr -d '\\n' | grep -oE 'center = \\[[^]]*\\]' | grep -q moon"
       check "bar: stats mode setting" "[ \"\$($id bar stats)\" = icons ] && $id bar stats inline >/dev/null && [ \"\$($id bar stats)\" = inline ] && $id bar stats icons >/dev/null"
       # The bar's toggles (decision record 0042): the anchor, plus only the
@@ -902,6 +902,11 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
           sleep 0.3; qmp_input '{"type":"btn","data":{"down":true,"button":"left"}}'
           sleep 0.08; qmp_input '{"type":"btn","data":{"down":false,"button":"left"}}'; sleep 1
         }
+        rclick() { # rclick <x> <y>: a real right click
+          qmp_input "{\"type\":\"abs\",\"data\":{\"axis\":\"x\",\"value\":$(( $1 * 32767 / (sw - 1) ))}},{\"type\":\"abs\",\"data\":{\"axis\":\"y\",\"value\":$(( $2 * 32767 / (sh - 1) ))}}"
+          sleep 0.3; qmp_input '{"type":"btn","data":{"down":true,"button":"right"}}'
+          sleep 0.08; qmp_input '{"type":"btn","data":{"down":false,"button":"right"}}'; sleep 1
+        }
         shot() { # shot <label>: a screenshot to $last_shot
           last_shot=$shots/$vm-$(date +%Y%m%d-%H%M%S)-$1.png
           "$here/ssh" "$vm" "$user" -- "$hypr grim -" > "$last_shot" 2>/dev/null || true
@@ -1027,16 +1032,15 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
         bell=$(( sw * 3 / 5 + ${dx:-0} + ${dw:-0} / 2 - 6 ))
         report "$(( ${dw:-0} > 0 && ${dw:-0} < 12 ? 0 : 1 ))" "bell: an amber dot for the unread notification (x $bell)"
         click "$bell" 15
-        check "notifications: a click on the bell opens them" "$hypr noctalia msg status | jq -e '.activePanelId == \"control-center\"' >/dev/null"
+        check "notifications: a click on the bell opens them" "$hypr noctalia msg status | jq -e '.activePanelId == \"$id/utilities:notify-panel\"' >/dev/null"
         shot notifications; read -r bw bh bx by < <(popover_box "$last_shot" "$rest") || true
         text=$(read_text "$last_shot" "${bw:-500}x${bh:-400}+${bx:-700}+${by:-38}")
-        report "$(grep -q 'Updates ready' <<<"$text" && grep -qi 'update now' <<<"$text"; echo $?)" "notifications: the card with its actions (read: $(head -c 100 <<<"$text"))"
+        report "$(grep -q 'Updates ready' <<<"$text" && grep -q NOTIFICATIONS <<<"$text"; echo $?)" "notifications: the popover lists it under its header (read: $(head -c 100 <<<"$text"))"
         report "$(( ${by:-0} >= 34 && ${by:-0} <= 48 ? 0 : 1 ))" "notifications: under the bar (${bw:-?}x${bh:-?} at ${bx:-?},${by:-?})"
         report "$(centred_under "${bw:-0}" "${bx:-0}" "$bell"; echo $?)" "notifications: under the bell"
-        # Do not disturb is the header's middle button (clear all, do not
-        # disturb, close), at its top right.
-        click "$(( ${bx:-0} + ${bw:-0} - 70 ))" "$(( ${by:-0} + 24 ))"
-        check "notifications: do not disturb from its header" "$hypr [ \"\$(noctalia msg notification-dnd-status)\" = on ]"
+        # Do not disturb: the bell's right-click (the popover also has a switch).
+        key KEY_ESC; rclick "$bell" 15
+        check "notifications: do not disturb from the bell" "$hypr [ \"\$(noctalia msg notification-dnd-status)\" = on ]"
         shot notifications-dnd
         "$here/ssh" "$vm" "$user" -- "$hypr $id theme shape rounded >/dev/null; sleep 2" || true
         key KEY_ESC; click "$bell" 25; shot notifications-rounded; key KEY_ESC

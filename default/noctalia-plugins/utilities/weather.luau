@@ -4,7 +4,7 @@
 -- on, the moon follows in the same segment (`☁ 52° · ◐ 62%`) and draws the
 -- hairline after both. Noctalia's own weather service does the lookup; this
 -- only reads the reading it keeps on disk, so nothing new is fetched. Click:
--- the weather tab ([widget.weather.actions]).
+-- the weather popover (weather-panel.luau), with the active look while open.
 local seg = require("./seg.luau")
 local phase = require("./moon-phase.luau")
 
@@ -15,6 +15,7 @@ do
   path = cache .. "/noctalia/weather.json"
 end
 
+local open = false -- the popover is open (the active look)
 local now = nil -- the reading: { temp, code, day, feels, high, low, humidity, place }
 local seen = -1 -- the cache file's mtime when it was last read
 
@@ -68,7 +69,7 @@ local function render()
     for _, l in ipairs(phase.labels(seg, moon)) do table.insert(children, l) end
   end
   barWidget.render(ui.row({ gap = 0, align = "center" }, {
-    seg.segment({ paddingH = 12, gap = 7 }, children),
+    seg.segment({ paddingH = 12, gap = 7, active = open }, children),
     seg.divider(),
   }))
   local rows = {}
@@ -116,6 +117,12 @@ local function refresh()
     render()
   end)
 end
+
+function onClick()
+  noctalia.togglePanel("@DISTRO_ID@/utilities:weather-panel")
+end
+
+noctalia.state.watch("weather-open", function(v) open = v == true; render() end)
 
 function update()
   noctalia.setUpdateInterval(60 * 1000)
