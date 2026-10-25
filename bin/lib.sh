@@ -195,7 +195,9 @@ token_hex() { # token_hex <path> [alpha]
 
 # Noctalia's panels, displays and notification cards as Frosted Terminal
 # popovers (decision record 0043): their border in the theme's border.popover
-# (an option of the distro's Noctalia build for panels), and corners for the
+# (Noctalia scales a panel border's alpha by the panel's opacity, 0.80 in the
+# "soft" transparency mode the defaults use, so it's written at alpha / 0.80
+# to come out as the token says), and corners for the
 # shape (the corner scale gives the panels the shape's panelRadius; Noctalia's
 # is 12 at scale 1, and the buttons and cards inside follow). Inside them, the
 # design's cards and buttons (options of the distro's build too): cards are
@@ -206,11 +208,13 @@ token_hex() { # token_hex <path> [alpha]
 # that loads before config.toml (files load in name order and later ones win):
 # anything set in config.toml still wins over it.
 look_apply() {
-  local dir=${XDG_CONFIG_HOME:-$HOME/.config}/noctalia radius=12 border='#ebc77a61' v tmp
+  local dir=${XDG_CONFIG_HOME:-$HOME/.config}/noctalia radius=12 border='#ebc77a61' panel_border v tmp
   local card='#070b178c' card_border='#e6e2d61f' button='#e6e2d60f' button_border='#e6e2d62e'
   [[ $(setting theme.shape terminal) == rounded ]] && radius=16
   v=$(token "geometry.current.panelRadius" 2>/dev/null) && [[ $v =~ ^[0-9]+$ ]] && radius=$v
   v=$(token_hex color.border.popover) && border=$v
+  panel_border=$(awk -v c="$border" 'BEGIN { a = strtonum("0x" substr(c, 8, 2)) / 0.80; if (a > 255) a = 255
+    printf "%s%02x", substr(c, 1, 7), int(a + 0.5) }')
   v=$(token_hex color.bg.deep 0.55) && card=$v
   v=$(token_hex color.border.divider) && card_border=$v
   v=$(token_hex color.text.primary 0.06) && button=$v
@@ -220,7 +224,7 @@ look_apply() {
   tmp=$(mktemp "$dir/.look.XXXXXX")
   printf '# Written by `%s theme` from the theme and shape; rewritten when they change.\n# Your own settings go in config.toml, which wins over this file.\n[shell]\ncorner_radius_scale = %s\ncard_color = "%s"\ncard_border_color = "%s"\nbutton_color = "%s"\nbutton_border_color = "%s"\n\n[shell.panel]\nborder_color = "%s"\n\n[osd]\nborder_color = "%s"\n\n[notification]\nborder_color = "%s"\n' \
     "$DISTRO_ID" "$(awk -v r="$radius" 'BEGIN { printf "%.3f", r / 12 }')" "$card" "$card_border" "$button" "$button_border" \
-    "$border" "$border" "$border" > "$tmp" \
+    "$panel_border" "$border" "$border" > "$tmp" \
     && mv "$tmp" "$dir/00-$DISTRO_ID-look.toml" || rm -f "$tmp"
 }
 
