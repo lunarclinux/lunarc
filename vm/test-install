@@ -989,6 +989,30 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
         click "${mx:-200}" 15; shot now-playing-blur-off; key KEY_ESC
         "$here/ssh" "$vm" "$user" -- "$hypr $id theme blur on >/dev/null" || true
 
+        # The theme picker: opens on the theme in use, Right moves along, Down
+        # shows the light colours of a theme with both, Escape closes it.
+        tp_dump() { "$here/ssh" "$vm" "$user" -- "$hypr rm -f \$XDG_RUNTIME_DIR/$id-theme-picker.json; noctalia msg plugin $id/utilities:themes all dump >/dev/null 2>&1; sleep 0.5; cat \$XDG_RUNTIME_DIR/$id-theme-picker.json" 2>/dev/null; }
+        tp_is() { # tp_is <description> <jq test on the dump>
+          local d; d=$(tp_dump)
+          report "$(jq -e "$2" >/dev/null 2>&1 <<<"$d"; echo $?)" "$1"
+          [[ $(jq -e "$2" 2>/dev/null <<<"$d") == true ]] || log "theme picker: $d"
+        }
+        "$here/ssh" "$vm" "$user" -- "$hypr $id theme pick; sleep 2" || true
+        tp_is "theme picker: opens on the theme in use, with every theme" '.open and .count >= 17 and .theme == "moonlit" and .mode == "dark" and (.picture | test("/themes/moonlit/"))'
+        shot theme-picker
+        text=$(read_text "$last_shot" "$((sw))x$((sh))+0+0")
+        report "$(grep -q 'THEME' <<<"$text" && grep -q 'Moonlit' <<<"$text"; echo $?)" "theme picker: header and name drawn (read: $(head -c 100 <<<"$text"))"
+        key KEY_RIGHT
+        tp_is "theme picker: Right moves to the next theme" '.open and .theme != "moonlit"'
+        key KEY_LEFT; key KEY_LEFT
+        tp_is "theme picker: Left goes back past it" '.open and .theme != "moonlit"'
+        for _ in $(seq 17); do d=$(tp_dump); [[ $(jq -r .theme <<<"$d") == paper ]] && break; key KEY_RIGHT; done
+        key KEY_UP
+        tp_is "theme picker: Up shows the other colours" '.theme == "paper" and .mode == "dark"'
+        key KEY_ESC
+        tp_is "theme picker: Escape closes it" '.open == false'
+        check "theme picker: nothing changed without Enter" "$id theme current | grep -qx 'moonlit (dark)'"
+
         # A squeezed left lane: a toggle on beside the clock, a long window
         # title and the test player. The lane's text shortens to fit (our
         # Noctalia bar-fit patch) instead of being cut mid-glyph; the clock

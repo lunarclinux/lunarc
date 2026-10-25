@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Makes the theme picker's pictures (themes/<name>/preview-<mode>.webp): on an
+# installed VM, one desktop scene (fastfetch in a terminal beside Files),
+# photographed in every theme and each of its modes.
+#
+#   vm/test-install --keep      # an installed VM to photograph
+#   vm/theme-previews [--vm distro-clean] [theme...]
+#
+# The pictures are 1280x720, from the top of the screen (the bar stays in). Commit the
+# changed pictures with the theme change that needs them.
+set -euo pipefail
+here=$(cd "$(dirname "$0")" && pwd); repo=$(dirname "$here")
+vm=distro-clean
+if [[ ${1:-} == --vm ]]; then vm=$2; shift 2; fi
+id=$(. "$repo/distro.conf"; echo "$DISTRO_ID")
+user=tester
+hypr='export XDG_RUNTIME_DIR=/run/user/$(id -u) WAYLAND_DISPLAY=wayland-1; export HYPRLAND_INSTANCE_SIGNATURE=$(ls -t $XDG_RUNTIME_DIR/hypr | head -1);'
+run() { "$here/ssh" "$vm" "$user" -- "$hypr $*"; }
+command -v magick >/dev/null || { echo "theme-previews: needs imagemagick" >&2; exit 1; }
+
+themes=("$@")
+if (( ${#themes[@]} == 0 )); then
+  for d in "$repo"/themes/*/; do d=${d%/}; themes+=("${d##*/}"); done
+fi
+before=$(run "$id theme current" | awk '{print $1}')
+
+# The scene, on an empty workspace: a terminal and Files, tiled. Files reads
+# GTK colours when it starts, so it's opened again for every theme.
+run "$id workspaces go 9; sleep 1
+  hyprctl dispatch 'hl.dsp.exec_cmd(\"ghostty --gtk-single-instance=false --wait-after-command=true -e fastfetch\")' >/dev/null; sleep 2
+" >/dev/null
+files() {
+  run "pkill -x nautilus; sleep 1; hyprctl dispatch 'hl.dsp.exec_cmd(\"nautilus --new-window\")' >/dev/null; sleep 3" >/dev/null || true
+}
+
+for name in "${themes[@]}"; do
+  palette=$repo/themes/$name/palette.json
+  [[ -f $palette ]] || { echo "theme-previews: no theme $name" >&2; continue; }
+  for mode in $(jq -r 'keys[] | select(. == "dark" or . == "light")' "$palette"); do
+    run "$id theme set $name $mode >/dev/null" >/dev/null
+    files
+    run "sleep 2; grim -" | magick - -resize 1280x720^ -gravity north -extent 1280x720 -quality 82 \
+      "$repo/themes/$name/preview-$mode.webp"
+    echo "$name $mode: themes/$name/preview-$mode.webp ($(du -h "$repo/themes/$name/preview-$mode.webp" | cut -f1))"
+  done
+done
+run "pkill -x nautilus; pkill -f 'wait-after-command=true -e fastfetch'; $id theme set $before >/dev/null" >/dev/null || true

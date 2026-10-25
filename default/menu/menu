@@ -22,7 +22,8 @@ Remove   | |                        | menu: remove  | −
 | Update | | term: @DISTRO_ID@ update | ↑
 System   | | lock, reboot, power off |              | !
 
-Style | Theme | colours for everything | menu: theme
+Style | Theme | pick from pictures of them all | @DISTRO_ID@ theme pick
+Style | Theme by name | colours for everything | menu: theme
 Style | Dark mode | the theme's dark colours | @DISTRO_ID@ theme mode dark
 Style | Light mode | the theme's light colours | @DISTRO_ID@ theme mode light
 Style | Wallpaper | choose one | noctalia msg panel-open wallpaper
