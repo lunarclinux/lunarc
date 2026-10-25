@@ -264,3 +264,23 @@ bar_apply() {
   printf '%s\n# Written by `%s` from its settings (shape, workspaces style, moon, weather)\n# and the theme; rewritten when they change.\n[bar.default]\nstart = %s\ncenter = %s\nthickness = %s\nmargin_edge = %s\nmargin_ends = %s\nradius = %s\nborder = "%s"\nbackground_opacity = %s\n%s\n' \
     "$begin" "$DISTRO_ID" "$start" "$center" "$thickness" "$inset" "$inset" "$radius" "$hairline" "$opacity" "$end" >> "$config"
 }
+
+# Laptop performance mode (setting power.mode): battery (the default: a
+# laptop's own panel at its preferred mode, the power profile left alone),
+# auto (plugged in: the panel's fastest refresh and the performance profile;
+# on battery: back to normal), or performance (always).
+on_mains() { # 0 when a mains or USB-C supply is plugged in
+  local s
+  for s in "${POWER_SYSFS:-/sys/class/power_supply}"/*; do
+    [[ -r $s/type && -r $s/online ]] || continue
+    case $(<"$s/type") in Mains|USB|USB_C|USB_PD) if [[ $(<"$s/online") == 1 ]]; then return 0; fi ;; esac
+  done
+  return 1
+}
+performance_now() { # 0 when the performance settings apply right now
+  case $(setting power.mode battery) in
+    performance) return 0 ;;
+    auto) on_mains ;;
+    *) return 1 ;;
+  esac
+}

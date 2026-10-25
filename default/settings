@@ -14,6 +14,9 @@ terminal.notifications = off
 app.web_browser = chromium
 # The login screen's password field has an eye that shows what's typed: on or off.
 login.show_password = on
+# Laptop performance: battery (the built-in screen at its usual rate), auto
+# (fastest refresh and the performance profile while plugged in) or performance.
+power.mode = battery
 # The bar's system stats: icons, hover or inline. The moon segment: on or off.
 bar.stats = icons
 bar.moon = off

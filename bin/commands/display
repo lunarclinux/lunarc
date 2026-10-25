@@ -97,9 +97,10 @@ scale_jq='def default_scale:
 # resolution at the highest refresh rate it offers there. The "preferred" mode
 # often means 60 Hz on a faster screen, and "highrr" can drop the resolution.
 # A laptop panel (built in) keeps its preferred mode: a 120-165 Hz panel at full
-# rate costs battery all day (`display set` picks any mode).
+# rate costs battery all day (`display set` picks any mode), unless the laptop
+# performance mode applies ($perf, `power mode`).
 def default_mode:
-  if .builtin then "preferred" else
+  if .builtin and $perf != "1" then "preferred" else
   ((.width | tostring) + "x" + (.height | tostring)) as $res
   | [(.availableModes // [])[] | capture("^(?<r>[0-9]+x[0-9]+)@(?<hz>[0-9.]+)Hz$") | select(.r == $res) | .hz | tonumber] as $hz
   | if ($hz | length) == 0 then "preferred" else "\($res)@\($hz | max)" end end;'
@@ -108,7 +109,9 @@ rules() { # rules <monitors-json> <state-json>
   local mons=$1 st=$2 key lid=0
   key=$(set_key "$mons")
   if [[ -e $lid_flag ]]; then lid=1; fi
-  jq -r --arg key "$key" --argjson st "$st" --arg lid "$lid" "$scale_jq"'
+  local perf=0
+  if performance_now; then perf=1; fi
+  jq -r --arg key "$key" --argjson st "$st" --arg lid "$lid" --arg perf "$perf" "$scale_jq"'
     ([.[] | select(.builtin | not)] | length > 0) as $external
     | ($st.layouts[$key] // {}) as $layout
     | (if ([.[] | select(($layout.off // {})[.id] != true)] | length) == 0 then {} else ($layout.off // {}) end) as $off
@@ -537,7 +540,7 @@ scale_after() { # scale_after <screen name> <old scale>
   printf '%s\n' "$now"
 }
 
-default_for() { jq -r "$scale_jq default_scale" <<<"$1"; } # default_for <monitor-json>
+default_for() { jq -r --arg perf 0 "$scale_jq default_scale" <<<"$1"; } # default_for <monitor-json>
 
 # step_from <scale> up|down → the next step above or below, or nothing
 step_from() {
