@@ -3,7 +3,9 @@
 -- as a grid with today in amber, arrows for the months either side, and Today
 -- to come back. The week starts on the locale's first day, as Noctalia's own
 -- calendar does (`locale first_weekday`). Colours are palette roles, so it
--- follows the theme.
+-- follows the theme. Events from calendars added in Noctalia's settings stay
+-- in Noctalia's calendar (its event cache is encrypted, out of a plugin's
+-- reach): with any account set up, Events opens it.
 local pop = require("./pop.luau")
 
 local CELL_W, CELL_H = 40, 28
@@ -14,6 +16,7 @@ local DAYS = { "Su", "Mo", "Tu", "We", "Th", "Fr", "Sa" }
 local today = nil       -- { y, m, d }
 local shown = nil       -- { y, m }
 local firstDay = 0      -- 0 = Sunday … 6 = Saturday
+local hasAccounts = false
 
 local function isLeap(y) return (y % 4 == 0 and y % 100 ~= 0) or y % 400 == 0 end
 local function daysIn(y, m)
@@ -98,9 +101,14 @@ function render()
   end
   table.insert(children, ui.column({ key = "grid", gap = 2 }, rows))
 
-  -- Back to this month, when looking at another.
+  -- Events (with a calendar account), and back to this month when looking at another.
   local away = y ~= today.y or m ~= today.m
-  table.insert(children, ui.row({ key = "foot", justify = "end", height = 28, align = "center" }, {
+  table.insert(children, ui.row({ key = "foot", height = 28, align = "center", gap = 4 }, {
+    hasAccounts and pop.button("Events", function()
+      panel.close()
+      noctalia.runAsync({ "noctalia", "msg", "panel-toggle", "control-center", "calendar" }, function(_r) end)
+    end, { key = "events", glyph = "list" }) or ui.box({ key = "events", height = 1, fill = "#00000000" }),
+    ui.spacer({ key = "space", flexGrow = 1 }),
     away and pop.button("Today", function() shown = { y = today.y, m = today.m }; render() end,
       { key = "today", glyph = "calendar" }) or ui.box({ key = "today", height = 1, fill = "#00000000" }),
   }))
@@ -111,6 +119,8 @@ function onOpen(_context)
   noctalia.state.set("calendar-open", true)
   readToday()
   shown = { y = today.y, m = today.m }
+  local ok, accounts = pcall(noctalia.getSetting, "calendar.account")
+  hasAccounts = ok and type(accounts) == "table" and next(accounts) ~= nil
   render()
   -- The locale's first day of the week (1 = the day `locale week-1stday` names,
   -- a Sunday in glibc's locales).
