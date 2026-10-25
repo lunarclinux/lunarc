@@ -80,7 +80,7 @@ Capture | Screenshot: region in 5 s | pick it, then set up the shot; SUPER+SHIFT
 Capture | Screenshot: screen in 5 s | time to open a menu or hover | @DISTRO_ID@ capture screenshot screen --delay 5
 Capture | Screenshot: screen in 10 s | | @DISTRO_ID@ capture screenshot screen --delay 10
 Capture | Record the screen | stop from the bar | @DISTRO_ID@ capture record screen
-Capture | Record a region | | @DISTRO_ID@ capture record region
+Capture | Record a region | pick it; ALT+SHIFT+Print starts and stops | @DISTRO_ID@ capture record region
 Capture | Record with sound | | @DISTRO_ID@ capture record screen --audio
 Capture | Stop recording | | @DISTRO_ID@ capture stop
 Capture | Pick a colour | copies the hex code | @DISTRO_ID@ capture color
