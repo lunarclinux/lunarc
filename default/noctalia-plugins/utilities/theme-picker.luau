@@ -14,7 +14,7 @@ local cli = "@DISTRO_ID@"
 local THEMES = "/usr/share/" .. cli .. "/themes"
 local WIDTH = 1180
 local W, H = 640, 360                    -- the middle picture
-local SIDE = { { 150, 300 }, { 96, 250 } } -- the first and second neighbours
+local SIDE = { { 140, 300 }, { 80, 250 } } -- the first and second neighbours
 
 local themes = {}   -- { name, desc, modes = { "dark", "light" }, mode (its default) }
 local at = 1        -- the one in the middle
@@ -149,7 +149,7 @@ render = function()
         table.insert(strip, look.box({ key = "c" .. d, width = s[1], height = s[2], fill = "#00000000" }))
       end
     end
-    table.insert(rows, look.row({ key = "strip", paddingH = 18, paddingV = 18, gap = 14, align = "center", justify = "center" }, strip))
+    table.insert(rows, look.row({ key = "strip", paddingH = 18, paddingV = 18, gap = 12, align = "center", justify = "center" }, strip))
 
     -- Its name and line, which colours, and whether it's the one in use.
     local modes = {}
