@@ -234,6 +234,21 @@ look_apply() {
 # the workspaces style, and the opt-in moon and weather segments (left out
 # entirely when off). The lists match [bar.default] in
 # default/noctalia/defaults.toml.
+# The quick settings (quick-items.luau in the utilities plugin): each item's
+# bar widget (its [widget.*] name in default/noctalia/defaults.toml), and where
+# they show unless `quick` changed it.
+QUICK_IDS=(wifi bluetooth stay-awake nightlight silence power dark mic gravity reminders recorder dictate)
+QUICK_BAR_DEFAULT="stay-awake nightlight gravity silence reminders recorder dictate"
+QUICK_PANEL_DEFAULT="wifi bluetooth stay-awake nightlight silence power dark mic"
+quick_widget() { # quick_widget <id> → the bar widget's name
+  case $1 in
+    stay-awake|gravity|silence|reminders|recorder|dictate) echo "$1" ;;
+    nightlight) echo night-light ;;
+    wifi|bluetooth|power|dark|mic) echo "qs-$1" ;;
+    *) return 1 ;;
+  esac
+}
+
 bar_apply() {
   look_apply
   local config=${XDG_CONFIG_HOME:-$HOME/.config}/noctalia/config.toml start center
@@ -249,7 +264,14 @@ bar_apply() {
   fi
   start='["menu", "workspaces", "window", "media"]'
   if [[ $(setting bar.workspaces moon) == noctalia ]]; then start='["menu", "workspaces-noctalia", "window", "media"]'; fi
-  center='["toggles", "stay-awake", "night-light", "gravity", "silence", "reminders", "recorder", "dictate", "clock"'
+  # The quick settings chosen for the bar (`$DISTRO_ID quick`), after their anchor.
+  center='['
+  local id
+  for id in $(setting quick.bar "$QUICK_BAR_DEFAULT"); do
+    v=$(quick_widget "$id") && center+="\"$v\", "
+  done
+  if [[ $center != '[' ]]; then center='["toggles", '"${center#[}"; fi
+  center+='"clock"'
   # With both on, the weather segment shows the moon too and the moon's hides.
   if [[ $(setting privacy.weather off) == on ]]; then center+=', "weather"'; fi
   if [[ $(setting bar.moon off) == on ]]; then center+=', "moon"'; fi

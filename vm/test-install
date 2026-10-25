@@ -369,7 +369,7 @@ if "$here/ssh" "$vm" "$user" -- "pacman -Q $id >/dev/null 2>&1"; then
   check "package files intact"          "pacman -Qkk $id 2>&1 | grep -q ', 0 altered files'"
   check "login screen uses distro config" "systemctl cat greetd | grep -q -- '--config /etc/greetd/$id.toml'"
   check "hidden apps dir in XDG_DATA_DIRS" "systemctl --user show-environment | grep -q '^XDG_DATA_DIRS=/usr/share/$id/xdg'"
-  check "system names itself (os-release)" ". /etc/os-release; [ \"\$ID\" = $id ] && [ \"\$ID_LIKE\" = arch ] && [ -n \"\$NAME\" ]"
+  check "system names itself and its version (os-release)" ". /etc/os-release; [ \"\$ID\" = $id ] && [ \"\$ID_LIKE\" = arch ] && [ -n \"\$NAME\" ] && [[ \"\$VERSION_ID\" == 0.* ]]"
   check "signing key trusted"            "pacman -Q $id-keyring >/dev/null && echo '$password' | sudo -S -p '' pacman-key --list-keys $(cat "$repo/pkg/keyring/fingerprint") >/dev/null"
   check "package repository enabled, signed" "grep -A2 '^\\[$id\\]\$' /etc/pacman.conf | grep -qx 'SigLevel = Required' && grep -A2 '^\\[$id\\]\$' /etc/pacman.conf | grep -qx 'Server = $repo_url'"
   check "pacman: colour on, candy off by default" "grep -qx Color /etc/pacman.conf && ! grep -q '^ILoveCandy' /etc/pacman.conf && $id update candy 2>&1 | grep -qx 'candy: off'"
@@ -743,6 +743,16 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       check "quick settings use the plugin's tiles" "$hypr noctalia config export | grep -q 'utilities:stay-awake-shortcut' && noctalia config export | grep -q 'utilities:nightlight-shortcut' && ! noctalia config export | grep -qE '^type = \"(caffeine|nightlight)\"'"
       "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg panel-open control-center >/dev/null" || true
       screenshot quick-settings
+      "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg panel-close >/dev/null 2>&1" || true
+      # Our quick settings (SUPER+S): the quick settings chosen for the popover,
+      # the same items as the bar's toggles, the system's version on top.
+      qs_dump() { "$here/ssh" "$vm" "$user" -- "$hypr rm -f \$XDG_RUNTIME_DIR/$id-quick.json; noctalia msg plugin $id/utilities:quick-panel all dump >/dev/null 2>&1; sleep 0.5; cat \$XDG_RUNTIME_DIR/$id-quick.json" 2>/dev/null; }
+      "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg panel-toggle $id/utilities:quick-panel >/dev/null; sleep 3" || true
+      d=$(qs_dump)
+      report "$(jq -e '.open and (.version | test("^'"$(. "$repo/distro.conf"; echo "$DISTRO_NAME")"' 0\\.")) and .panel == ["wifi","bluetooth","stay-awake","nightlight","silence","power","dark","mic"] and (.states.silence.on == false) and (.states["stay-awake"] | type == "object")' >/dev/null 2>&1 <<<"$d"; echo $?)" "quick settings: our popover, its tiles and the version (read: $(head -c 160 <<<"$d"))"
+      screenshot quick-panel
+      "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg panel-close >/dev/null 2>&1" || true
+      check "quick settings: placed in the bar too, and back" "$hypr $id quick wifi both >/dev/null && sleep 2 && noctalia config export | grep -qE '^center *=.*qs-wifi' && [ \"\$($id quick wifi)\" = both ] && $id quick reset >/dev/null && sleep 2 && ! noctalia config export | grep -qE '^center *=.*qs-wifi' && [ \"\$($id quick wifi)\" = panel ]"
       "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg panel-close >/dev/null" || true
       # Workspaces (decision record 0037): numbers, the active one as its moon
       # phase, a gold dot for a window asking for attention.

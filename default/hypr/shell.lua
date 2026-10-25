@@ -8,7 +8,8 @@ local bind = dofile("/usr/share/@DISTRO_ID@/default/hypr/bind.lua")
 -- distro's utilities plugin. Typing filters it, apps and deeper items included.
 bind(mod .. " + Space", "Menu: apps and everything else", shell("panel-toggle @DISTRO_ID@/utilities:menu"))
 bind(mod .. " + SHIFT + Space", "Pick a theme", shell("panel-toggle @DISTRO_ID@/utilities:themes"))
-bind(mod .. " + S", "Quick settings", shell("panel-toggle control-center"))
+bind(mod .. " + S", "Quick settings", shell("panel-toggle @DISTRO_ID@/utilities:quick-panel"))
+bind(mod .. " + CTRL + S", "Noctalia's control center (every section)", shell("panel-toggle control-center"))
 bind(mod .. " + comma", "Shell settings", shell("settings-toggle"))
 -- The lock: the screensaver plays behind it (`@DISTRO_ID@ lock`); falls back to
 -- Noctalia's lock screen if it can't start. CTRL+ALT+L works while locked and

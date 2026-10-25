@@ -36,7 +36,7 @@ SUPER is the Windows key. SUPER+K lists every shortcut, searchable; Return on on
 | SUPER+K | The menu's Keybinds: every shortcut, and changing one |
 | SUPER+Return | Terminal |
 | SUPER+A | Your coding agent in a terminal; with several installed, pick one (Return keeps the default) |
-| SUPER+S | Quick settings (Wi-Fi, Bluetooth, sound) |
+| SUPER+S | Quick settings: switches, volume and brightness; **Edit** picks which show here and which in the bar. SUPER+CTRL+S: Noctalia's full control center |
 | SUPER+comma | Settings |
 | SUPER+V | Clipboard history |
 | SUPER+W | Close window |
@@ -142,6 +142,7 @@ Items are in `/usr/share/lunarc/default/menu/menu`; copy it to `~/.config/lunarc
 | `lunarc menu` / `lunarc keys` | The menu / its Keybinds (`keys --list`, `keys set`, `keys reset` from the terminal) |
 | `lunarc package search\|install\|remove` | Packages from the Arch repositories, the AUR and Flathub (what the menu's Install and Remove use) |
 | `lunarc awake on` / `off` / `toggle` · `lunarc nightlight on` / `off` / `toggle` | Stay awake, night light (also in the bar and quick settings) |
+| `lunarc quick` · `lunarc quick wifi both` | Where each quick setting shows: `bar`, `panel` (SUPER+S), `both` or `off`; `lunarc quick reset` for the defaults |
 | `lunarc keyboard add de` / `remove` / `list` / `next` | Keyboard layouts (`lunarc keyboard available` lists them) |
 | `lunarc migrate --list --user` | See which config migrations have run |
 | `lunarc screensaver effects` / `preview [effect]` | List the screensaver's effects / play one now (any key closes it) |

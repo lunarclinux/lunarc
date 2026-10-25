@@ -99,6 +99,28 @@ entry = "dictate.luau"
 id = "reminders"
 entry = "reminders.luau"
 
+# More quick settings for the bar (quick-items.luau; `@DISTRO_ID@ quick` picks
+# which show in the bar and which in the quick settings popover).
+[[widget]]
+id = "quick-wifi"
+entry = "quick-wifi.luau"
+
+[[widget]]
+id = "quick-bluetooth"
+entry = "quick-bluetooth.luau"
+
+[[widget]]
+id = "quick-power"
+entry = "quick-power.luau"
+
+[[widget]]
+id = "quick-dark"
+entry = "quick-dark.luau"
+
+[[widget]]
+id = "quick-mic"
+entry = "quick-mic.luau"
+
 # The same two as quick-settings tiles, in place of the built-in ones.
 [[shortcut]]
 id = "stay-awake-shortcut"
@@ -136,6 +158,16 @@ placement = "floating"
 open_near_click = true
 
 # The weather popover, under the weather segment (pop.luau's look).
+# Quick settings (SUPER+S): the quick settings chosen for the popover as tiles,
+# volume and brightness, Edit to choose what shows here and in the bar.
+[[panel]]
+id = "quick-panel"
+entry = "quick-panel.luau"
+width = 400
+height = 440
+placement = "floating"
+position = "top_right"
+
 [[panel]]
 id = "calendar-panel"
 entry = "calendar-panel.luau"

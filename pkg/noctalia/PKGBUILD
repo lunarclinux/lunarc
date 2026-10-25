@@ -1,5 +1,5 @@
 # The desktop shell (bar, launcher, panels, notifications, OSD, lock screen),
-# built from the same release and checksum as Arch's own package, with six
+# built from the same release and checksum as Arch's own package, with seven
 # patches of ours (decision records 0043 and 0031). Arch's PKGBUILD for 5.3.0-1 is the model: same
 # source, dependencies, meson options and files.
 #
@@ -36,6 +36,8 @@
 # (all of the distro's segments) sat 8px out past both edges, over its
 # neighbours; it is exactly the widget now, full bar height, edge to edge, like
 # the tray's and the power button's.
+# os-release-version.patch (ours): the control center's home card names the
+# system and its version from os-release ("<Name> 0.8.402"), not Noctalia's.
 # no-background-fetch.patch (ours, decision record 0031): nothing is downloaded
 # for a feature that isn't in use. Upstream fetches the community palette
 # catalog (api.noctalia.dev/palettes) at every start and theme change; now only
@@ -98,14 +100,16 @@ source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz"
         bar-fit.patch
         surface-colors.patch
         no-background-fetch.patch
-        bar-hover-fit.patch)
+        bar-hover-fit.patch
+        os-release-version.patch)
 sha256sums=('7677b5d7da80cf89c7a8232de26d25380aa5fcaf34fb38abddd4fe7cb676161a'
             'e9e77c7ab68b08339cb2c136d3a29b4eeddc30ae402b99fe9957981c0d052e0e'
             'f499c11d674575d48d131aa50de2d6b2744737dcea64e1c7e90a155b66310720'
             'd60e97afd47a30d7b06bf05a14baf53be4a7bcc845ce6c24eff3f619bed296a1'
             '7a8d4e1b94c6a5d2fe03ecc67e748aa5f29f57842adb6123a3baa6bcd553c141'
             '5e37dca32aa75bfd0d87f87d0355987fabd888f3daea81c1e3e9aaa3cd21d31d'
-            '4cccf900fa310ba82aaea1392bfb37d4dc4b84b029b1453eab60a70051b8fca2')
+            '4cccf900fa310ba82aaea1392bfb37d4dc4b84b029b1453eab60a70051b8fca2'
+            '8e53afb817e16b464382fa5f676c8a5e5661b080309a9c2ce1975a672bfcd2f7')
 
 _archive=https://archive.archlinux.org/packages
 _buildlibs=(libqalculate-5.13.2-1-x86_64 libical-4.0.7-1-x86_64
@@ -143,6 +147,7 @@ prepare() {
   patch -d "$pkgname-$pkgver" -p1 < surface-colors.patch
   patch -d "$pkgname-$pkgver" -p1 < no-background-fetch.patch
   patch -d "$pkgname-$pkgver" -p1 < bar-hover-fit.patch
+  patch -d "$pkgname-$pkgver" -p1 < os-release-version.patch
   rm -rf buildlibs
   _have_buildlibs && return 0
   # /.arch-chroot: devtools' clean chroot, where depends and makedepends are installed.

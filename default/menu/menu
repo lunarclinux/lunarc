@@ -43,6 +43,7 @@ Style | Workspaces: moon phases | | @DISTRO_ID@ workspaces style moon
 Style | Workspaces: pills | Noctalia's own | @DISTRO_ID@ workspaces style noctalia
 Style | Screensaver | preview | @DISTRO_ID@ screensaver preview
 
+Setup | Quick settings | SUPER+S; Edit there picks what shows in the bar too | noctalia msg panel-toggle @DISTRO_ID@/utilities:quick-panel
 Setup | Wi-Fi | networks | noctalia msg panel-open control-center network
 Setup | Bluetooth | devices | noctalia msg panel-open control-center bluetooth
 Setup | Sound | outputs and inputs | noctalia msg panel-open control-center audio

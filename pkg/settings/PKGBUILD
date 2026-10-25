@@ -21,5 +21,5 @@ backup=(
 )
 
 package() {
-  bash "$DISTRO_SRC/pkg/files.sh" settings "$DISTRO_SRC" "$pkgdir"
+  DISTRO_VERSION="$pkgver" bash "$DISTRO_SRC/pkg/files.sh" settings "$DISTRO_SRC" "$pkgdir"
 }
