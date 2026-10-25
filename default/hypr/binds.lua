@@ -44,6 +44,7 @@ bind(mod .. " + Print", "Screenshot of the window", run("@DISTRO_ID@ capture scr
 bind("CTRL + Print", "Screenshot of a region, then edit it", run("@DISTRO_ID@ capture screenshot region --edit"))
 bind(mod .. " + SHIFT + Print", "Screenshot of a region in 5 seconds (pick it, then set up the shot)", run("@DISTRO_ID@ capture screenshot region --delay 5"))
 bind("ALT + Print", "Start or stop a screen recording", run("@DISTRO_ID@ capture record-toggle screen"))
+bind("ALT + SHIFT + Print", "Record a region (pick it), or stop the recording", run("@DISTRO_ID@ capture record-toggle region"))
 bind(mod .. " + CTRL + C", "Pick a colour from the screen", run("@DISTRO_ID@ capture color"))
 bind(mod .. " + CTRL + D", "Dictate (speak to type)", run("@DISTRO_ID@ dictate toggle"))
 

@@ -51,6 +51,7 @@ SUPER is the Windows key. SUPER+K lists every shortcut, searchable; Return on on
 | ALT+Tab | Switch windows |
 | Print | Screenshot of a region (SHIFT: screen, SUPER: window, CTRL: region then edit, SUPER+SHIFT: region in 5 seconds) |
 | ALT+Print | Start or stop a screen recording |
+| ALT+SHIFT+Print | Record a region you pick (again to stop) |
 | SUPER+CTRL+C | Pick a colour from the screen |
 | SUPER+CTRL+D | Dictate: speak, press again, the text is typed |
 | SUPER+CTRL+Space | Next keyboard layout (when you have more than one) |

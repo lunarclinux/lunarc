@@ -329,8 +329,12 @@ warning_threshold = 20
 [widget.crashes]
 type = "@DISTRO_ID@/crashes:indicator"
 
+# Draws its own hairline and padding (agents/seg.luau), as stats does: inside
+# a capsule its hairline sat 8px in, and the tray's hover box before it stopped
+# 8px short of it.
 [widget.ai-usage]
 type = "@DISTRO_ID@/agents:usage"
+capsule = false
 
 # Quick settings (SUPER+S): Noctalia's default tiles, with the plugin's stay
 # awake and night light in place of the built-in ones so they match the bar.
