@@ -84,7 +84,7 @@ function render()
   if not isOpen then return end
   local children = { pop.header(editing and "EDIT QUICK SETTINGS" or "QUICK SETTINGS", version ~= "" and version or nil) }
   if editing then
-    table.insert(children, pop.muted("Click one to move it: bar → popover → both → off.", { fontSize = 11 }))
+    table.insert(children, pop.muted("Click to move: bar → popover → both → off", { fontSize = 11 }))
     table.insert(children, grid(items.ids))
   else
     table.insert(children, pop.muted(who, { fontSize = 11 }))
