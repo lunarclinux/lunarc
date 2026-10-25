@@ -4,6 +4,7 @@
 #   pkg/build [ref]                          on this machine (development, tests, CI)
 #   pkg/build --chroot [--fresh] [ref]       in a clean, current Arch chroot (for publishing)
 #   pkg/build --chroot --dry-run [ref]       print the root and signing steps instead
+#   pkg/build --dev [ref]                    a test build to install on this machine
 #
 # default ref: HEAD. The version comes from the last layer tag: l5-complete
 # plus 3 commits -> 0.5.3.
@@ -26,17 +27,28 @@
 # builds. Needs devtools and root (sudo asks once). --fresh deletes and
 # recreates the chroot first. tools/publish only accepts a chroot build.
 #
+# --dev: packages for trying a change on your own machine before it's released.
+# Each is versioned to sort just above what's published (the repository at
+# REPO_URL in repo.conf) and below the next release, so the next update replaces
+# it: the distro's packages keep the ref's version with pkgrel 0.<UTC minute>
+# (0.8.372-0.202610251030, below 0.8.372-1); a vendored package whose PKGBUILD
+# is ahead of the published one gets pkgrel <its pkgrel - 1>.<UTC minute>
+# (noctalia 1:5.2.1-7.202610251030, between the published -7 and the coming
+# -8). A vendored package the same as the published one isn't built: the
+# released package is the one to test with. Unsigned; output in pkg/out-dev/.
+#
 # Host builds use makepkg --nodeps: this machine needn't have the desktop or
 # every build dependency installed (some PKGBUILDs then use pinned Arch
 # packages for their build libraries; see pkg/noctalia).
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
-chroot=0 dry=0 fresh=0 ref=HEAD
+chroot=0 dry=0 fresh=0 dev=0 ref=HEAD
 while (( $# )); do
   case $1 in
     --chroot) chroot=1 ;;
     --dry-run) dry=1 ;;
     --fresh) fresh=1 ;;
+    --dev) dev=1 ;;
     -h|--help) sed -n '2,/^set -euo/{/^set -euo/d;s/^# \{0,1\}//;p}' "$0"; exit 0 ;;
     -*) echo "pkg/build: unknown option $1" >&2; exit 2 ;;
     *) ref=$1 ;;
@@ -47,7 +59,8 @@ if (( (dry || fresh) && ! chroot )); then
   echo "pkg/build: --dry-run and --fresh go with --chroot" >&2; exit 2
 fi
 fail() { echo "pkg/build: $*" >&2; exit 1; }
-if (( chroot )); then out=$root/pkg/out; else out=$root/pkg/out-test; fi
+if (( dev && chroot )); then echo "pkg/build: --dev builds are for this machine; not with --chroot" >&2; exit 2; fi
+if (( chroot )); then out=$root/pkg/out; elif (( dev )); then out=$root/pkg/out-dev; else out=$root/pkg/out-test; fi
 if [[ -n ${PKG_OUT:-} ]]; then out=$(realpath -m -- "$PKG_OUT"); fi
 if (( ! chroot )) && [[ $out == "$(realpath -m -- "$root/pkg/out")" ]]; then
   fail "pkg/out holds only clean-chroot builds (pkg/build --chroot); build elsewhere (default pkg/out-test)"
@@ -112,7 +125,9 @@ fi
 fpr=$(<"$work/src/pkg/keyring/fingerprint")
 signing_home=${SIGNING_GNUPGHOME:-$HOME/.local/share/$DISTRO_ID-signing/gnupg}
 sign=()
-if [[ -d $signing_home ]] && GNUPGHOME=$signing_home gpg --batch --list-secret-keys "$fpr" >/dev/null 2>&1; then
+if (( dev )); then
+  echo "pkg/build: --dev: unsigned"
+elif [[ -d $signing_home ]] && GNUPGHOME=$signing_home gpg --batch --list-secret-keys "$fpr" >/dev/null 2>&1; then
   export GNUPGHOME=$signing_home
   sign=(--sign --key "$fpr")
   echo "pkg/build: signing with $fpr"
@@ -141,6 +156,56 @@ for dir in "$work"/src/pkg/*/; do
   cp -r "$dir." "$work/$name/"
   vendored+=("$name")
 done
+# --dev: what's published, and the versions that sort between it and the next release.
+if (( dev )); then
+  repo_url=$(sed -n 's/^REPO_URL=//p' "$work/src/repo.conf" | head -1)
+  [[ -n $repo_url ]] || fail "--dev: no REPO_URL in repo.conf"
+  curl -fsSL --retry 2 -o "$work/published.db" "$repo_url/$DISTRO_REPO.db" \
+    || fail "--dev: couldn't download $repo_url/$DISTRO_REPO.db to see what's published"
+  declare -A published=()
+  while read -r n v; do published[$n]=$v; done < <(bsdtar -xOf "$work/published.db" '*/desc' \
+    | awk '/^%NAME%$/ { getline n } /^%VERSION%$/ { getline v; print n, v }')
+  stamp=$(date -u +%Y%m%d%H%M)
+  # The distro's packages: the ref must be ahead of the release.
+  [[ -n ${published[$DISTRO_ID]:-} ]] || fail "--dev: $DISTRO_ID isn't in the published repository"
+  pub=${published[$DISTRO_ID]%-*}
+  if (( $(vercmp "$ver" "$pub") <= 0 )); then
+    fail "--dev: $ref is $ver, not ahead of the published $pub; nothing to test (or rebase on main)"
+  fi
+  dev_versions=("$DISTRO_ID $ver-0.$stamp (published ${published[$DISTRO_ID]})")
+  # Vendored packages: built only when the PKGBUILD is ahead of the published one.
+  keep=()
+  for name in "${vendored[@]}"; do
+    info=$(cd "$work/$name" && makepkg --printsrcinfo 2>/dev/null)
+    first=$(awk '$1 == "pkgname" { print $3; exit }' <<<"$info")
+    epoch=$(awk '$1 == "epoch" { print $3; exit }' <<<"$info")
+    pv=$(awk '$1 == "pkgver" { print $3; exit }' <<<"$info")
+    rel=$(awk '$1 == "pkgrel" { print $3; exit }' <<<"$info")
+    full=${epoch:+$epoch:}$pv-$rel
+    have=${published[$first]:-}
+    if [[ -n $have ]] && (( $(vercmp "$full" "$have") <= 0 )); then
+      if (( $(vercmp "$full" "$have") < 0 )); then
+        fail "--dev: pkg/$name is $full, behind the published $have"
+      fi
+      continue
+    fi
+    base=0
+    if [[ -n $have && ${rel%%.*} -gt 1 ]]; then base=$(( ${rel%%.*} - 1 )); fi
+    newrel=$base.$stamp
+    devfull=${epoch:+$epoch:}$pv-$newrel
+    if [[ -n $have ]] && (( $(vercmp "$devfull" "$have") <= 0 )); then newrel=0.$stamp; devfull=${epoch:+$epoch:}$pv-$newrel; fi
+    if [[ -n $have ]] && (( $(vercmp "$devfull" "$have") <= 0 )); then
+      fail "--dev: no test version of $name between the published $have and $full"
+    fi
+    # In the folder that's built, and in the copy the distro package reads its
+    # dependency on our builds from (pkg/main).
+    sed -i "s/^pkgrel=.*/pkgrel=$newrel/" "$work/$name/PKGBUILD" "$work/src/pkg/$name/PKGBUILD"
+    keep+=("$name")
+    dev_versions+=("$first $devfull (published ${have:-none}; the next release is $full)")
+  done
+  vendored=("${keep[@]}")
+fi
+
 # The distro's own packages. Each folder is self-contained, so the same folder
 # builds here and in the chroot (which sees only this folder, as /startdir):
 # the repository at the ref in distro-src (hard links; not src, which is
@@ -156,6 +221,7 @@ for part in keyring settings main; do
     echo "PKGVER=$ver"
     cat "$work/src/pkg/$part/PKGBUILD"
   } > "$build/PKGBUILD"
+  if (( dev )); then sed -i "s/^pkgrel=.*/pkgrel=0.$stamp/" "$build/PKGBUILD"; fi
   # An install script is named after its package; fill in the name.
   for script in "$work/src/pkg/$part"/*.install; do
     if [[ -f $script ]]; then sed "s/@DISTRO_ID@/$DISTRO_ID/g" "$script" > "$build/$DISTRO_ID-$part.install"; fi
@@ -319,5 +385,13 @@ repo-add -q "${sign[@]}" "$db" "$out"/repo/*.pkg.tar.zst
 # How this build was made; tools/publish only publishes chroot builds.
 mode=host
 if (( chroot )); then mode=chroot; fi
+if (( dev )); then mode=dev; fi
 printf 'BUILD_MODE=%s\nBUILD_COMMIT=%s\nBUILD_VERSION=%s\n' "$mode" "$commit" "$ver" > "$out/build-info"
 ls -1 "$out/repo"
+if (( dev )); then
+  echo
+  echo "pkg/build: test versions (the next update replaces them with the release):"
+  printf '  %s\n' "${dev_versions[@]}"
+  echo "pkg/build: install with:"
+  printf '  sudo pacman -U'; for f in "$out"/repo/*.pkg.tar.zst; do case ${f##*/} in *-debug-*) ;; *) printf ' %q' "$f" ;; esac; done; echo
+fi
