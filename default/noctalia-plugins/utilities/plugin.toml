@@ -137,6 +137,14 @@ open_near_click = true
 
 # The weather popover, under the weather segment (pop.luau's look).
 [[panel]]
+id = "calendar-panel"
+entry = "calendar-panel.luau"
+width = 320
+height = 372
+placement = "floating"
+open_near_click = true
+
+[[panel]]
 id = "weather-panel"
 entry = "weather-panel.luau"
 width = 360

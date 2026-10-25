@@ -245,9 +245,6 @@ type = "@DISTRO_ID@/utilities:clock"
 anchor = true
 capsule = false
 
-[widget.clock.actions]
-left = "panel-toggle control-center calendar"
-
 [widget.moon]
 type = "@DISTRO_ID@/utilities:moon"
 capsule = false
