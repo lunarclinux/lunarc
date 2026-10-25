@@ -226,18 +226,33 @@ FOLDER_COLORS='black bluegrey blue brown cyan darkcyan deeporange green grey ind
 folder_color() {
   local v; v=$(setting theme.folders auto)
   if [[ $v != auto ]]; then printf '%s\n' "$v"; return; fi
-  # The nearest by the folders' front colour.
-  local c pick='' best=999999 r g b fr fg fb d accent
+  # The nearest by hue (light themes' accents are dark; a match on the whole
+  # colour would give them black folders), saturation breaking near-ties;
+  # the greys only for a grey accent.
+  local c f accent list=''
   accent=$(jq -r '.color.accent.amber' "$TOKENS") || return 1
-  r=$((16#${accent:1:2})) g=$((16#${accent:3:2})) b=$((16#${accent:5:2}))
   for c in $FOLDER_COLORS; do
-    fr=$(grep -oE 'fill:#[0-9a-fA-F]{6}' "$PAPIRUS/64x64/places/folder-$c.svg" 2>/dev/null | sed -n 3p) || true
-    [[ -n $fr ]] || continue
-    fr=${fr#fill:#}; fg=$((16#${fr:2:2})) fb=$((16#${fr:4:2})); fr=$((16#${fr:0:2}))
-    d=$(( (fr - r) ** 2 + (fg - g) ** 2 + (fb - b) ** 2 ))
-    if (( d < best )); then best=$d pick=$c; fi
+    f=$(grep -oE 'fill:#[0-9a-fA-F]{6}' "$PAPIRUS/64x64/places/folder-$c.svg" 2>/dev/null | sed -n 3p) || true
+    [[ -n $f ]] && list+="$c ${f#fill:#}"$'\n'
   done
-  printf '%s\n' "${pick:-blue}"
+  awk -v a="${accent#\#}" '
+    function hsv(h,   r, g, b, mx, mn, d) {
+      r = strtonum("0x" substr(h, 1, 2)) / 255; g = strtonum("0x" substr(h, 3, 2)) / 255; b = strtonum("0x" substr(h, 5, 2)) / 255
+      mx = r; if (g > mx) mx = g; if (b > mx) mx = b
+      mn = r; if (g < mn) mn = g; if (b < mn) mn = b
+      d = mx - mn; S = mx > 0 ? d / mx : 0
+      if (d == 0) H = 0; else if (mx == r) H = 60 * (((g - b) / d) % 6); else if (mx == g) H = 60 * ((b - r) / d + 2); else H = 60 * ((r - g) / d + 4)
+      if (H < 0) H += 360
+    }
+    BEGIN { hsv(a); ah = H; as = S }
+    NF == 2 {
+      hsv($2)
+      if (as < 0.15) d = ($1 == "grey") ? 0 : 999
+      else if (S < 0.2) d = 999
+      else { dh = H - ah; if (dh < 0) dh = -dh; if (dh > 180) dh = 360 - dh; ds = S - as; if (ds < 0) ds = -ds; d = dh + 40 * ds }
+      if (best == "" || d < bd) { best = $1; bd = d }
+    }
+    END { print (best == "" ? "blue" : best) }' <<<"$list"
 }
 write_icons() {
   [[ -d $PAPIRUS ]] || return 0
