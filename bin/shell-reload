@@ -7,6 +7,9 @@
 #                          wants that aren't running (new ones included),
 #                          restart our stateless watchers so they run the new
 #                          code, apply user migrations, and reload Noctalia once
+#                          (restart it, as --noctalia does, when the plugins'
+#                          panels changed: Noctalia registers panels only when
+#                          it starts)
 #   shell-reload --hypr    after the Hyprland defaults change: reload Hyprland
 #   shell-reload --noctalia
 #                          after the Noctalia package changes: restart the
@@ -93,6 +96,33 @@ session_services() { # session_services <user>
   user_systemctl "$user" start --no-block "$DISTRO_ID-migrate.service" >/dev/null 2>&1
 }
 
+# The plugins' panel ids, one per line: a reload picks up new plugin code, but
+# a panel the running shell doesn't know stays unknown until it restarts.
+panels_file=/var/lib/$DISTRO_ID/noctalia-panels
+panel_ids() {
+  awk 'FNR == 1 { p = 0 } /^\[\[panel\]\]/ { p = 1; next } /^\[/ { p = 0 } p && /^id *=/ { print FILENAME ": " $0 }' \
+    /usr/share/"$DISTRO_ID"/noctalia-plugins/*/plugin.toml 2>/dev/null | sed "s|^/usr/share/$DISTRO_ID/noctalia-plugins/||" | sort
+}
+panels_changed=0
+if [[ $mode == shell ]]; then
+  now=$(panel_ids)
+  if [[ ! -f $panels_file || $(cat "$panels_file") != "$now" ]]; then panels_changed=1; fi
+  mkdir -p "${panels_file%/*}" && printf '%s\n' "$now" > "$panels_file"
+fi
+
+# Restart the shell now only when it says it isn't locked; otherwise (locked,
+# or no answer) a transient unit waits for the unlock.
+restart_shell() { # restart_shell <user> <runtime dir>
+  local user=$1 runtime=$2
+  if timeout 5 runuser -u "$user" -- bash -c "$(declare -f noctalia_msg); noctalia_msg \"\$1\" status" _ "$runtime" 2>/dev/null \
+    | grep -q '"locked": *false'; then
+    user_systemctl "$user" try-restart --no-block noctalia.service >/dev/null 2>&1
+  else
+    timeout 20 systemd-run --user --machine="$user@" --quiet --collect --no-block \
+      --unit="$DISTRO_ID-shell-restart" "$lib/shell-reload" --noctalia-unlocked >/dev/null 2>&1
+  fi
+}
+
 hypr_reload() { # hypr_reload <user> <runtime dir>
   local user=$1 runtime=$2 dir sig
   for dir in "$runtime"/hypr/*/; do
@@ -114,18 +144,14 @@ while read -r _session uid user _rest; do
   if [[ $mode == --hypr ]]; then
     hypr_reload "$user" "$runtime"
   elif [[ $mode == --noctalia ]]; then
-    # Restart now only when the shell says it isn't locked; otherwise (locked,
-    # or no answer) a transient unit waits for the unlock.
-    if timeout 5 runuser -u "$user" -- bash -c "$(declare -f noctalia_msg); noctalia_msg \"\$1\" status" _ "$runtime" 2>/dev/null \
-      | grep -q '"locked": *false'; then
-      user_systemctl "$user" try-restart --no-block noctalia.service >/dev/null 2>&1
-    else
-      timeout 20 systemd-run --user --machine="$user@" --quiet --collect --no-block \
-        --unit="$DISTRO_ID-shell-restart" "$lib/shell-reload" --noctalia-unlocked >/dev/null 2>&1
-    fi
+    restart_shell "$user" "$runtime"
   else
     session_services "$user"
-    timeout 5 runuser -u "$user" -- bash -c "$(declare -f noctalia_msg); noctalia_msg \"\$1\" config-reload" _ "$runtime" >/dev/null 2>&1
+    if (( panels_changed )); then
+      restart_shell "$user" "$runtime"
+    else
+      timeout 5 runuser -u "$user" -- bash -c "$(declare -f noctalia_msg); noctalia_msg \"\$1\" config-reload" _ "$runtime" >/dev/null 2>&1
+    fi
   fi
 done < <(loginctl list-sessions --no-legend 2>/dev/null | awk '{print $1, $2, $3}' | sort -u -k2,2)
 exit 0
