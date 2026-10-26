@@ -381,7 +381,7 @@ case ${1:-} in
     noctalia msg panel-toggle "$DISTRO_ID/utilities:themes" >/dev/null ;;
   current) printf '%s (%s)\n' "$(setting theme)" "$(setting theme.mode)" ;;
   set)
-    name=${2:-}; [[ -n $name && -d $themes/$name ]] || die "unknown theme '${name}'; see '$DISTRO_ID theme list'"
+    name=${2:-}; [[ $name =~ ^[a-z0-9][a-z0-9-]*$ && -d $themes/$name ]] || die "unknown theme '${name}'; see '$DISTRO_ID theme list'"
     mode=${3:-$(meta "$name" mode)}
     [[ $mode == dark || $mode == light ]] || die "mode must be dark or light"
     if ! has_variant "$name" "$mode"; then info "$name has no $mode variant; using its default"; mode=$(meta "$name" mode); fi
@@ -468,7 +468,7 @@ case ${1:-} in
     info "login screen: $name ($(setting theme.mode))" ;;
   preview)
     if [[ -n ${2:-} ]]; then
-      [[ -d $themes/$2 ]] || die "unknown theme '$2'"
+      [[ $2 =~ ^[a-z0-9][a-z0-9-]*$ && -d $themes/$2 ]] || die "unknown theme '$2'"
       preview "$2"
     else
       while IFS= read -r name; do preview "$name"; done < <(theme_names)

@@ -44,6 +44,7 @@ case $part in
     # allowed without a password for the person at the computer.
     put "$src/bin/greeter-theme" "$dest/usr/lib/$id/greeter-theme" 755
     put "$src/etc/polkit/greeter-theme.policy" "$dest/usr/share/polkit-1/actions/$id.greeter-theme.policy"
+    put "$src/etc/polkit/greeter-theme.rules" "$dest/usr/share/polkit-1/rules.d/50-$id-greeter-theme.rules"
     put "$src/distro.conf" "$dest/usr/lib/$id/distro.conf"
     put "$src/repo.conf" "$dest/usr/lib/$id/repo.conf"
     for cmd in "$src"/bin/commands/*; do put "$cmd" "$dest/usr/lib/$id/commands/${cmd##*/}" 755; done

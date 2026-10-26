@@ -123,13 +123,22 @@ restart_shell() { # restart_shell <user> <runtime dir>
   fi
 }
 
+# Only instances whose lock file names a running Hyprland of this user, each
+# process once, at most 4: anything else in the user's runtime folder (which
+# the user controls) could otherwise hold up every package transaction.
 hypr_reload() { # hypr_reload <user> <runtime dir>
-  local user=$1 runtime=$2 dir sig
+  local user=$1 runtime=$2 dir sig pid uid seen=" " n=0
+  uid=$(id -u "$user") || return 0
   for dir in "$runtime"/hypr/*/; do
+    (( n < 4 )) || break
     sig=${dir%/}; sig=${sig##*/}
     [[ $sig =~ ^[A-Za-z0-9_]+$ ]] || continue
-    [[ -S $runtime/hypr/$sig/.socket.sock ]] || continue
-    timeout 10 runuser -u "$user" -- env XDG_RUNTIME_DIR="$runtime" HYPRLAND_INSTANCE_SIGNATURE="$sig" \
+    [[ -S $runtime/hypr/$sig/.socket.sock && ! -L $runtime/hypr/$sig/hyprland.lock ]] || continue
+    pid=$(head -c 32 "$runtime/hypr/$sig/hyprland.lock" 2>/dev/null | head -n1)
+    [[ $pid =~ ^[0-9]+$ && $seen != *" $pid "* ]] || continue
+    [[ $(cat "/proc/$pid/comm" 2>/dev/null) == Hyprland && $(stat -c %u "/proc/$pid" 2>/dev/null) == "$uid" ]] || continue
+    seen+="$pid "; n=$(( n + 1 ))
+    timeout 5 runuser -u "$user" -- env XDG_RUNTIME_DIR="$runtime" HYPRLAND_INSTANCE_SIGNATURE="$sig" \
       hyprctl reload >/dev/null 2>&1
   done
 }

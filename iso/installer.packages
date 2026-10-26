@@ -6,3 +6,5 @@ gum
 # which runs as root, open its window on the live desktop.
 gparted
 xorg-xhost
+# The firewall, on during the live session as on an installed system
+firewalld
