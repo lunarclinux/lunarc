@@ -1,12 +1,12 @@
 --!nonstrict
 -- Stay awake as a quick-settings tile (SUPER+S), the same switch as the bar's
--- cup (`@DISTRO_ID@ awake`).
+-- eye (`@DISTRO_ID@ awake`).
 local common = require("./common.luau")
 local on = false
 
 local function render()
   shortcut.setLabel("Stay awake")
-  shortcut.setIcon("mug-filled", "mug")
+  shortcut.setIcon("eye", "eye-off")
   shortcut.setActive(on)
 end
 

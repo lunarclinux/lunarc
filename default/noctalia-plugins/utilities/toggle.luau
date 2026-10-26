@@ -1,13 +1,13 @@
 --!nonstrict
--- Shared by the bar's toggles (stay awake, night light, Low Gravity, silence,
--- reminders, recording, dictation). Each shows only while it's on, or while the
+-- Shared by the bar's toggles, the quick settings shown in the bar
+-- (quick-items.luau, quick-widget.luau). Each shows only while it's on, or while the
 -- anchor (toggles.luau) is revealing them all. Hovering a toggle keeps them
 -- revealed: it reports "hover:<entry>" and the anchor decides. Without the
 -- anchor in the bar (a hand-made bar layout), toggles always show.
 local seg = require("./seg.luau")
 local M = {}
 
-M.ids = { "stay-awake", "nightlight", "gravity", "silence", "reminders", "recorder", "dictate" }
+M.ids = require("./quick-items.luau").ids
 
 -- A toggle widget: new(barWidget, entry id) → { show(children, active) }, where
 -- children is a list of ui.* nodes (a glyph, maybe a label), drawn as one of

@@ -153,6 +153,8 @@ case $part in
     for image in "$src"/default/plymouth/*.png; do install -Dm644 "$image" "$splash/${image##*/}"; done
     # The system's name (os-release), kept in place by a hook.
     put "$src/etc/os-release" "$dest/usr/share/$id/os-release"
+    # Its version: the package's (quick settings, fastfetch and others show it).
+    if [[ -n ${DISTRO_VERSION:-} ]]; then printf 'VERSION="%s"\nVERSION_ID=%s\n' "$DISTRO_VERSION" "$DISTRO_VERSION" >> "$dest/usr/share/$id/os-release"; fi
     put "$src/etc/pacman.d/hooks/os-release.hook" "$dest/usr/share/libalpm/hooks/$id-os-release.hook"
     # Privacy and security defaults (decision record 0031): telemetry opt-outs
     # for the session and for login shells, kernel hardening, GNOME app defaults.

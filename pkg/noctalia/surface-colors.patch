@@ -1,8 +1,8 @@
-diff --git i/src/app/application_services.cpp w/src/app/application_services.cpp
-index 9747332..4c3b59f 100644
---- i/src/app/application_services.cpp
-+++ w/src/app/application_services.cpp
-@@ -580,6 +580,12 @@ void Application::initStyleThemeAndWayland() {
+diff --git a/src/app/application_services.cpp b/src/app/application_services.cpp
+index 4fadf04..b8bc3d0 100644
+--- a/src/app/application_services.cpp
++++ b/src/app/application_services.cpp
+@@ -581,6 +581,12 @@ void Application::initStyleThemeAndWayland() {
          finish.sheenBottom = *shell.sheenBottomColor;
        }
        Box::setGlobalSurfaceFinish(finish);
@@ -15,11 +15,11 @@ index 9747332..4c3b59f 100644
      }
      lastCornerRadiusScale = corner;
      if (cornerChanged) {
-diff --git i/src/config/config_types.h w/src/config/config_types.h
-index dbb89fe..a45e123 100644
---- i/src/config/config_types.h
-+++ w/src/config/config_types.h
-@@ -1153,6 +1153,11 @@ struct ShellConfig {
+diff --git a/src/config/config_types.h b/src/config/config_types.h
+index 775b651..2b45784 100644
+--- a/src/config/config_types.h
++++ b/src/config/config_types.h
+@@ -1278,6 +1278,11 @@ struct ShellConfig {
    // on_surface at 7% and 2% (sheen).
    bool topHighlight = false;
    std::optional<ColorSpec> topHighlightColor;
@@ -31,12 +31,12 @@ index dbb89fe..a45e123 100644
    bool surfaceSheen = false;
    std::optional<ColorSpec> sheenTopColor;
    std::optional<ColorSpec> sheenBottomColor;
-diff --git i/src/config/schema/config_schema.cpp w/src/config/schema/config_schema.cpp
-index 6ad257a..f87c92a 100644
---- i/src/config/schema/config_schema.cpp
-+++ w/src/config/schema/config_schema.cpp
-@@ -1619,6 +1619,10 @@ namespace noctalia::config::schema {
-         field(&ShellConfig::cardBorders, "card_borders"),
+diff --git a/src/config/schema/config_schema.cpp b/src/config/schema/config_schema.cpp
+index 8003569..bccf410 100644
+--- a/src/config/schema/config_schema.cpp
++++ b/src/config/schema/config_schema.cpp
+@@ -1640,6 +1640,10 @@ namespace noctalia::config::schema {
+         field(&ShellConfig::showCloseButtons, "show_close_buttons"),
          field(&ShellConfig::topHighlight, "top_highlight"),
          colorSpecField(&ShellConfig::topHighlightColor, "top_highlight_color", /*alwaysEmit=*/false),
 +        colorSpecField(&ShellConfig::cardColor, "card_color", /*alwaysEmit=*/false),
@@ -46,10 +46,10 @@ index 6ad257a..f87c92a 100644
          field(&ShellConfig::surfaceSheen, "surface_sheen"),
          colorSpecField(&ShellConfig::sheenTopColor, "sheen_top_color", /*alwaysEmit=*/false),
          colorSpecField(&ShellConfig::sheenBottomColor, "sheen_bottom_color", /*alwaysEmit=*/false),
-diff --git i/src/shell/control_center/tab.cpp w/src/shell/control_center/tab.cpp
+diff --git a/src/shell/control_center/tab.cpp b/src/shell/control_center/tab.cpp
 index b008d45..3b1f64b 100644
---- i/src/shell/control_center/tab.cpp
-+++ w/src/shell/control_center/tab.cpp
+--- a/src/shell/control_center/tab.cpp
++++ b/src/shell/control_center/tab.cpp
 @@ -8,6 +8,13 @@ namespace control_center {
  
    void applySectionCardStyle(Flex& card, float scale, float fillOpacity) {
@@ -64,10 +64,10 @@ index b008d45..3b1f64b 100644
      card.setDirection(FlexDirection::Vertical);
      card.setAlign(FlexAlign::Stretch);
      card.setGap(Style::spaceSm * scale);
-diff --git i/src/ui/controls/button.cpp w/src/ui/controls/button.cpp
+diff --git a/src/ui/controls/button.cpp b/src/ui/controls/button.cpp
 index 8ad2653..a4e9da1 100644
---- i/src/ui/controls/button.cpp
-+++ w/src/ui/controls/button.cpp
+--- a/src/ui/controls/button.cpp
++++ b/src/ui/controls/button.cpp
 @@ -36,7 +36,8 @@ namespace {
        return Button::ButtonPalette{
            .borderWidth = Style::borderWidth,
@@ -89,10 +89,10 @@ index 8ad2653..a4e9da1 100644
      }
    }
    m_visualStateInitialized = true;
-diff --git i/src/ui/palette.cpp w/src/ui/palette.cpp
+diff --git a/src/ui/palette.cpp b/src/ui/palette.cpp
 index d2f01b5..0d08a36 100644
---- i/src/ui/palette.cpp
-+++ w/src/ui/palette.cpp
+--- a/src/ui/palette.cpp
++++ b/src/ui/palette.cpp
 @@ -125,6 +125,14 @@ void setPalette(const Palette& p) {
    paletteChanged().emit();
  }
@@ -108,10 +108,10 @@ index d2f01b5..0d08a36 100644
  Color colorForRoleSnapshot(ColorRole role) {
    std::scoped_lock lock(g_paletteMutex);
    return colorForRole(role);
-diff --git i/src/ui/palette.h w/src/ui/palette.h
+diff --git a/src/ui/palette.h b/src/ui/palette.h
 index d405342..7339a9a 100644
---- i/src/ui/palette.h
-+++ w/src/ui/palette.h
+--- a/src/ui/palette.h
++++ b/src/ui/palette.h
 @@ -147,6 +147,20 @@ void setPalette(const Palette& p);
  // and re-apply palette-derived colors to their scene nodes on each emit.
  Signal<>& paletteChanged();

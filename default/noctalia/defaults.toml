@@ -236,6 +236,26 @@ capsule = false
 type = "@DISTRO_ID@/utilities:recorder"
 capsule = false
 
+[widget.qs-wifi]
+type = "@DISTRO_ID@/utilities:quick-wifi"
+capsule = false
+
+[widget.qs-bluetooth]
+type = "@DISTRO_ID@/utilities:quick-bluetooth"
+capsule = false
+
+[widget.qs-power]
+type = "@DISTRO_ID@/utilities:quick-power"
+capsule = false
+
+[widget.qs-dark]
+type = "@DISTRO_ID@/utilities:quick-dark"
+capsule = false
+
+[widget.qs-mic]
+type = "@DISTRO_ID@/utilities:quick-mic"
+capsule = false
+
 [widget.dictate]
 type = "@DISTRO_ID@/utilities:dictate"
 capsule = false

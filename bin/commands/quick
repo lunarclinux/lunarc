@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# summary: Choose which quick settings show in the bar and in SUPER+S
+set -euo pipefail
+source "$DISTRO_LIB/lib.sh"
+
+usage() {
+  cat <<USAGE
+Usage: $DISTRO_ID quick [command]
+
+The quick settings are one set of switches (Wi-Fi, Bluetooth, stay awake, night
+light, do not disturb, power profile, dark mode, mic off, Low Gravity,
+reminders, screen recording, dictation). Each can show in the bar's toggles
+(left of the clock), in the quick settings popover (SUPER+S), in both, or in
+neither. Noctalia's full control center stays one click away in the popover.
+
+  list [--plain]               every quick setting and where it shows
+  <id> bar|panel|both|off      show it there
+  <id> next                    the next of those (what the popover's Edit does)
+  reset                        back to the defaults
+
+ids: ${QUICK_IDS[*]}
+USAGE
+}
+
+# The ids listed in a setting ("none" for an empty list), in order.
+ids_in() { # ids_in <bar|panel>
+  local v def
+  if [[ $1 == bar ]]; then def=$QUICK_BAR_DEFAULT; else def=$QUICK_PANEL_DEFAULT; fi
+  v=$(setting "quick.$1" "$def")
+  if [[ $v != none ]]; then printf '%s\n' $v; fi
+}
+has() { ids_in "$1" | grep -qx -- "$2"; }
+where() { # where <id> → bar|panel|both|off
+  local b=0 p=0
+  if has bar "$1"; then b=1; fi
+  if has panel "$1"; then p=1; fi
+  case $b$p in 11) echo both ;; 10) echo bar ;; 01) echo panel ;; *) echo off ;; esac
+}
+known() { local i; for i in "${QUICK_IDS[@]}"; do [[ $i == "$1" ]] && return 0; done; return 1; }
+
+# Adds or removes an id, keeping the catalog's order for a newly added one.
+put() { # put <bar|panel> <id> <yes|no>
+  local list=() i out=()
+  mapfile -t list < <(ids_in "$1")
+  for i in "${QUICK_IDS[@]}"; do
+    if [[ $i == "$2" ]]; then
+      if [[ $3 == yes ]]; then out+=("$i"); fi
+    elif printf '%s\n' "${list[@]}" | grep -qx -- "$i"; then
+      out+=("$i")
+    fi
+  done
+  # Items already in the list keep the list's own order.
+  local ordered=() x
+  for x in "${list[@]}"; do printf '%s\n' "${out[@]}" | grep -qx -- "$x" && ordered+=("$x"); done
+  for x in "${out[@]}"; do printf '%s\n' "${ordered[@]}" | grep -qx -- "$x" || ordered+=("$x"); done
+  if (( ${#ordered[@]} )); then set_setting "quick.$1" "${ordered[*]}"; else set_setting "quick.$1" none; fi
+}
+
+apply() {
+  bar_apply >/dev/null
+  noctalia msg plugin "$DISTRO_ID/utilities:quick-panel" all refresh >/dev/null 2>&1 || true
+}
+
+case ${1:-list} in
+  -h|--help|help) usage ;;
+  list)
+    for id in "${QUICK_IDS[@]}"; do
+      if [[ ${2:-} == --plain ]]; then printf '%s\t%s\n' "$id" "$(where "$id")"
+      else printf '%-12s %s\n' "$id" "$(where "$id")"; fi
+    done ;;
+  reset)
+    sed -i '/^quick\.\(bar\|panel\) *=/d' "$SETTINGS" 2>/dev/null || true
+    apply
+    info "quick settings: the defaults" ;;
+  *)
+    id=$1 place=${2:-}
+    known "$id" || die "unknown quick setting '$id'; ids: ${QUICK_IDS[*]}"
+    if [[ -z $place ]]; then where "$id"; exit 0; fi
+    if [[ $place == next ]]; then
+      case $(where "$id") in bar) place=panel ;; panel) place=both ;; both) place=off ;; *) place=bar ;; esac
+    fi
+    case $place in
+      bar) put bar "$id" yes; put panel "$id" no ;;
+      panel) put bar "$id" no; put panel "$id" yes ;;
+      both) put bar "$id" yes; put panel "$id" yes ;;
+      off) put bar "$id" no; put panel "$id" no ;;
+      *) die "where: bar, panel, both, off or next" ;;
+    esac
+    apply
+    info "$id: $place" ;;
+esac

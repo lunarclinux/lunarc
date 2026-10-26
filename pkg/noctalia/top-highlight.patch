@@ -1,7 +1,7 @@
-diff --git i/src/app/application_services.cpp w/src/app/application_services.cpp
-index bdc20758a..9747332e6 100644
---- i/src/app/application_services.cpp
-+++ w/src/app/application_services.cpp
+diff --git a/src/app/application_services.cpp b/src/app/application_services.cpp
+index 03a253d..4fadf04 100644
+--- a/src/app/application_services.cpp
++++ b/src/app/application_services.cpp
 @@ -92,6 +92,7 @@
  #include "ui/dialogs/color_picker_dialog.h"
  #include "ui/dialogs/file_dialog.h"
@@ -10,10 +10,10 @@ index bdc20758a..9747332e6 100644
  #include "ui/style.h"
  #include "util/file_utils.h"
  #include "util/string_utils.h"
-@@ -564,6 +565,22 @@ void Application::initStyleThemeAndWayland() {
-     Style::setPopupBordersEnabled(m_configService.config().shell.popupBorders);
+@@ -565,6 +566,22 @@ void Application::initStyleThemeAndWayland() {
      Style::setPopupShadowsEnabled(m_configService.config().shell.popupShadows);
      Style::setCardBordersEnabled(m_configService.config().shell.cardBorders);
+     Style::setCloseButtonsEnabled(m_configService.config().shell.showCloseButtons);
 +    {
 +      const auto& shell = m_configService.config().shell;
 +      SurfaceFinish finish;
@@ -33,14 +33,14 @@ index bdc20758a..9747332e6 100644
      lastCornerRadiusScale = corner;
      if (cornerChanged) {
        m_notificationToast.requestLayout();
-diff --git i/src/config/config_types.h w/src/config/config_types.h
-index bad0c2415..73b8ffb75 100644
---- i/src/config/config_types.h
-+++ w/src/config/config_types.h
-@@ -1146,6 +1146,15 @@ struct ShellConfig {
-   bool popupBorders = true;
+diff --git a/src/config/config_types.h b/src/config/config_types.h
+index e16fb17..775b651 100644
+--- a/src/config/config_types.h
++++ b/src/config/config_types.h
+@@ -1272,6 +1272,15 @@ struct ShellConfig {
    bool popupShadows = true;
    bool cardBorders = true;
+   bool showCloseButtons = true;
 +  // Frosted surfaces: a 1px highlight along the top inner edge of the bar,
 +  // panels, launcher, OSD and notification toasts, and a faint top-to-bottom
 +  // sheen over them. Colors default to primary at 32% (highlight) and
@@ -53,14 +53,14 @@ index bad0c2415..73b8ffb75 100644
    std::string fontFamily = "sans-serif";
    std::string lang; // empty = auto-detect from $LC_ALL/$LC_MESSAGES/$LANG
    std::string timeFormat = "{:%H:%M}";
-diff --git i/src/config/schema/config_schema.cpp w/src/config/schema/config_schema.cpp
-index ef45b41bf..c8fb1ac22 100644
---- i/src/config/schema/config_schema.cpp
-+++ w/src/config/schema/config_schema.cpp
-@@ -1616,6 +1616,11 @@ namespace noctalia::config::schema {
-         field(&ShellConfig::popupBorders, "popup_borders"),
+diff --git a/src/config/schema/config_schema.cpp b/src/config/schema/config_schema.cpp
+index 8619822..8003569 100644
+--- a/src/config/schema/config_schema.cpp
++++ b/src/config/schema/config_schema.cpp
+@@ -1638,6 +1638,11 @@ namespace noctalia::config::schema {
          field(&ShellConfig::popupShadows, "popup_shadows"),
          field(&ShellConfig::cardBorders, "card_borders"),
+         field(&ShellConfig::showCloseButtons, "show_close_buttons"),
 +        field(&ShellConfig::topHighlight, "top_highlight"),
 +        colorSpecField(&ShellConfig::topHighlightColor, "top_highlight_color", /*alwaysEmit=*/false),
 +        field(&ShellConfig::surfaceSheen, "surface_sheen"),
@@ -69,11 +69,11 @@ index ef45b41bf..c8fb1ac22 100644
          // font_family is trimmed; empty falls back to sans-serif.
          custom<ShellConfig>(
              "font_family",
-diff --git i/src/shell/bar/bar.cpp w/src/shell/bar/bar.cpp
-index ff71f3d99..e509dde76 100644
---- i/src/shell/bar/bar.cpp
-+++ w/src/shell/bar/bar.cpp
-@@ -3270,6 +3270,7 @@ void Bar::buildScene(BarInstance& instance, std::uint32_t width, std::uint32_t h
+diff --git a/src/shell/bar/bar.cpp b/src/shell/bar/bar.cpp
+index 46eadf6..68a1296 100644
+--- a/src/shell/bar/bar.cpp
++++ b/src/shell/bar/bar.cpp
+@@ -3307,6 +3307,7 @@ void Bar::buildScene(BarInstance& instance, std::uint32_t width, std::uint32_t h
  
      // Bar background
      instance.bg = static_cast<Box*>(instance.slideRoot->addChild(ui::box()));
@@ -81,11 +81,11 @@ index ff71f3d99..e509dde76 100644
  
      // Shadow — bar shape copy rendered with large SDF softness to simulate a blurred drop shadow.
      if (shadowSize > 0.0F) {
-diff --git i/src/shell/notification/notification_toast.cpp w/src/shell/notification/notification_toast.cpp
-index 368962963..3c0548c5a 100644
---- i/src/shell/notification/notification_toast.cpp
-+++ w/src/shell/notification/notification_toast.cpp
-@@ -2796,6 +2796,7 @@ InputArea* NotificationToast::buildCard(
+diff --git a/src/shell/notification/notification_toast.cpp b/src/shell/notification/notification_toast.cpp
+index ba8fd22..60a3667 100644
+--- a/src/shell/notification/notification_toast.cpp
++++ b/src/shell/notification/notification_toast.cpp
+@@ -2802,6 +2802,7 @@ InputArea* NotificationToast::buildCard(
              box.setRadius(Style::scaledRadiusXl(scale));
              box.setFill(colorSpecFromRole(ColorRole::Surface, bgAlpha));
              box.setBorder(borderColor, borderWidth);
@@ -93,10 +93,10 @@ index 368962963..3c0548c5a 100644
            },
        })
    );
-diff --git i/src/shell/osd/osd_overlay.cpp w/src/shell/osd/osd_overlay.cpp
-index 48363fd6f..f22ec4b74 100644
---- i/src/shell/osd/osd_overlay.cpp
-+++ w/src/shell/osd/osd_overlay.cpp
+diff --git a/src/shell/osd/osd_overlay.cpp b/src/shell/osd/osd_overlay.cpp
+index 48363fd..f22ec4b 100644
+--- a/src/shell/osd/osd_overlay.cpp
++++ b/src/shell/osd/osd_overlay.cpp
 @@ -671,6 +671,7 @@ void OsdOverlay::buildScene(Instance& inst, std::uint32_t width, std::uint32_t h
              box.setRadius(osdCardRadius(cw, ch, s));
              box.setPosition(cardX, cardY);
@@ -105,34 +105,34 @@ index 48363fd6f..f22ec4b74 100644
            },
        })
    );
-diff --git i/src/shell/panel/panel_manager.cpp w/src/shell/panel/panel_manager.cpp
-index ff7a2c162..a021b8ade 100644
---- i/src/shell/panel/panel_manager.cpp
-+++ w/src/shell/panel/panel_manager.cpp
-@@ -2588,6 +2588,7 @@ void PanelManager::buildScene(std::uint32_t width, std::uint32_t height) {
-           bg->setBorder(colorSpecFromRole(ColorRole::Outline, backgroundOpacity), Style::borderWidth);
+diff --git a/src/shell/panel/panel_manager.cpp b/src/shell/panel/panel_manager.cpp
+index 4a6c83f..75016eb 100644
+--- a/src/shell/panel/panel_manager.cpp
++++ b/src/shell/panel/panel_manager.cpp
+@@ -2677,6 +2677,7 @@ void PanelManager::buildScene(std::uint32_t width, std::uint32_t height) {
+           );
          }
        }
 +      bg->setSurfaceFinish(true);
        m_bgNode = sceneParent->addChild(std::move(bg));
      }
  
-diff --git i/src/shell/panel/persistent_panel_host.cpp w/src/shell/panel/persistent_panel_host.cpp
-index 56106fe68..41dc502b3 100644
---- i/src/shell/panel/persistent_panel_host.cpp
-+++ w/src/shell/panel/persistent_panel_host.cpp
-@@ -342,6 +342,7 @@ void PersistentPanelHost::buildScene(Instance& instance, std::uint32_t width, st
-     if (m_config->config().shell.panel.borders) {
-       bg->setBorder(colorSpecFromRole(ColorRole::Outline, backgroundOpacity), Style::borderWidth);
+diff --git a/src/shell/panel/persistent_panel_host.cpp b/src/shell/panel/persistent_panel_host.cpp
+index 852757c..09f43a2 100644
+--- a/src/shell/panel/persistent_panel_host.cpp
++++ b/src/shell/panel/persistent_panel_host.cpp
+@@ -344,6 +344,7 @@ void PersistentPanelHost::buildScene(Instance& instance, std::uint32_t width, st
+           shell::panel_surface::borderColor(m_config, backgroundOpacity), shell::panel_surface::borderWidth(m_config)
+       );
      }
 +    bg->setSurfaceFinish(true);
      instance.bgNode = static_cast<Box*>(instance.sceneRoot->addChild(std::move(bg)));
    }
  
-diff --git i/src/ui/controls/box.cpp w/src/ui/controls/box.cpp
-index e72d16034..94e53f967 100644
---- i/src/ui/controls/box.cpp
-+++ w/src/ui/controls/box.cpp
+diff --git a/src/ui/controls/box.cpp b/src/ui/controls/box.cpp
+index e72d160..94e53f9 100644
+--- a/src/ui/controls/box.cpp
++++ b/src/ui/controls/box.cpp
 @@ -5,8 +5,18 @@
  #include "ui/palette.h"
  #include "ui/style.h"
@@ -242,10 +242,10 @@ index e72d16034..94e53f967 100644
 +  m_rect->setStyle(m_style);
 +  syncFinish();
 +}
-diff --git i/src/ui/controls/box.h w/src/ui/controls/box.h
-index 3856a5d6d..8c9193f10 100644
---- i/src/ui/controls/box.h
-+++ w/src/ui/controls/box.h
+diff --git a/src/ui/controls/box.h b/src/ui/controls/box.h
+index 3856a5d..8c9193f 100644
+--- a/src/ui/controls/box.h
++++ b/src/ui/controls/box.h
 @@ -9,6 +9,17 @@
  
  class RectNode;
