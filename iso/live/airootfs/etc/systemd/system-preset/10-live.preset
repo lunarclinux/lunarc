@@ -6,3 +6,8 @@ disable systemd-networkd.service
 disable systemd-networkd*.socket
 disable systemd-networkd-wait-online.service
 disable iwd.service
+# No remote logins on the live system (releng enables sshd with root login on;
+# the VM tests start it through their cloud-init seed), and the firewall on, as
+# on an installed system.
+disable sshd.service
+enable firewalld.service

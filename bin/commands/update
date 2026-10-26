@@ -253,8 +253,9 @@ clock_check() { # clock_check <interactive 0|1>
   info "Package signatures can't be checked until it's right."
   # Offered only when the clock is before clock_floor (so it's surely
   # wrong) and the unverified time isn't: a faked time can never move the clock
-  # back before that floor, where expired keys and certificates look valid.
-  if [[ -n $real ]] && (( interactive && now < clock_floor && real >= clock_floor )); then
+  # back before that floor, where expired keys and certificates look valid, nor
+  # more than five years past it, where every certificate would look expired.
+  if [[ -n $real ]] && (( interactive && now < clock_floor && real >= clock_floor && real < clock_floor + 5 * 365 * 86400 )); then
     info "(That time comes from the package server over a connection that can't be checked yet.)"
     read -rp "Set the clock to the package server's time now? [y/N] " answer
     if [[ $answer == [yY]* ]]; then
@@ -541,14 +542,17 @@ rollback_apply() { # rollback_apply <n> <dry-run 0|1>
   mv "$new" "$top/@"
   # Subvolumes nested inside the old system (e.g. /var/lib/machines) aren't in
   # snapshots; move them across rather than leave them behind.
-  while read -r sub; do
-    [[ -n $sub ]] || continue
-    if [[ -e $top/@/$sub ]] && ! rmdir "$top/@/$sub" 2>/dev/null; then
+  # A failure here leaves that one behind; it never stops the kernel step below.
+  local path sub
+  while IFS= read -r path; do
+    sub=${path#"@old-$stamp/"}
+    if [[ -e $top/@/$sub ]] && ! rmdir -- "$top/@/$sub" 2>/dev/null; then
       info "left $sub in @old-$stamp (something is in its place)"; continue
     fi
-    mkdir -p "$(dirname "$top/@/$sub")"
-    mv "$old/$sub" "$top/@/$sub"
-  done < <(btrfs subvolume list -o "$old" | awk '{ print $NF }' | sed "s|^@old-$stamp/||")
+    if ! { mkdir -p -- "$(dirname -- "$top/@/$sub")" && mv -- "$old/$sub" "$top/@/$sub"; }; then
+      info "left $sub in @old-$stamp (couldn't move it)"
+    fi
+  done < <(nested_subvols "$top" "@old-$stamp")
 
   for b in /boot/vmlinuz-*; do
     [[ -f $b ]] || continue
@@ -572,6 +576,23 @@ rollback_apply() { # rollback_apply <n> <dry-run 0|1>
   # its first update; the old ones still point at snapshots that exist.
 }
 
+# The subvolumes nested inside <name> (a top-level subvolume, e.g. @old-…),
+# as paths from the top of the filesystem, deepest first. The path is all of
+# "path …" (names may contain spaces: any user can create a subvolume where
+# they can write, /var/tmp included); anything not inside <name>, or with an
+# empty, "." or ".." part, is skipped.
+nested_subvols() { # nested_subvols <top> <name>
+  local line path part ok parts
+  while IFS= read -r line; do
+    path=${line#* path }
+    [[ $path != "$line" && $path == "$2"/* ]] || continue
+    ok=1
+    IFS=/ read -ra parts <<<"$path"
+    for part in "${parts[@]}"; do [[ -n $part && $part != . && $part != .. ]] || ok=0; done
+    (( ok )) && printf '%s\n' "$path"
+  done < <(btrfs subvolume list -o "$1/$2") | sort -r
+}
+
 rollback_clean() {
   local top olds o answer
   [[ $EUID -eq 0 ]] || die "cleaning up needs root"
@@ -584,9 +605,9 @@ rollback_clean() {
   read -rp "Delete them? [y/N] " answer
   if [[ $answer != [yY]* ]]; then info "Kept."; return 0; fi
   for o in "${olds[@]}"; do
-    # Nested subvolumes first, deepest first.
-    btrfs subvolume list -o "$top/$o" | awk '{ print $NF }' | sort -r | while read -r sub; do
-      btrfs -q subvolume delete "$top/$sub"
+    # Nested subvolumes first, deepest first; only ones inside this system.
+    nested_subvols "$top" "$o" | while IFS= read -r sub; do
+      btrfs -q subvolume delete -- "$top/$sub"
     done
     btrfs -q subvolume delete "$top/$o"
   done

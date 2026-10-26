@@ -353,6 +353,8 @@ if "$here/ssh" "$vm" "$user" -- "pacman -Q $id >/dev/null 2>&1"; then
   check "printing after the migration"   "$(sed -e "s/@ID@/$id/g" -e "s/@PW@/$password/g" "$here/checks/printing.sh")"
   check "network privacy settings"      "NetworkManager --print-config | grep -qx 'wifi.cloned-mac-address=stable' && NetworkManager --print-config | grep -qx 'ipv6.ip6-privacy=2' && NetworkManager --print-config | grep -qx 'ipv4.dhcp-send-hostname=false'"
   check "kernel hardening applied"      "[ \$(sysctl -n kernel.kptr_restrict) = 2 ] && [ \$(sysctl -n kernel.unprivileged_bpf_disabled) = 1 ] && [ \$(sysctl -n kernel.kexec_load_disabled) = 1 ] && [ \$(sysctl -n kernel.yama.ptrace_scope) = 1 ]"
+  check "risky media parsers left out, and kept out" "! test -e /usr/lib/gstreamer-1.0/libgstmodplug.so && ! test -e /usr/lib/gstreamer-1.0/libgstgme.so && ! test -e /usr/lib/gstreamer-1.0/libgstwildmidi.so && ! test -e /usr/lib/localsearch-3.0/extract-modules/libextract-xps.so && pacman-conf NoExtract | grep -qx usr/lib/gstreamer-1.0/libgstmodplug.so && test -e /usr/lib/gstreamer-1.0/libgstfluidsynthmidi.so"
+  check "the login screen's session can't use the greeter-theme helper" "grep -q 'subject.user == \"greeter\"' /usr/share/polkit-1/rules.d/50-$id-greeter-theme.rules"
   check "MT7921 Wi-Fi: no ASPM (when that card is present)" "modprobe -c | grep -qx 'options mt7921e disable_aspm=1'"
   check "calculator downloads nothing"  "[ \$(gsettings get org.gnome.calculator refresh-interval) = 0 ]"
   check "firmware checks only on request" "pacman -Q fwupd >/dev/null && ! systemctl is-enabled --quiet fwupd-refresh.timer"

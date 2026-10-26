@@ -60,13 +60,25 @@ exists() { grep -qxF "$marker $owner/$1" "$fstab"; }
 # executables (backups never run anything from the share).
 common_opts="nosuid,nodev,noexec,_netdev,nofail,noauto,x-systemd.automount,x-systemd.idle-timeout=10min,x-systemd.mount-timeout=20s"
 
+# /mnt/nas/<user> belongs to that user, so anything in it could be a symlink
+# to somewhere else: only ever act on a real directory reached without one.
+real_dir() { # real_dir <path>: the path exists as a directory and resolves to itself
+  [[ -d $1 && ! -L $1 && $(realpath -e -- "$1" 2>/dev/null) == "$1" ]]
+}
+
 add_entry() { # add_entry <name> <fstab line>
   local name=$1 line=$2 mp
   mp=$(mountpoint_for "$name")
   # /mnt/nas/<user> is that user's alone: other local users can't look in.
+  [[ ! -L $base && ! -L $base/$owner ]] || die "$base/$owner is a symlink; not using it"
   install -d -m 755 "$base"
   install -d -m 700 -o "$owner_uid" -g "$owner_gid" "$base/$owner"
-  install -d -m 755 "$mp"
+  if [[ -e $mp || -L $mp ]]; then
+    real_dir "$mp" || die "$mp is in the way (not a plain folder); remove it and try again"
+  else
+    mkdir -m 755 -- "$mp"
+  fi
+  real_dir "$base/$owner" && real_dir "$mp" || die "$mp isn't a plain folder under $base"
   cp "$fstab" "$fstab.$DISTRO_ID-bak"
   printf '%s %s/%s\n%s\n' "$marker" "$owner" "$name" "$line" >> "$fstab"
   systemctl daemon-reload
@@ -78,13 +90,13 @@ remove_entry() { # remove_entry <name>
   mp=$(mountpoint_for "$name")
   unit=$(unit_for "$name")
   systemctl stop "$unit" "${unit%.automount}.mount" 2>/dev/null || true
-  umount -l "$mp" 2>/dev/null || true
+  if real_dir "$mp"; then umount -l -- "$mp" 2>/dev/null || true; fi
   cp "$fstab" "$fstab.$DISTRO_ID-bak"
   # Drop the marker line and the entry right after it.
   awk -v m="$marker $owner/$name" '$0 == m { skip = 1; next } skip { skip = 0; next } { print }' \
     "$fstab.$DISTRO_ID-bak" > "$fstab"
   rm -f "$creds_dir/$owner/$name"
-  rmdir "$mp" 2>/dev/null || true
+  if real_dir "$mp"; then rmdir -- "$mp" 2>/dev/null || true; fi
   systemctl daemon-reload
 }
 

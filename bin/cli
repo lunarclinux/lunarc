@@ -5,6 +5,9 @@
 set -euo pipefail
 
 self=${0##*/}
+# DISTRO_LIB points a user's runs at another copy (development); root always
+# uses the installed one, whatever the environment or the name it was run by.
+if [[ $EUID -eq 0 ]]; then DISTRO_LIB=/usr/lib/@DISTRO_ID@; fi
 export DISTRO_LIB=${DISTRO_LIB:-/usr/lib/$self}
 # shellcheck source=/dev/null
 source "$DISTRO_LIB/distro.conf"

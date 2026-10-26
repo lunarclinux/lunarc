@@ -1,0 +1,8 @@
+// The login screen's own session (greetd's "greeter" user) is an active
+// session too, so allow_active would let it run the greeter-theme helper.
+// Only people who log in may.
+polkit.addRule(function (action, subject) {
+  if (action.id == "@DISTRO_ID@.greeter-theme" && subject.user == "greeter") {
+    return polkit.Result.NO;
+  }
+});

@@ -70,3 +70,13 @@ that misbehave on Valve's Proton.
 and Flatpak apps) and a few settings (theme, terminal, coding agent, keyboard layouts)
 to a file. On the other computer, `lunarc app import apps.txt` installs them all
 (`--dry-run` shows what it would do first).
+
+## File formats left out
+
+Four parsers are left out because they have unfixed memory-safety bugs and no default app needs them: GStreamer's tracker music (`.mod`, `.s3m`, `.xm`, `.dsm` and similar), console music (`.nsf`, `.ay`, `.gbs` and similar) and WildMIDI plugins, and the search indexer's XPS reader. Ordinary music, video, images and documents are unaffected; MIDI still plays through FluidSynth.
+
+They stay out across updates through a `NoExtract` line in `/etc/pacman.conf` (marked with a comment). To have them back, delete those two lines and reinstall the packages:
+
+```
+sudo pacman -S gst-plugins-bad localsearch
+```
