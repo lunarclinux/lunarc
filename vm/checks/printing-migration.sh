@@ -1,5 +1,5 @@
 # Run in the VM by vm/test-install as the desktop user (@ID@ = distro id,
-# @PW@ = the user's password, for sudo). Decision record 0045: puts printing
+# @PW@ = the user's password, for sudo). Puts printing
 # back the way an install from before it was (units off, mDNS closed, stock
 # nsswitch, avahi and cupsd configs), runs the system migration twice, and
 # checks the second run changed nothing. vm/checks/printing.sh then checks the

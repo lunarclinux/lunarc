@@ -12,7 +12,7 @@ Every theme's design tokens (tokens.json) are rewritten afterwards by
 tools/make-tokens, since they follow the palettes.
 
 Colours of the upstream-based themes come from each project's published
-palette (licences in docs/decisions/0025-theme-collection.md).
+palette (licences in THIRD-PARTY-NOTICES.md).
 """
 import json
 import pathlib

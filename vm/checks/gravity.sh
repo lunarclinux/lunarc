@@ -1,5 +1,5 @@
 # Run in the VM by vm/test-install as the desktop user (@ID@ = distro id).
-# Low Gravity (decision record 0038): on a workspace with three tiled windows,
+# Low Gravity: on a workspace with three tiled windows,
 # `gravity on` floats them all, spread out (no two at the same spot, all on
 # screen); a window opened afterwards floats too and gets a proper size; a
 # window on another workspace stays tiled; `gravity off` tiles them again; the

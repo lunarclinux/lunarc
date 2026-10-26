@@ -1,5 +1,5 @@
 --!nonstrict
--- The popovers' look (the system stats popover's, decision record 0043): a
+-- The popovers' look (the system stats popover's): a
 -- `── TITLE` / `right ──` header in Geist Mono over a hairline, then rows of a
 -- muted label, a thin bar and a value. Shared by the weather, sound, network
 -- and notification popovers so they read as one family.

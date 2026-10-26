@@ -91,7 +91,7 @@ install_packages() {
 }
 
 # Package changes run in a terminal take their snapshot first and say so
-# (decision record 0043): "==> snapshot before install cowsay … ok (#215)",
+#: "==> snapshot before install cowsay … ok (#215)",
 # then the command. That pre snapshot and a post one after it pair up like
 # snap-pac's, which is told to skip (SNAP_PAC_SKIP) so there aren't two
 # pairs. If nothing changed (declined, or failed early) the snapshot goes.
@@ -194,7 +194,7 @@ token_hex() { # token_hex <path> [alpha]
 }
 
 # Noctalia's panels, displays and notification cards as Frosted Terminal
-# popovers (decision record 0043): their border in the theme's border.popover
+# popovers: their border in the theme's border.popover
 # (Noctalia scales a panel border's alpha by the panel's opacity, 0.80 in the
 # "soft" transparency mode the defaults use, so it's written at alpha / 0.80
 # to come out as the token says), and corners for the
@@ -229,7 +229,7 @@ look_apply() {
 }
 
 # The bar settings, kept as one managed block in Noctalia's user config
-# (decision record 0043): its geometry for the shape (theme.shape: terminal,
+#: its geometry for the shape (theme.shape: terminal,
 # edge to edge; rounded, a floating pill), its hairline in the theme's colour,
 # the workspaces style, and the opt-in moon and weather segments (left out
 # entirely when off). The lists match [bar.default] in

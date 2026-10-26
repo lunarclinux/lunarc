@@ -143,7 +143,7 @@ DESKTOP
 }
 
 # Apps that send usage data by default get it turned off when installed
-# through the catalog (decision record 0031); the user can turn it back on in
+# through the catalog; the user can turn it back on in
 # the app. Only adds the setting; never rewrites a settings file it can't parse.
 json_setting_defaults() { # json_setting_defaults <file> <jq object of defaults>
   local file=$1 tmp

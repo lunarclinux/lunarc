@@ -1,6 +1,6 @@
 # Run in the VM by vm/test-install as the desktop user (@ID@ = distro id,
 # @PW@ = the user's password, for sudo). The boot menu and the text console
-# use Moonlit's terminal colours (decision records 0017, 0043): the booted
+# use Moonlit's terminal colours: the booted
 # command line has them, and the system migration turns a boot menu with the
 # older colours into exactly what a fresh install writes.
 set -u

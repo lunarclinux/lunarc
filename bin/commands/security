@@ -5,7 +5,7 @@ source "$DISTRO_LIB/lib.sh"
 
 # Read-only. Each line is "ok", "note" (worth knowing, often deliberate) or
 # "warn" (weaker than the default, with how to change it). Exits 1 when
-# anything warns. Decision record 0048.
+# anything warns.
 usage() {
   cat <<USAGE
 Usage: $DISTRO_ID security [command]
@@ -56,8 +56,8 @@ check_firewall() {
 
 # TCP ports listening on an address other than this computer's own, and UDP
 # ports open on every address (other UDP sockets are a program's own outgoing
-# traffic). DHCP and mDNS replies (5353, the printer lookup, decision record
-# 0045) are expected.
+# traffic). DHCP and mDNS replies (5353, the printer lookup)
+# are expected.
 check_listening() {
   local open
   open=$(ss -Hlntu 2>/dev/null | awk '
@@ -211,7 +211,7 @@ check_unmanaged() {
   fi
 }
 
-# --- The watch (decision record 0048) -------------------------------------
+# --- The watch -------------------------------------
 
 log=$STATE_DIR/installs.log
 seen=$STATE_DIR/unmanaged.seen

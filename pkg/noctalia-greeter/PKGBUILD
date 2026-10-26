@@ -69,7 +69,7 @@ _have_buildlibs() {
 
 # meson and ninja come from Arch (makedepends). A host build skips the
 # makedepends check, so say clearly when they're missing; never fetch build
-# tools from elsewhere (decision record 0043).
+# tools from elsewhere.
 _meson() {
   if ! command -v meson >/dev/null || ! command -v ninja >/dev/null; then
     echo "building $pkgname needs meson and ninja: sudo pacman -S --needed meson ninja" >&2

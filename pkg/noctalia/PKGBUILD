@@ -1,6 +1,6 @@
 # The desktop shell (bar, launcher, panels, notifications, OSD, lock screen),
 # built from the same release and checksum as Arch's own package, with seven
-# patches of ours (decision records 0043 and 0031). Arch's PKGBUILD for 5.3.0-1 is the model: same
+# patches of ours. Arch's PKGBUILD for 5.3.0-1 is the model: same
 # source, dependencies, meson options and files.
 #
 # top-highlight.patch (ours, not sent upstream): Frosted Terminal's finish on
@@ -38,7 +38,7 @@
 # the tray's and the power button's.
 # os-release-version.patch (ours): the control center's home card names the
 # system and its version from os-release ("<Name> 0.8.402"), not Noctalia's.
-# no-background-fetch.patch (ours, decision record 0031): nothing is downloaded
+# no-background-fetch.patch (ours): nothing is downloaded
 # for a feature that isn't in use. Upstream fetches the community palette
 # catalog (api.noctalia.dev/palettes) at every start and theme change; now only
 # while [theme] source is "community". A media player's http(s) cover art (and
@@ -131,7 +131,7 @@ _have_buildlibs() {
 
 # meson and ninja come from Arch (makedepends). A host build skips the
 # makedepends check, so say clearly when they're missing; never fetch build
-# tools from elsewhere (decision record 0043).
+# tools from elsewhere.
 _meson() {
   if ! command -v meson >/dev/null || ! command -v ninja >/dev/null; then
     echo "building $pkgname needs meson and ninja: sudo pacman -S --needed meson ninja" >&2

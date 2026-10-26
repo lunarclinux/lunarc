@@ -2,8 +2,8 @@
 # Changing your login password with `passwd` changes the keyring's password
 # too (passwords saved by browsers and apps). Without this the keyring kept
 # the old password, so a password login stopped unlocking it. A keyring with
-# no password of its own (encrypted disk with automatic login, decision record
-# 0047) stays as it is. /etc/pam.d/passwd is a pacman backup file, so the line
+# no password of its own (encrypted disk with automatic login)
+# stays as it is. /etc/pam.d/passwd is a pacman backup file, so the line
 # survives updates. New installs get this from the installer, which runs this
 # file. Safe to run again.
 pam=/etc/pam.d/passwd

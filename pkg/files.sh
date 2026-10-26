@@ -40,7 +40,7 @@ case $part in
     # the polkit action gives the password prompt a plain reason.
     put "$src/bin/dictate-helper" "$dest/usr/lib/$id/dictate-helper" 755
     put "$src/etc/polkit/dictate.policy" "$dest/usr/share/polkit-1/actions/$id.dictate.policy"
-    # The login screen follows `theme` (decision record 0041): a root helper,
+    # The login screen follows `theme`: a root helper,
     # allowed without a password for the person at the computer.
     put "$src/bin/greeter-theme" "$dest/usr/lib/$id/greeter-theme" 755
     put "$src/etc/polkit/greeter-theme.policy" "$dest/usr/share/polkit-1/actions/$id.greeter-theme.policy"
@@ -85,7 +85,7 @@ case $part in
       # passphrase once and can keep it in the login keyring.
       printf 'SSH_AUTH_SOCK=${XDG_RUNTIME_DIR}/gcr/ssh\n'
       # Mesa's shader cache holds 1 GB; once full, games compile shaders again
-      # (decision record 0053).
+      #.
       printf 'MESA_SHADER_CACHE_MAX_SIZE=12G\n'
     } > "$dest/usr/lib/environment.d/50-$id.conf"
 
@@ -131,7 +131,7 @@ case $part in
     put "$src/etc/pacman.d/hooks/hypr-reload.hook" "$dest/usr/share/libalpm/hooks/$id-hypr-reload.hook"
     put "$src/etc/pacman.d/hooks/noctalia-restart.hook" "$dest/usr/share/libalpm/hooks/$id-noctalia-restart.hook"
     put "$src/bin/shell-reload" "$dest/usr/lib/$id/shell-reload" 755
-    # Bootable snapshots (decision record 0036): keep the old kernel before
+    # Bootable snapshots: keep the old kernel before
     # mkinitcpio's 60-mkinitcpio-remove deletes it ("10-" sorts first), and
     # rewrite the boot menu's entries after snap-pac's zz-snap-pac-post ("zzz-").
     put "$src/etc/pacman.d/hooks/boot-snapshots-save.hook" "$dest/usr/share/libalpm/hooks/10-$id-boot-snapshots-save.hook"
@@ -156,7 +156,7 @@ case $part in
     # Its version: the package's (quick settings, fastfetch and others show it).
     if [[ -n ${DISTRO_VERSION:-} ]]; then printf 'VERSION="%s"\nVERSION_ID=%s\n' "$DISTRO_VERSION" "$DISTRO_VERSION" >> "$dest/usr/share/$id/os-release"; fi
     put "$src/etc/pacman.d/hooks/os-release.hook" "$dest/usr/share/libalpm/hooks/$id-os-release.hook"
-    # Privacy and security defaults (decision record 0031): telemetry opt-outs
+    # Privacy and security defaults: telemetry opt-outs
     # for the session and for login shells, kernel hardening, GNOME app defaults.
     put "$src/default/privacy/environment.conf" "$dest/usr/lib/environment.d/60-$id-privacy.conf"
     install -d "$dest/etc/profile.d"
@@ -164,7 +164,7 @@ case $part in
       > "$dest/etc/profile.d/$id-privacy.sh"
     put "$src/etc/sysctl.d/hardening.conf" "$dest/usr/lib/sysctl.d/90-$id-hardening.conf"
     # Game compatibility, zram-friendly memory settings and NTSync for Proton
-    # (decision record 0053). /etc/sysctl.d still wins for the user's own values.
+    #. /etc/sysctl.d still wins for the user's own values.
     put "$src/etc/sysctl.d/gaming.conf" "$dest/usr/lib/sysctl.d/80-$id-gaming.conf"
     put "$src/etc/sysctl.d/memory.conf" "$dest/usr/lib/sysctl.d/80-$id-memory.conf"
     put "$src/etc/modules-load.d/ntsync.conf" "$dest/usr/lib/modules-load.d/$id-ntsync.conf"
@@ -188,11 +188,11 @@ case $part in
     install -d -m750 "$dest/etc/sudoers.d"   # sudo's own package creates it 750
     put "$src/etc/sudoers.d/10-wheel" "$dest/etc/sudoers.d/10-$id-wheel" 440
     put "$src/etc/systemd/zram-generator.conf" "$dest/etc/systemd/zram-generator.conf"
-    # makepkg without separate -debug packages for AUR builds (decision record
-    # 0055); a backup file, so a local edit survives updates.
+    # makepkg without separate -debug packages for AUR builds; a backup
+    # file, so a local edit survives updates.
     put "$src/etc/makepkg.conf.d/no-debug.conf" "$dest/etc/makepkg.conf.d/$id.conf"
     # Firefox's system policies: no telemetry, studies or sponsored content,
-    # strict tracking protection, HTTPS-only, uBlock Origin (decision record 0031).
+    # strict tracking protection, HTTPS-only, uBlock Origin.
     put "$src/etc/firefox/policies.json" "$dest/etc/firefox/policies/policies.json"
     # Network privacy: random Wi-Fi MAC per network, IPv6 privacy addresses,
     # the hostname not sent to DHCP servers.
@@ -205,7 +205,7 @@ case $part in
     # and a drop-in points greetd at it.
     put "$src/etc/greetd/config.toml" "$dest/etc/greetd/$id.toml"
     # The login wrapper that config names ships with it, so the two always
-    # arrive together (decision record 0041), and the session it starts.
+    # arrive together, and the session it starts.
     put "$src/bin/greeter" "$dest/usr/lib/$id/greeter" 755
     put "$src/bin/greeter-client" "$dest/usr/lib/$id/greeter-client" 755
     put "$src/etc/greetd/session.desktop" "$dest/usr/share/wayland-sessions/$id.desktop"

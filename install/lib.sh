@@ -27,7 +27,7 @@ install_disks() {
 }
 
 # ---------------------------------------------------------------------------
-# What's already on a disk, for installing alongside it (decision record 0035).
+# What's already on a disk, for installing alongside it.
 # Nothing here writes to the disk; EFI partitions are only mounted read-only.
 
 ALONGSIDE_MIN_BYTES=$(( 40 * 1024 * 1024 * 1024 ))
@@ -218,7 +218,7 @@ partition_dev() { # partition_dev <disk> <number>
 human_gb() { printf '%d GB' $(( $1 / 1000000000 )); }
 
 # ---------------------------------------------------------------------------
-# The styled installer (decision record 0023): used only for an interactive
+# The styled installer: used only for an interactive
 # install on a terminal with gum available. Scripted installs (--yes, the VM
 # tests) keep the plain output above.
 

@@ -2,7 +2,7 @@
 # Questions for an install started without options. Sourced by install.sh;
 # sets DISK, USERNAME, PASSWORD_FILE, HOSTNAME_NEW, TIMEZONE, ENCRYPT,
 # ENCRYPT_FILE, AUTOLOGIN. With gum on a terminal (UI=1) the questions are
-# styled screens (decision record 0023); otherwise plain prompts.
+# styled screens; otherwise plain prompts.
 
 # Put a secret in a file only root can read, deleted when the installer exits,
 # and store the file's path in the named variable.

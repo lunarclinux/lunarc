@@ -170,7 +170,7 @@ dns_servers() { # dns_servers <provider>
 # fallback, no built-in fallback servers). Off, resolved doesn't run at all:
 # not the service and not its sockets (a name lookup through a socket would
 # start it again). Either way it never uses LLMNR or multicast DNS (the
-# package's resolved.conf.d drop-in; decision record 0046).
+# package's resolved.conf.d drop-in).
 resolved_units=(systemd-resolved.service systemd-resolved-varlink.socket systemd-resolved-monitor.socket)
 dns_on() { # dns_on <provider>
   local servers

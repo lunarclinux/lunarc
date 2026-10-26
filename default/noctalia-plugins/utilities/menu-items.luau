@@ -17,7 +17,7 @@ local systemMenu = "/usr/share/" .. cli .. "/default/menu/menu"
 local catalogFile = "/usr/share/" .. cli .. "/default/apps/catalog"
 local updatesFile = noctalia.expandPath("~/.local/state/" .. cli .. "/updates")
 
--- The top level, always in this order (decision record 0043). The menu file
+-- The top level, always in this order. The menu file
 -- can give each a description, glyph or generated list.
 local ROOT = {
   { title = "Apps", desc = "launch anything", glyph = "◆", gen = "apps" },

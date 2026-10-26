@@ -1,7 +1,7 @@
 # Lunarc at work
 
 What works on a work laptop, how to set up the usual corporate pieces, and,
-plainly, what doesn't. Lunarc is a personal desktop; many companies require
+plainly, what doesn't. Lunarc is not a managed corporate desktop; many companies require
 software that only supports other systems. Check with your IT team before
 replacing a managed machine.
 

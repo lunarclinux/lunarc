@@ -28,7 +28,7 @@ if [[ -n $REPLACE_PARTS ]]; then
 fi
 
 if [[ $INSTALL_MODE == alongside ]]; then
-  # Keep every existing partition (decision record 0035). Our own EFI system
+  # Keep every existing partition. Our own EFI system
   # partition and the system partition go into the largest stretch of free
   # space: Windows' EFI partition is usually 100-300 MB, too small for kernels,
   # and we never write to it.

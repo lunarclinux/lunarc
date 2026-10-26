@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# The apps the launcher palette lists (decision record 0042), as JSON on stdout:
+# The apps the launcher palette lists, as JSON on stdout:
 # the desktop entries Noctalia's own app list shows, found and filtered the
 # same way. XDG data dirs in order (XDG_DATA_HOME first, then XDG_DATA_DIRS,
 # whose first entry is the distro's overlay of hidden entries), the first file

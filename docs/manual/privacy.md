@@ -3,7 +3,7 @@
 Lunarc sends nothing about you anywhere: no telemetry, no usage statistics, no
 crash uploads, from Lunarc itself or from the apps it includes. This page lists
 every connection a fresh install makes, why, and how to turn it off. Apps you
-install yourself are yours to configure. (Project rule: decision record 0031.)
+install yourself are yours to configure.
 
 `lunarc privacy` shows the switches; `lunarc firewall` shows what may connect in.
 
@@ -58,7 +58,7 @@ features below.
 
 ## Defaults that protect you
 
-- **Disk encryption** is the installer's default (LUKS2). TRIM passes through it so the SSD stays fast; that lets someone holding the disk see which blocks are empty, never what's in them (decision record 0051). Backups are encrypted (Pika Backup). Saved passwords and clipboard history live in the keyring.
+- **Disk encryption** is the installer's default (LUKS2). TRIM passes through it so the SSD stays fast; that lets someone holding the disk see which blocks are empty, never what's in them. Backups are encrypted (Pika Backup). Saved passwords and clipboard history live in the keyring.
 - **Firewall:** incoming connections are refused (firewalld, zone `public`), except mDNS replies from the local network, which finding printers needs. `lunarc firewall allow localsend` (or `kdeconnect`, `syncthing`, `ssh`, `steam-streaming`, `8080/tcp`) opens one; `deny` closes it.
 - **Wi-Fi:** a random hardware (MAC) address per network, temporary IPv6 addresses, and your computer's name isn't sent to the network.
 - **Firefox:** telemetry, studies, sponsored tiles and stories, Firefox Suggest and recommendations off; strict tracking protection; HTTPS-only mode; search suggestions off; DuckDuckGo as the search engine; uBlock Origin installed (removable). Firefox's own DNS-over-HTTPS stays off so it doesn't send your lookups to a provider you didn't choose; use `lunarc privacy dns` for the whole system instead. All of these can be changed in Firefox's settings.
@@ -67,7 +67,7 @@ features below.
 - **Printing:** the print service answers only this computer and never shares its printers; Avahi looks for printers but never announces this computer's name, address or services.
 - **Name lookups:** nothing answers name questions from the local network (no LLMNR or multicast DNS from the system's resolver). With encrypted DNS off, the system resolver doesn't run at all; lookups go to the network's DNS server.
 - **Lock:** SUPER+L, idle and before sleep; wrong-password lockouts are short (10 tries, 2 minutes).
-- **Software:** everything Lunarc installs comes from signed packages, with one exception: Claude Code (`lunarc agent install claude`) installs with Anthropic's own installer into `~/.local`, for your account only, and updates itself (decision record 0049). Containers (`lunarc dev docker`) run as you with Podman, not as root; Docker itself with the `docker` group, which amounts to root access, only with `lunarc dev docker --rootful`.
+- **Software:** everything Lunarc installs comes from signed packages, with one exception: Claude Code (`lunarc agent install claude`) installs with Anthropic's own installer into `~/.local`, for your account only, and updates itself. Containers (`lunarc dev docker`) run as you with Podman, not as root; Docker itself with the `docker` group, which amounts to root access, only with `lunarc dev docker --rootful`.
 
 ## Security check
 

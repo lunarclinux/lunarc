@@ -1,4 +1,4 @@
-# App fonts in the desktop's faces (Frosted Terminal, decision record 0043):
+# App fonts in the desktop's faces (Frosted Terminal):
 # GTK apps (Files, Text Editor, the keyring and other prompts) use Geist, as
 # the shell's panels do, and Geist Mono where they ask for a monospace face.
 # Defaults only: a font chosen in an app or with gsettings still wins.

@@ -1,4 +1,4 @@
--- Window look (Frosted Terminal, decision record 0043): gaps, borders, corners,
+-- Window look (Frosted Terminal): gaps, borders, corners,
 -- blur and glow, and the header strip on terminal windows. The values come from
 -- the current theme's design tokens and the shape and blur settings, written by
 -- `@DISTRO_ID@ theme` to a small file; Moonlit's are the fallback until then.

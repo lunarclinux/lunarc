@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# zswap off (decision record 0054). Arch's kernel turns zswap on, but the only
+# zswap off. Arch's kernel turns zswap on, but the only
 # swap here is zram (and on laptops with hibernation, a disk swap file behind
 # it): zswap in front of zram compresses every page twice and hides zram's
 # real use from zramctl. Adds zswap.enabled=0 to the boot entries in

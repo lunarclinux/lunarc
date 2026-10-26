@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Printing on by default (decision record 0045). CUPS starts when something
+# Printing on by default. CUPS starts when something
 # prints and only listens on this computer (its default). Avahi finds printers
 # on the local network but never announces this computer. .local names resolve
 # through nss-mdns. The firewall lets mDNS replies in; nothing else.

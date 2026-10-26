@@ -44,7 +44,7 @@ colours=$(jq -r --arg m "$mode" '.[$m] | to_entries[]
   | "\(.key[1:] | gsub("(?<c>[A-Z])"; "_" + (.c | ascii_downcase)) | ltrimstr("_")) = \"\(.value)\""' "$palette")
 surface=$(jq -r --arg m "$mode" '.[$m].mSurface' "$palette")
 
-# Frosted Terminal (decision record 0043): the theme's design tokens over those
+# Frosted Terminal: the theme's design tokens over those
 # palette roles, so the login card reads like the desktop's popovers: the deep
 # background, the popover fill as the card (opaque: the greeter has no
 # translucency), the amber popover border as its outline, amber and coral, the

@@ -1,5 +1,5 @@
 # Run in the VM by vm/test-install as the desktop user (@ID@ = distro id).
-# Display size (decision record 0034, 2026-10-12): a screen nobody chose a
+# Display size: a screen nobody chose a
 # scale for gets one from its pixel density; `display scale` sets and steps it;
 # `display size` applies a choice at once and goes back unless it's kept.
 set -u

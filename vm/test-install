@@ -12,7 +12,7 @@
 # restored system (not with --encrypt).
 # --alongside first lays out a pretend Windows (EFI partition with Windows Boot
 # Manager files, an NTFS partition, a firmware entry), installs into the free
-# space beside it and checks none of it changed (decision record 0035).
+# space beside it and checks none of it changed.
 # --replace adds an old Linux to that layout (a Linux partition, its Limine,
 # kernel and menu on Windows' EFI partition, and a firmware entry that comes
 # first), installs with --replace-linux --remove-old-boot, and checks the old
@@ -334,14 +334,14 @@ check "root account locked"            "echo '$password' | sudo -S -p '' passwd 
 check "/boot is root-only"           'test "$(stat -c %a /boot)" = 700'
 if "$here/ssh" "$vm" "$user" -- "pacman -Q $id >/dev/null 2>&1"; then
   check "distro packages installed"     "pacman -Q $id $id-settings"
-  # Privacy and security by default (decision record 0031).
+  # Privacy and security by default.
   sudo_vm="echo '$password' | sudo -S -p ''"
   check "firefox policies in place"     "jq -e '.policies.DisableTelemetry == true and .policies.DNSOverHTTPS.Enabled == false and .policies.HttpsOnlyMode == \"enabled\"' /etc/firefox/policies/policies.json >/dev/null"
   check "telemetry opt-outs in shells"  "bash -lc 'echo \$DO_NOT_TRACK \$DOTNET_CLI_TELEMETRY_OPTOUT \$DISABLE_TELEMETRY' | grep -qx '1 1 1'"
   check "firewall refuses incoming"     "$sudo_vm firewall-cmd --state | grep -qx running && $sudo_vm firewall-cmd --get-default-zone | grep -qx public && $sudo_vm firewall-cmd --permanent --zone=public --get-target | grep -qx default && [ -z \"\$($sudo_vm firewall-cmd --zone=public --list-ports)\" ]"
   check "network share: checks, mount on use, write, remove" "$(sed -e "s/@ID@/$id/g" -e "s/@PW@/$password/g" "$here/checks/share.sh")"
   check "firewall: ssh open only because a key was set up" "$sudo_vm firewall-cmd --zone=public --list-services | tr ' ' '\\n' | grep -qx ssh && systemctl is-enabled --quiet sshd"
-  # Everyday formats, spelling, CJK text and printing (decision record 0045).
+  # Everyday formats, spelling, CJK text and printing.
   check "codecs, archives, spelling, fonts, printing installed" "pacman -Q gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav 7zip unzip hunspell hunspell-en_us noto-fonts-cjk cups avahi nss-mdns >/dev/null"
   check "video and audio play, archives extract" "$(cat "$here/checks/media-files.sh")"
   check "spell checking: en_US dictionary" "test -f /usr/share/hunspell/en_US.dic && printf 'hello wrold\\n' | enchant-2 -l -d en_US | grep -qx wrold"
@@ -358,10 +358,10 @@ if "$here/ssh" "$vm" "$user" -- "pacman -Q $id >/dev/null 2>&1"; then
   check "firmware checks only on request" "pacman -Q fwupd >/dev/null && ! systemctl is-enabled --quiet fwupd-refresh.timer"
   check "home folder private"           "[ \$(stat -c %a ~) = 700 ]"
   check "privacy switches report"       "$id privacy | grep -qE '^weather in the bar +off' && $id firewall apps | grep -q localsend"
-  # Security pass (decision record 0048).
+  # Security pass.
   check "security check, install watch, rootless containers" "$(sed -e "s/@ID@/$id/g" -e "s/@PW@/$password/g" "$here/checks/security.sh")"
   check "nothing pipes a download into a shell" "! grep -rIlE '(curl|wget)[^|]*\\|[[:space:]]*(sudo[[:space:]]+)?(ba|z)?sh\\b' /usr/lib/$id /usr/share/$id/default 2>/dev/null | grep -q ."
-  # DNS (decision record 0046): resolved only for encrypted DNS, never LLMNR
+  # DNS: resolved only for encrypted DNS, never LLMNR
   # or mDNS; on and off both coherent; printing discovery unaffected.
   check "DNS: no LLMNR or mDNS from resolved; encrypted on and off" "$(sed -e "s/@ID@/$id/g" -e "s/@PW@/$password/g" "$here/checks/dns.sh")"
   check "encrypted DNS off leaves no resolver config" "! grep -rqs DNSOverTLS /etc/systemd/resolved.conf.d && ! test -e /etc/NetworkManager/conf.d/90-$id-dns.conf"
@@ -385,7 +385,7 @@ if "$here/ssh" "$vm" "$user" -- "pacman -Q $id >/dev/null 2>&1"; then
   check "boot menu has the wallpaper"   "echo '$password' | sudo -S -p '' sh -c 'grep -q \"^wallpaper: boot():/$id/wallpaper.png\" /boot/limine.conf && test -s /boot/$id/wallpaper.png'"
   check "console uses the theme palette" "grep -q 'vt.default_red=11,' /proc/cmdline"
   check "boot menu and console colours: current, migrated" "$(sed -e "s/@ID@/$id/g" -e "s/@PW@/$password/g" "$here/checks/boot-palette.sh")"
-  # The login screen (decision record 0041): Noctalia Greeter through the
+  # The login screen: Noctalia Greeter through the
   # wrapper (tuigreet as its fallback), in the theme's colours and wallpaper.
   check "login screen packages installed" "pacman -Q noctalia-greeter greetd-tuigreet >/dev/null"
   check "login screen runs the wrapper"  "grep -qx 'command = \"/usr/lib/$id/greeter\"' /etc/greetd/$id.toml && test -x /usr/lib/$id/greeter && test -x /usr/lib/$id/greeter-client"
@@ -524,7 +524,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     check "folders in the accent's colour" 'readlink ~/.local/share/icons/'"$id"'-Papirus-Dark/64x64/places/folder.svg | grep -q folder-paleorange.svg'
     check "apps in the desktop's fonts (GTK, Qt)" "[ \"\$(gsettings get org.gnome.desktop.interface font-name)\" = \"'Geist 11'\" ] && [ \"\$(gsettings get org.gnome.desktop.interface monospace-font-name)\" = \"'Geist Mono 11'\" ] && grep -q '^general=\"Geist,11' ~/.config/qt6ct/qt6ct.conf"
     check "default terminal is ghostty"   "$id terminal list | grep -qE '^\* ghostty +installed'"
-    # Design tokens (decision record 0043): the current theme's, as a file; Moonlit's are the design's own.
+    # Design tokens: the current theme's, as a file; Moonlit's are the design's own.
     tok_hash() { git -C "$repo" show "$ref:$1" | jq -cS "${2:-.}" | sed "s/@DISTRO_NAME@/$name/" | sha256sum | cut -d' ' -f1; }
     tokens_are() { echo "[ \"\$(jq -cS . ~/.config/$id/theme/tokens.json | sha256sum | cut -d' ' -f1)\" = $1 ]"; }
     check "theme tokens are the design's"  "$(tokens_are "$(tok_hash docs/design/frosted-terminal/tokens.json)") && [ \"\$($id theme token color.accent.amber)\" = '#ebc77a' ] && [ \"\$($id theme token geometry.terminal.paneRadius)\" = 6 ]"
@@ -553,7 +553,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
 
     # Layer 5: crash inbox, agents, updates.
     "$here/ssh" "$vm" "$user" -- "$hypr $id theme set moonlit >/dev/null; hyprctl dispatch 'hl.dsp.exec_cmd(\"$id theme greeter\")' >/dev/null" || true
-    # Frosted Terminal windows (decision record 0043): Hyprland and Ghostty
+    # Frosted Terminal windows: Hyprland and Ghostty
     # from the theme's tokens, the shape and blur settings, header strips.
     check "windows: look from tokens, shape, blur, header strips" "$(sed "s/@ID@/$id/g" "$here/checks/frosted.sh")"
     check "ghostty: Geist Mono, translucent, theme colours" "ghostty +show-config 2>/dev/null > /tmp/gc; grep -qx 'font-family = Geist Mono' /tmp/gc && grep -qx 'background-opacity = 0.9' /tmp/gc && grep -qx 'background = #070b17' /tmp/gc && grep -qix 'palette = 1=#f0a39a' /tmp/gc && grep -qix 'palette = 5=#a9a8f2' /tmp/gc && grep -qix 'palette = 6=#8fd4e3' /tmp/gc"
@@ -608,7 +608,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       check "bar: moon and weather off by default, bell and power on" "$hypr x=\$(noctalia config export | tr -d '\\n'); c=\$(grep -oE 'center = \\[[^]]*\\]' <<<\"\$x\" | head -1); e=\$(grep -oE 'end = \\[[^]]*\\]' <<<\"\$x\" | head -1); echo \"\$c \$e\"; grep -q clock <<<\"\$c\" && ! grep -qE 'moon|weather' <<<\"\$c\" && grep -q bell <<<\"\$e\" && grep -q session <<<\"\$e\""
       check "bar: moon setting adds and removes it" "$hypr $id bar moon on >/dev/null && sleep 1 && noctalia config export | tr -d '\\n' | grep -oE 'center = \\[[^]]*\\]' | grep -q moon && $id bar moon off >/dev/null && sleep 1 && ! noctalia config export | tr -d '\\n' | grep -oE 'center = \\[[^]]*\\]' | grep -q moon"
       check "bar: stats mode setting" "[ \"\$($id bar stats)\" = icons ] && $id bar stats inline >/dev/null && [ \"\$($id bar stats)\" = inline ] && $id bar stats icons >/dev/null"
-      # The bar's toggles (decision record 0042): the anchor, plus only the
+      # The bar's toggles: the anchor, plus only the
       # toggles that are on (gold); hovering the anchor shows them all. Read
       # from screenshots of the bar's centre (the moonlit theme's gold).
       report() { # report <ok?> <description>
@@ -619,7 +619,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
         "$here/ssh" "$vm" "$user" -- "$hypr grim -" > "$last_shot" 2>/dev/null || true
         log "screenshot: $last_shot"
       }
-      # The clock's two hairlines (decision record 0043): the columns that
+      # The clock's two hairlines: the columns that
       # stand out from both neighbours along the bar's rows above and below
       # any text, nearest the middle of the screen. → "<left x> <right x> <screen width>"
       clock_lines() { # clock_lines <png> [bar's top y] → "<left x> <right x> <screen width> <toggles' hairline x>"
@@ -672,7 +672,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
         "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg notification-dnd-set off >/dev/null; sleep 6" || true
         bar_shot bar-off; read -r w _ gold < <(bar_centre "$last_shot")
         report "$(( w <= rest_w + 4 && gold < 20 ? 0 : 1 ))" "toggles: both off, only the anchor again (width $w, gold $gold)"
-        # The bar (Frosted Terminal, decision record 0043).
+        # The bar (Frosted Terminal).
         ocr() { # ocr <png> <crop geometry> [tesseract page mode] → text
           magick "$1" -crop "$2" +repage -colorspace gray -resize 400% -negate -level 20%,80% png:- | tesseract - - --psm "${3:-6}" 2>/dev/null || true
         }
@@ -759,13 +759,13 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       # (The export prints a long list over several lines: read it flattened.)
       check "quick settings: placed in the bar too, and back" "$hypr centre() { noctalia config export | tr -d ' \\n' | grep -o 'center=\\[[^]]*\\]'; }; $id quick wifi both >/dev/null && sleep 2 && centre | grep -q qs-wifi && [ \"\$($id quick wifi)\" = both ] && $id quick reset >/dev/null && sleep 2 && ! centre | grep -q qs-wifi && [ \"\$($id quick wifi)\" = panel ]; rc=\$?; $id quick reset >/dev/null; exit \$rc"
       "$here/ssh" "$vm" "$user" -- "$hypr noctalia msg panel-close >/dev/null" || true
-      # Workspaces (decision record 0037): numbers, the active one as its moon
+      # Workspaces: numbers, the active one as its moon
       # phase, a gold dot for a window asking for attention.
       check "workspaces widget in the bar"  "$hypr noctalia config export | grep -qE '^start *= *\\[ *\"menu\", *\"workspaces\",' && noctalia config export | grep -qE 'type *= *\"$id/utilities:workspaces\"'"
       check "workspace watcher running"     "systemctl --user is-active --quiet $id-workspace-watch"
       check "workspaces follow Hyprland"    "$hypr $id workspaces go 3 && sleep 1 && $id workspaces state | jq -e '.active == 3 and (.items | length) >= 5' >/dev/null"
       check "attention: dot, then SUPER+U"  "$(sed "s/@ID@/$id/g" "$here/checks/attention.sh")"
-      # Low Gravity (decision record 0038): float this workspace, tile it again.
+      # Low Gravity: float this workspace, tile it again.
       check "Low Gravity: float, spread, new windows, off, all" "$(sed "s/@ID@/$id/g" "$here/checks/gravity.sh")"
       "$here/ssh" "$vm" "$user" -- "$hypr $id workspaces go 6; for i in 1 2 3; do hyprctl dispatch 'hl.dsp.exec_cmd(\"ghostty --gtk-single-instance=false\")' >/dev/null; sleep 2; done; $id gravity on >/dev/null; sleep 2" >/dev/null 2>&1 || true
       screenshot gravity-on
@@ -775,7 +775,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       check "workspaces style switches"     "$hypr $id workspaces style noctalia >/dev/null && sleep 2 && noctalia config export | grep -qE 'workspaces-noctalia' && noctalia config export | grep -qE '^center *=.*stay-awake' && $id workspaces style moon >/dev/null && sleep 2 && ! noctalia config export | grep -qE '^start *=.*workspaces-noctalia'"
       "$here/ssh" "$vm" "$user" -- "$hypr $id workspaces go 3" >/dev/null 2>&1 || true
       screenshot workspaces
-      # Updates take effect without logging out (decision record 0040): the
+      # Updates take effect without logging out: the
       # package's hooks start missing session services and reload Hyprland.
       check "update starts missing services" "systemctl --user stop $id-workspace-watch && ! systemctl --user is-active --quiet $id-workspace-watch && $sudo_vm /usr/lib/$id/shell-reload && for i in \$(seq 15); do systemctl --user is-active --quiet $id-workspace-watch && exit 0; sleep 1; done; exit 1"
       check "update reloads Hyprland's binds" "$hypr f=/usr/share/$id/default/hypr/binds.lua; printf '%s\\n' 'bind(\"SUPER + F12\", \"Update test bind\", run(\"true\"))' > /home/$user/testbind.lua && $sudo_vm sh -c 'cp /usr/share/$id/default/hypr/binds.lua /root/binds.lua.orig && cat /home/$user/testbind.lua >> /usr/share/$id/default/hypr/binds.lua' && $sudo_vm /usr/lib/$id/shell-reload --hypr && sleep 1 && hyprctl binds -j | jq -e 'any(.[]; .description == \"Update test bind\")' >/dev/null; rc=\$?; $sudo_vm cp /root/binds.lua.orig \$f; $sudo_vm /usr/lib/$id/shell-reload --hypr; rm -f /home/$user/testbind.lua; exit \$rc"
@@ -800,13 +800,13 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
         check "keyring needs no password"  "$hypr export DBUS_SESSION_BUS_ADDRESS=unix:path=\$XDG_RUNTIME_DIR/bus; test -f ~/.local/share/keyrings/login.keyring && echo s3cret | timeout 10 secret-tool store --label=install-test app install-test && timeout 10 secret-tool lookup app install-test | grep -qx s3cret && ! hyprctl clients -j | jq -e '.[] | select(.class == \"gcr-prompter\")' >/dev/null"
       else
         check "no passwordless keyring"    "! test -e ~/.local/share/keyrings/login.keyring || ! grep -q '^\[keyring\]' ~/.local/share/keyrings/login.keyring"
-        # Decision record 0047: made at install with the login password, so
+        # Made at install with the login password, so
         # never a new-keyring prompt; locked until that password unlocks it.
         # (Not on an install updated from before it: no password to make it with.)
         (( upgraded )) || check "keyring: made at install, the login password unlocks it" "$(sed -e "s/@PW@/$password/g" "$here/checks/keyring.sh")"
       fi
       check "plugins: per-version dir behind one link" "t=\$(readlink /usr/share/$id/noctalia-plugins) && [[ \$t == noctalia-plugins.d/* ]] && [ -f /usr/share/$id/noctalia-plugins/utilities/plugin.toml ] && [ ! -e /usr/share/$id/default/noctalia-plugins ] && [ -f /usr/share/libalpm/hooks/$id-shell-reload.hook ]"
-      # The menu (SUPER+Space; decision record 0043), driven with real keys
+      # The menu (SUPER+Space), driven with real keys
       # from here (virsh send-key); what it shows is read from its state dump
       # (rows with matched letters in [brackets], " · " and the tag or keys).
       key() { virsh send-key "$vm" "$@" >/dev/null; sleep 0.6; }
@@ -906,7 +906,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       screenshot menu-rounded
       key KEY_ESC
       "$here/ssh" "$vm" "$user" -- "$hypr $id theme shape terminal >/dev/null" || true
-      # Popovers (Frosted Terminal, decision record 0043): opened with real
+      # Popovers (Frosted Terminal): opened with real
       # clicks from the VM's USB tablet and real keys; where each one landed
       # is read from screenshots taken with and without it.
       check "popovers: Noctalia's panels styled, corners follow the shape" "$hypr x=\$(noctalia config export); grep -qi 'border_color = \"#ebc77a61' <<<\"\$x\" && grep -qi 'border_color = \"#ebc77a79' <<<\"\$x\" && grep -q 'transparency_mode = \"soft\"' <<<\"\$x\" && grep -q 'sidebar_section = \"none\"' <<<\"\$x\" && grep -qx 'corner_radius_scale = 1.000' ~/.config/noctalia/00-$id-look.toml && $id theme shape rounded >/dev/null && grep -qx 'corner_radius_scale = 1.333' ~/.config/noctalia/00-$id-look.toml && sleep 1 && noctalia config export | grep -q 'corner_radius_scale = 1.33'; rc=\$?; $id theme shape terminal >/dev/null; exit \$rc"
@@ -1134,7 +1134,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       check "lock recovery key works while locked" "$hypr hyprctl binds -j | jq -e '.[] | select(.key == \"L\" and .modmask == 12 and .locked == true)' >/dev/null"
       check "lock engages"                  "$hypr $id lock && pgrep -x swaylock-plugin >/dev/null"
       locked_at=$SECONDS
-      # The prompt pill (Frosted Terminal, decision record 0043): low on the
+      # The prompt pill (Frosted Terminal): low on the
       # screen, `tester@<host> password:` and a row of dots, nothing else (no
       # clock, no chips). It shows for 3 s from the screensaver's first frame,
       # fades out over 1.5 s, pops back at once at any key and fades again 5 s
@@ -1297,7 +1297,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       "$here/ssh" "$vm" "$user" -- "echo '$password' | sudo -S -p '' mv /usr/bin/swaylock-plugin /usr/bin/swaylock-plugin.off" || true
       check "falls back to Noctalia's lock" "$hypr $id lock; sleep 3; noctalia msg status | jq -e '.. | objects | select(has(\"locked\")) | .locked == true' >/dev/null"
       # A new Noctalia build arriving now must not restart the shell under its
-      # own lock screen (decision record 0043): the restart waits for the unlock.
+      # own lock screen: the restart waits for the unlock.
       shell_pid=$("$here/ssh" "$vm" "$user" -- 'systemctl --user show -P MainPID noctalia' 2>/dev/null || true)
       check "shell restart waits while Noctalia's lock is up" "$hypr echo '$password' | sudo -S -p '' /usr/lib/$id/shell-reload --noctalia; sleep 4; [ \"\$(systemctl --user show -P MainPID noctalia)\" = '$shell_pid' ] && noctalia msg status | jq -e '.locked == true' >/dev/null && systemctl --user is-active --quiet $id-shell-restart"
       vm_type "$password"; virsh send-key "$vm" KEY_ENTER >/dev/null; sleep 4
@@ -1320,7 +1320,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     menu_is "update auto-check: the menu finds its item" '.rows[0] == "System › Check for updates [daily]"'
     key KEY_ENTER; sleep 2
     check "update auto-check: the menu's item turns it on" "systemctl --user is-enabled --quiet $id-update-check.timer && $hypr $id update auto-check off >/dev/null"
-    # Pre-checks (decision record 0030): offline, a wrong clock and an untrusted
+    # Pre-checks: offline, a wrong clock and an untrusted
     # key each give one plain message instead of pacman errors. Offline runs
     # detached (it takes the network away from this SSH session too).
     fpr=$(cat "$repo/pkg/keyring/fingerprint")

@@ -1,5 +1,5 @@
 # Title bars for Hyprland windows, from Hyprland's official plugins: the header
-# strips on terminal windows (decision record 0043). Not in Arch's repositories,
+# strips on terminal windows. Not in Arch's repositories,
 # so the distro's repository carries it. Built from the plugins release that
 # Hyprland's own plugin manager pins for this Hyprland (hyprpm.toml: 0.56.2 ->
 # 7644cec, tagged v0.56.0), checksum-pinned.

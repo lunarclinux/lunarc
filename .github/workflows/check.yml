@@ -1,7 +1,6 @@
 # Lint and package build when the OS changes. The VM install test
 # (vm/test-install) needs KVM and runs locally. The website has its own
-# workflow (site.yml); changes only to it, or only to design notes and
-# decision records, don't run this. The manual is part of the OS (installed
+# workflow (site.yml); changes only to it don't run this. The manual is part of the OS (installed
 # on every system) and runs both.
 name: check
 

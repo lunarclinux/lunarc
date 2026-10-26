@@ -1,6 +1,6 @@
 # Getting started with Lunarc Linux
 
-Working name: Lunarc (see decision record 0016); the command is `lunarc`.
+Working name: Lunarc; the command is `lunarc`.
 
 ## Installing
 

@@ -1,11 +1,11 @@
 # Layer 2: graphical session.
 hyprland
 # Header strips on terminal windows: Hyprland's hyprbars plugin, built for
-# exactly this Hyprland (from the distro repository; decision record 0043).
+# exactly this Hyprland (from the distro repository).
 hyprland-plugin-hyprbars
 uwsm
 greetd
-# The login screen (from the distro repository; decision record 0041) and the
+# The login screen (from the distro repository) and the
 # text greeter it falls back to.
 noctalia-greeter
 greetd-tuigreet
@@ -39,7 +39,7 @@ noto-fonts-cjk
 ttf-jetbrains-mono-nerd
 inter-font
 # Geist and Geist Mono, the Frosted Terminal typefaces (from the distro
-# repository; decision record 0043).
+# repository).
 otf-geist
 otf-geist-mono
 
@@ -64,7 +64,7 @@ unzip
 hunspell
 hunspell-en_us
 
-# Printing (decision record 0045): CUPS, started when something prints and
+# Printing: CUPS, started when something prints and
 # reachable only from this computer; network printers found through Avahi,
 # which only looks and never announces this computer; .local names through
 # nss-mdns. Print Settings (system-config-printer) is a default app.

@@ -1,5 +1,5 @@
 # Run in the VM by vm/test-install as the desktop user (@ID@ = distro id).
-# Display profiles (decision record 0034): a scale set for one screen is
+# Display profiles: a scale set for one screen is
 # applied and remembered; a second screen (a Hyprland headless output standing
 # in for a plugged-in monitor) gets placed, saved as a profile, and put back in
 # the same place when it's unplugged and plugged in again (the hotplug hook).

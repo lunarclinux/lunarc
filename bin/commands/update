@@ -91,7 +91,7 @@ held_back() { # held_back <pending lines>
 
 # Packages the distro repository builds with its own patches under Arch's
 # names: the shell and the login screen (epoch 1, so Arch's package of the same
-# name never replaces them; decision records 0043 and 0048).
+# name never replaces them).
 ours_over_arch=(noctalia noctalia-greeter)
 
 # Arch's version of <pkg>, when it is newer than the release our build is made

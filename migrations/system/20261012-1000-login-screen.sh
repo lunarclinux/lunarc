@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # The login screen becomes Noctalia Greeter in the desktop theme, through a
-# wrapper that falls back to the tuigreet text greeter (decision record 0041).
+# wrapper that falls back to the tuigreet text greeter.
 # The login screen's config is a backup file: where the installer added
 # automatic login to it, the update leaves it alone (the new default arrives as
 # .pacnew), so point its greeter at the wrapper here and keep the rest.

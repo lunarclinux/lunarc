@@ -2,7 +2,7 @@
 # Don't edit: updates replace this file. Override in your own config.
 
 [shell]
-# Geist, the design's second face (decision record 0043): the bar and the
+# Geist, the design's second face: the bar and the
 # distro's own popovers use Geist Mono, but Noctalia's panels are laid out
 # for a proportional face and cut mono labels short.
 font_family = "Geist"
@@ -10,7 +10,7 @@ polkit_agent = true          # Noctalia's own password prompt, themed like the r
 telemetry_enabled = false     # no usage ping to noctalia.dev
 external_ip_enabled = false   # the network tab doesn't look up your public address (api.noctalia.dev/ip)
 setup_wizard_enabled = false  # the distro applies its own theme and settings at first login
-# Frosted Terminal (decision record 0043): a 1px amber line along the top
+# Frosted Terminal: a 1px amber line along the top
 # inner edge of the bar, panels, launcher, OSD and toasts, and a faint sheen
 # over them. Options of the distro's Noctalia build (pkg/noctalia); colours
 # default to the theme's primary (32%) and text colour (7% to 2%).
@@ -132,10 +132,10 @@ kind = "path"
 location = "/usr/share/@DISTRO_ID@/noctalia-plugins"
 enabled = true
 
-# The bar (Frosted Terminal, decision record 0043): flat segments between
+# The bar (Frosted Terminal): flat segments between
 # hairlines, Geist Mono. Left: the menu button, workspaces, the window title and
 # what's playing. Centre: the clock, pinned to the exact middle (anchor), with
-# the toggles that are on flush against its left (decision record 0042) and
+# the toggles that are on flush against its left and
 # the opt-in moon and weather to its right. Right: stats, notifications,
 # network, volume, battery, power. Its height, corners and inset follow
 # `@DISTRO_ID@ theme shape`, and the lists follow the bar settings; both are
@@ -176,7 +176,7 @@ left = "exec @DISTRO_ID@ menu"
 right = "panel-toggle launcher"
 
 # Workspaces: two-digit numbers, the one you're on tinted, with its moon phase
-# (decision record 0037). Noctalia's own pills stay available:
+#. Noctalia's own pills stay available:
 # `@DISTRO_ID@ workspaces style noctalia`.
 [widget.workspaces]
 type = "@DISTRO_ID@/utilities:workspaces"
@@ -204,7 +204,7 @@ capsule = false
 [widget.media.actions]
 right = "media toggle"
 
-# The toggles (decision record 0042): an anchor icon, then only the toggles
+# The toggles: an anchor icon, then only the toggles
 # that are on, in amber (recording in coral). Hovering the anchor shows them
 # all. Stay awake and night light are the plugin's own widgets, so they can
 # hide when off.

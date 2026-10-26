@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Checks the repository: shell syntax, shellcheck (if installed), the name and
-# clean-room rules on every tracked file, and one pattern that has caused bugs.
+# blocked-reference rules on every tracked file, and one pattern that has caused bugs.
 #
 #   tools/lint
 set -uo pipefail
@@ -37,21 +37,21 @@ for f in "${scripts[@]}"; do
     END { exit bad }' "$f" || problem "last-statement && pattern in $f"
 done
 
-# The name lives only in distro.conf; the reference distro is never named
-# outside docs/ (decision records 0001 and 0003).
+# The name lives only in distro.conf. Blocked references: an extended regex in
+# .git/info/blocked-references (local, not committed; skipped without it).
 names="\\b(${DISTRO_ID}|${DISTRO_REPO}|${DISTRO_NAME})\\b"
-blocked=''
+blocked=$(cat "$(git rev-parse --git-common-dir 2>/dev/null)/info/blocked-references" 2>/dev/null || true)
 while read -r f; do
-  case $f in distro.conf|docs/*|site/*|.githooks/*|tools/lint) continue ;; esac
+  case $f in distro.conf|docs/*|site/*|.github/*|SECURITY.md|README.md|THIRD-PARTY-NOTICES.md|.githooks/*|tools/lint) continue ;; esac
   [[ -f $f ]] || continue
   grep -qE "$names" <<<"$f" && problem "file name contains the distro name: $f"
   grep -IqE "$names" "$f" && problem "$f writes the distro name literally"
-  grep -IqiE "$blocked" "$f" && problem "$f mentions a blocked reference"
+  if [[ -n $blocked ]] && grep -IqiE "$blocked" "$f"; then problem "$f mentions a blocked reference"; fi
 done < <(git ls-files)
 
 # Nothing runs a downloaded script straight through a shell: software comes
 # from packages, or from a download checked against a pinned checksum or
-# signature before it runs (decision record 0048).
+# signature before it runs.
 pipe='(curl|wget)[^|]*\|[[:space:]]*(sudo[[:space:]]+)?(ba|z|da)?sh\b|(ba|z)?sh[[:space:]]+(-c[[:space:]]+)?["'\'']?<?\$\((curl|wget)\b|(ba|z)?sh[[:space:]]+<\((curl|wget)\b'
 while read -r f; do
   # (vm/checks/security.sh types such commands to test the install watch.)

@@ -1,6 +1,6 @@
 --!nonstrict
--- The bar's segment look, as utilities/seg.luau draws it (Frosted Terminal,
--- decision record 0043): flat, full height, 1px hairlines between segments,
+-- The bar's segment look, as utilities/seg.luau draws it (Frosted Terminal):
+-- flat, full height, 1px hairlines between segments,
 -- amber tint and underline while its panel is open. Plugins can't share
 -- files, so this is a copy of the parts the usage widget needs; keep the two
 -- in step.

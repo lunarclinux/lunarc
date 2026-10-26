@@ -1,76 +1,64 @@
-# Arch distro
+# Lunarc
 
-A personal Arch Linux based distribution, built from scratch in layers.
+An Arch Linux based desktop distribution: Hyprland with the Noctalia shell, a single command-line tool for the system's settings, signed packages and a guided installer. Website: https://lunarclinux.com
 
-The working name is set in `distro.conf` (history in `docs/decisions/`). Nothing else in the repo writes the name out, so it can be changed in one place.
+The distribution's name is set in `distro.conf`; the rest of the repository reads it from there.
 
-## Project rule: privacy and security by default
+## Principles
 
-Nothing about the user leaves the machine unless they ask: telemetry off in everything we ship, every automatic connection listed in `docs/manual/privacy.md`, encryption and a closed firewall by default. Any new default goes through the checklist in `docs/decisions/0031-privacy-and-security-by-default.md`.
-
-## Layers
-
-| Layer | What it adds |
-|---|---|
-| 0 | VM setup, repo skeleton, docs |
-| 1 | Minimal bootable Arch and package list |
-| 2 | Hyprland, login screen, audio, network, portals |
-| 3 | Quickshell: bar, notifications, lock screen, OSD |
-| 4 | Themes: palettes, fonts, terminal, wallpaper |
-| 5 | Command-line tools |
-| 6 | Packages (PKGBUILDs) |
-| 7 | Signing key and package repository |
-| 8 | Installable ISO |
-| 9 | Migrations, versioning, CI |
-
-Each finished layer has a git tag (`l0-complete`, `l1-complete`, ...) and a VM snapshot with the same name.
+- **Arch underneath.** Arch's packages and repositories are used as they are. The distribution adds its own packages for the desktop setup, the command-line tool, the installer and a few programs Arch doesn't carry.
+- **Privacy by default.** No telemetry in anything shipped. Every connection a fresh install makes is listed in `docs/manual/privacy.md`, with how to turn it off. Disk encryption and a closed firewall are the defaults.
+- **Updates that keep working.** Btrfs snapshots before and after every package change, migrations for existing installs, and an install-and-test run in a virtual machine before every release.
 
 ## Layout
 
-Folders match where files end up when installed, so packaging later copies folders rather than moving them.
+Folders mirror where their files are installed.
 
 | Folder | Contents |
 |---|---|
-| `packages/` | Package lists |
-| `install/` | Install scripts |
-| `config/` | Files for `~/.config` (via `/etc/skel`) |
-| `default/` | Default app settings |
+| `bin/` | The command-line tool and its helpers (`/usr/lib/<id>`) |
+| `config/` | Files for new users' `~/.config` (via `/etc/skel`) |
+| `default/` | Default settings for the desktop, shell plugins and apps |
 | `etc/` | Files for `/etc` |
-| `shell/` | Quickshell QML |
-| `themes/` | Themes |
-| `bin/` | Command-line tools |
-| `pkg/` | PKGBUILDs |
-| `iso/` | archiso profile |
-| `migrations/` | Upgrade scripts for existing installs |
-| `vm/` | VM definitions and snapshot script |
-| `docs/decisions/` | Decision records |
-| `docs/design/` | Visual design specs and mockups (Frosted Terminal) |
-| `docs/log/` | Build log |
-| `docs/manual/` | User manual |
+| `install/` | The installer |
+| `iso/` | The archiso profile for the installer image |
+| `migrations/` | Scripts that bring existing installs up to date |
+| `packages/` | Package lists |
+| `pkg/` | PKGBUILDs: the distribution's packages, and patched or extra packages |
+| `themes/` | Themes: palettes, design tokens, wallpapers |
+| `tests/` | Unit tests |
+| `tools/` | Build, release and maintenance tools |
+| `vm/` | Virtual machines for building and testing |
+| `docs/manual/` | The user manual (also on the website) |
+| `docs/design/` | Design tokens the themes are generated from |
+| `site/` | The website |
 
 ## Using it
 
-See `docs/manual/getting-started.md` for installing, keys and commands.
+`docs/manual/getting-started.md` covers installing, keys and commands.
 
-## Building
+## Building and testing
 
 ```sh
-pkg/build          # distro packages into pkg/out-test/repo (tests, development)
-pkg/build --chroot # the same in a clean Arch chroot, into pkg/out/repo; publishing is: pkg/build --chroot && tools/publish
-pkg/build --dev    # test packages for this machine, into pkg/out-dev/repo: versioned so the next release replaces them (ADR 0056)
-tools/cve-check    # known vulnerabilities in what we build ourselves (pkg/*); tools/release stops on one (ADR 0057)
-vm/build-iso       # installer ISO (built in the dev VM)
-vm/test-install    # install into the clean VM and run the checks
-tools/lint         # what CI runs
-tools/release      # a whole release: chroot packages, publish, ISO, signature, upload, website
+pkg/build             # packages into pkg/out-test/repo (development, tests)
+pkg/build --chroot    # the same in a clean Arch chroot, into pkg/out/repo (for publishing)
+pkg/build --dev       # test packages for this machine, versioned below the next release
+vm/test-install       # install into a clean virtual machine and run the checks
+tools/lint            # what CI runs
+tools/cve-check       # known vulnerabilities in the packages built here
+tools/release         # a release: clean packages, vulnerability check, publish, ISO, website
 ```
 
-## Setup after cloning
+After cloning:
 
 ```sh
 git config core.hooksPath .githooks
 ```
 
+## Reporting problems
+
+Bugs and feature requests: GitHub issues. Security issues: see `SECURITY.md`.
+
 ## License
 
-GPL-3.0-or-later. See `LICENSE`.
+GPL-3.0-or-later (`LICENSE`). Third-party notices: `THIRD-PARTY-NOTICES.md`.
