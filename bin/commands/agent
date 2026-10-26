@@ -8,9 +8,10 @@ source "$DISTRO_LIB/lib.sh"
 # be able to change anything: "-" means the agent has no mode we trust for that.
 # The read-only interactive mode is for prompts built from untrusted text (crash
 # captures hold whatever the crashed program printed): the agent can read and
-# explain, and asks before running or changing anything.
+# explain, and asks before running or changing anything. Neither may fetch from
+# the web: crash output could carry instructions to send what it reads somewhere.
 known=(
-  "claude|claude|vendor:https://claude.ai/install.sh|claude {}|claude -p --permission-mode plan {}|claude --permission-mode plan {}"
+  "claude|claude|vendor:https://claude.ai/install.sh|claude {}|claude -p --permission-mode plan --disallowedTools=WebFetch,WebSearch {}|claude --permission-mode plan --disallowedTools=WebFetch,WebSearch {}"
   "codex|codex|pkg:openai-codex|codex {}|codex exec --sandbox read-only {}|codex --sandbox read-only {}"
   "gemini|gemini|pkg:gemini-cli|gemini -i {}|gemini --approval-mode default -p {}|gemini --approval-mode default -i {}"
   "opencode|opencode|pkg:opencode|opencode --prompt {}|-|-"

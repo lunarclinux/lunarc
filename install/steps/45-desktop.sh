@@ -31,6 +31,8 @@ in_target bash "/usr/share/$DISTRO_ID/migrations/system/20261019-1000-wifi-count
 in_target bash "/usr/share/$DISTRO_ID/migrations/system/20261019-1010-trim.sh"
 # The keyring's password follows the login password when it's changed.
 in_target bash "/usr/share/$DISTRO_ID/migrations/system/20261020-1000-keyring-follows-password.sh"
+# Risky media parsers left out (the migration's comment says why).
+in_target bash "/usr/share/$DISTRO_ID/migrations/system/20261026-1000-risky-media-parsers.sh"
 # The login screen in the default theme, until someone picks another.
 in_target "/usr/lib/$DISTRO_ID/greeter-theme"
 in_target "/usr/bin/$DISTRO_ID" migrate --system --mark-all
