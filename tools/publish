@@ -6,8 +6,8 @@
 #   pkg/build --chroot && tools/publish [--dry-run]
 #
 # Safe to rerun and to interrupt:
-# - it refuses builds not made in the clean chroot (pkg/build --chroot,
-#   decision record 0044), unsigned builds, and any package whose version
+# - it refuses builds not made in the clean chroot (pkg/build --chroot),
+#   unsigned builds, and any package whose version
 #   would go backwards compared with what is published;
 # - a package whose version hasn't changed keeps the published file (a rebuild
 #   of the same version has a different checksum, which would break clients

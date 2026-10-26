@@ -63,7 +63,7 @@ install_agent() {
 }
 
 # Claude Code installs with Anthropic's own installer, for you, into ~/.local
-# (decision record 0049): it keeps itself up to date, and its license doesn't
+#: it keeps itself up to date, and its license doesn't
 # let a package carry it. The script is downloaded whole before it runs, so a
 # dropped connection can't run half of it.
 vendor_install() { # vendor_install <name> <installer URL>

@@ -1,0 +1,41 @@
+name: Bug report
+description: Something doesn't work as described.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, and what went wrong.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. …\n2. …"
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `pacman -Q lunarc noctalia`
+    validations:
+      required: true
+  - type: input
+    id: hardware
+    attributes:
+      label: Hardware
+      description: Computer model, graphics card (`lspci | grep -i vga`)
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant output, for example `journalctl -b -p warning --no-pager | tail -50`. Check it for anything private first.
+      render: text

@@ -1,5 +1,5 @@
 --!nonstrict
--- The bar's segments (Frosted Terminal, decision record 0043): flat, full
+-- The bar's segments (Frosted Terminal): flat, full
 -- height, separated by 1px hairlines. Colours are palette roles, so they follow
 -- the theme; the height comes from the bar's own settings, which `@DISTRO_ID@
 -- theme shape` writes (bar_apply).

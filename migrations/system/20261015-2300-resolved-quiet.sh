@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # systemd-resolved never uses LLMNR or multicast DNS (the package's
-# resolved.conf.d drop-in; decision record 0046): restart it if it's running so
+# resolved.conf.d drop-in): restart it if it's running so
 # that applies now. With encrypted DNS off it shouldn't run at all, but
 # `privacy dns off` used to stop only the service and leave its sockets
 # listening, so the next name lookup started it again: stop and disable them.

@@ -1,7 +1,7 @@
 # Run in the VM by vm/test-install (as the desktop user; @ID@ = distro id).
 # A terminal on workspace 6 rings its bell while we're on workspace 3: Ghostty
 # asks for attention, the watcher records it, the bar's state marks workspace
-# 6, SUPER+U's command goes there, and the mark clears (decision record 0037).
+# 6, SUPER+U's command goes there, and the mark clears.
 export XDG_RUNTIME_DIR=/run/user/$(id -u) WAYLAND_DISPLAY=wayland-1
 export HYPRLAND_INSTANCE_SIGNATURE=$(ls "$XDG_RUNTIME_DIR/hypr" | head -1)
 set -e

@@ -124,7 +124,7 @@ ever outgrows the size limit (mostly images), move the files to Static Assets:
 - `pkgs.lunarclinux.com` is a proxied AAAA `100::` record plus a Single Redirect rule
   (302) to `https://github.com/lunarclinux/lunarc-packages/releases/download/packages/<file>`.
   Publish with `pkg/build --chroot && tools/publish` on the machine holding the
-  signing key (a clean-chroot build; decision record 0044).
+  signing key (a clean-chroot build).
 - `downloads.lunarclinux.com`: the R2 bucket for ISOs (being set up). The site links
   there; no page loads anything from it.
 

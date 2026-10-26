@@ -17,7 +17,7 @@ if [[ -n $SSH_KEY ]]; then
 fi
 
 # The desktop keyring (passwords saved by browsers, editors, mail; the shell
-# keeps its clipboard key there), decision records 0028 and 0047.
+# keeps its clipboard key there).
 # - Autologin on an encrypted disk: created without a password of its own, so
 #   apps don't ask for one at every boot; the disk encryption protects it at rest.
 # - Otherwise: created now, locked with the login password. A password login

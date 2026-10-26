@@ -28,7 +28,7 @@ rootless() { pacman -Q podman-docker >/dev/null 2>&1; }
 real_docker() { [[ $(pacman -Qq docker 2>/dev/null) == docker ]]; }
 docker_ready() { rootless || { real_docker && in_docker_group; }; }
 
-# Containers run as you, not as root (decision record 0048): Podman, with the
+# Containers run as you, not as root: Podman, with the
 # docker command and a Docker-compatible socket for Compose and other tools.
 # Membership of the docker group is the same as root access, so it's only
 # done when asked for with --rootful.

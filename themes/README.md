@@ -5,9 +5,9 @@ Each folder is one theme:
 - `palette.json`: Noctalia palette (16 colour roles plus terminal colours), with `dark` and/or `light` variants. Noctalia's templates carry these colours to terminals, GTK, Qt and more. Hyprland's window look comes from `tokens.json` instead.
 - `wallpapers/`: the theme's wallpapers, numbered in cycling order (`1-moonarc.svg`, `2-nebula.svg`, …). SVG, drawn by `tools/make-wallpapers` in the theme's own colours; a theme's first wallpaper may be hand-made.
 - `theme.toml`: `name`, `description`, the default `mode` (`dark` or `light`), and `credit` / `license` / `url` for themes based on someone else's palette.
-- `tokens.json`: the Frosted Terminal design tokens (`docs/design/frosted-terminal/`) in the theme's colours, one set per variant. Written by `tools/make-tokens`; don't edit by hand. Moonlit's dark set is the design's `tokens.json`; the others are derived from `palette.json` by role (decision record 0043).
+- `tokens.json`: the Frosted Terminal design tokens (`docs/design/frosted-terminal/`) in the theme's colours, one set per variant. Written by `tools/make-tokens`; don't edit by hand. Moonlit's dark set is the design's `tokens.json`; the others are derived from `palette.json` by role.
 
-Moonlit is the default (ADR 0017). The collection is described in ADR 0025.
+Moonlit is the default. Licences of the palettes from other projects: `THIRD-PARTY-NOTICES.md`.
 
 | Theme | Modes | Based on | Licence |
 |---|---|---|---|

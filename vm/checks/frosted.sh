@@ -1,5 +1,5 @@
 # Run in the VM by vm/test-install as the desktop user (@ID@ = distro id).
-# Windows in the Frosted Terminal look (decision record 0043): Hyprland's gaps,
+# Windows in the Frosted Terminal look: Hyprland's gaps,
 # border, corners, colours, glow and blur come from the current theme's tokens
 # and follow a theme change; the shape and blur settings switch corners and
 # blur; the header-strip plugin is loaded and draws a strip on terminals only.

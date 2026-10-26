@@ -1,5 +1,5 @@
 --!nonstrict
--- Installed apps for the menu (menu-items.luau; decision records 0042, 0043),
+-- Installed apps for the menu (menu-items.luau),
 -- which lists and searches them itself. The desktop entries come from the
 -- app-entries helper, found and filtered the way Noctalia does; reading them
 -- here would overrun Noctalia's time limit for a plugin call.

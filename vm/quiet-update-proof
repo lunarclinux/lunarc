@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Proves an update of the distro package is quiet (decision record 0040):
+# Proves an update of the distro package is quiet:
 # reboots distro-clean into a session, builds a strictly newer package with a
 # trivial plugin change (temporary commits, reset afterwards), installs it with
 # pacman -U while the desktop runs, and counts Noctalia hot reloads. Run under

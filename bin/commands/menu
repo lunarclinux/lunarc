@@ -3,7 +3,7 @@
 set -euo pipefail
 source "$DISTRO_LIB/lib.sh"
 
-# A panel of the utilities plugin (decision record 0043): a keyboard list
+# A panel of the utilities plugin: a keyboard list
 # drawn by the plugin. Type to filter (deeper items and apps included), Return
 # opens, Backspace on an empty filter goes up, Ctrl+R starts over. Its items:
 # $SHARE/default/menu/menu, or your copy in ~/.config/<id>/menu.

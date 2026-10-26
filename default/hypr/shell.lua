@@ -3,7 +3,7 @@ local mod = "SUPER"
 local function shell(cmd) return hl.dsp.exec_cmd("noctalia msg " .. cmd) end
 local bind = dofile("/usr/share/@DISTRO_ID@/default/hypr/bind.lua")
 
--- The menu (decision record 0043): apps, keybinds, style, setup, capture,
+-- The menu: apps, keybinds, style, setup, capture,
 -- install, remove, update and system in one keyboard list, a panel of the
 -- distro's utilities plugin. Typing filters it, apps and deeper items included.
 bind(mod .. " + Space", "Menu: apps and everything else", shell("panel-toggle @DISTRO_ID@/utilities:menu"))
@@ -23,7 +23,7 @@ bind(mod .. " + V", "Clipboard history", shell("panel-toggle clipboard"))
 bind("ALT + Tab", "Switch windows", shell("window-switcher hold"))
 
 -- Volume and brightness, shown in the pill at the bottom of the screen
--- (`@DISTRO_ID@ osd`, decision record 0043).
+-- (`@DISTRO_ID@ osd`).
 local function held() return { locked = true, repeating = true } end
 local function osd(args) return hl.dsp.exec_cmd("@DISTRO_ID@ osd " .. args) end
 bind("XF86AudioRaiseVolume", "Volume up", osd("volume up"), held())

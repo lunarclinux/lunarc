@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Shell polish (decision record 0043): the weather as one of the bar's segments
+# Shell polish: the weather as one of the bar's segments
 # (the bar block drops the old weather divider), the design's cards and
 # buttons in Noctalia's panels, a less see-through bar in light mode, and Qt
 # apps in Geist (GTK apps get it from the package's GSettings defaults).

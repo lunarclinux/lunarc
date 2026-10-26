@@ -1,5 +1,5 @@
 # Run in the VM by vm/test-install as the desktop user (@ID@ = distro id,
-# @PW@ = the user's password, for sudo). Decision record 0048: the security
+# @PW@ = the user's password, for sudo). The security
 # check on a fresh install warns about nothing but the test's own SSH login;
 # the install watch notes a piped installer from zsh and bash without its query
 # string and ignores ordinary commands; rootless containers work without the

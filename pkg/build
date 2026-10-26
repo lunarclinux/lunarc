@@ -18,7 +18,7 @@
 # this machine (SIGNING_GNUPGHOME, default ~/.local/share/<id>-signing/gnupg).
 # Without it (CI, other machines) everything is built unsigned.
 #
-# --chroot (decision record 0044): every package is built with makechrootpkg
+# --chroot: every package is built with makechrootpkg
 # in a fresh copy of a clean chroot kept in ~/.cache/<id>-chroot (CHROOT_DIR),
 # which is created with mkarchroot or brought up to date (pacman -Syu) first,
 # from Arch's mirrors (CHROOT_MIRROR for one of your own) rather than this machine's mirrorlist.

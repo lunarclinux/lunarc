@@ -1,5 +1,5 @@
 --!nonstrict
--- The menu (SUPER+Space; Frosted Terminal, decision record 0043): one small
+-- The menu (SUPER+Space; Frosted Terminal): one small
 -- keyboard list. Typing filters the level you're on (at the top, deeper items
 -- and apps too, shown under their group); Up and Down move; Return opens a
 -- group in place or runs the item; Backspace on an empty filter goes up a

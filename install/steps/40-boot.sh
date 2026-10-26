@@ -16,7 +16,7 @@ in_target mkinitcpio -P >/dev/null 2>&1
 
 install -Dm644 "$MNT/usr/share/limine/BOOTX64.EFI" "$MNT/boot/EFI/BOOT/BOOTX64.EFI"
 
-# Alongside another system (decision record 0035): Limine also lives in its
+# Alongside another system: Limine also lives in its
 # own folder on our EFI partition, with a firmware boot entry placed first, so
 # the computer starts here while Windows Boot Manager keeps its own entry. The
 # pacman hook refreshes both copies. Nothing on Windows' EFI partition changes.
@@ -117,7 +117,7 @@ console_palette=$(cat "$boot_share/console-palette")
 install -Dm644 "$boot_share/wallpaper.png" "$MNT/boot/$DISTRO_ID/wallpaper.png"
 # The normal entry shows the splash; the fallback entry shows boot messages.
 # zswap off: Arch's kernel turns it on, but the only swap is zram, and zswap
-# in front of zram compresses every page twice (decision record 0054).
+# in front of zram compresses every page twice.
 base_cmdline="$root_args rootflags=subvol=@ rw zswap.enabled=0 $console_palette${EXTRA_CMDLINE:+ $EXTRA_CMDLINE}"
 cmdline="$base_cmdline quiet splash loglevel=3 rd.udev.log_level=3"
 cat > "$MNT/boot/limine.conf" <<CONF

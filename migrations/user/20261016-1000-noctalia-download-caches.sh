@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # The shell no longer downloads its community palette list or community
-# templates unless they're used (decision record 0031, 2026-10-16), but
+# templates unless they're used, but
 # installs that ran an earlier Noctalia still keep what it fetched in
 # ~/.local/state/noctalia. Remove those caches unless the palette source is
 # "community" or community templates are on (then they're in use and stay).

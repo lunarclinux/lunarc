@@ -28,3 +28,7 @@ iso/out/
 
 # Website build output (tools/make-site)
 site/dist/
+
+# Python bytecode
+__pycache__/
+*.pyc

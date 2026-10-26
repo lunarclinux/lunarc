@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# A firewall that refuses every incoming connection (decision record 0031):
+# A firewall that refuses every incoming connection:
 # firewalld's "public" zone without its default SSH opening. If sshd is
 # enabled (someone set up SSH on purpose), SSH stays open. Outgoing traffic is
 # never blocked. Open more with `<id> firewall allow <app>`.

@@ -1,6 +1,6 @@
 --!nonstrict
 -- The weather, right of the clock (opt-in: `@DISTRO_ID@ privacy weather on`),
--- as one of the bar's segments: `☁ 52°` (decision record 0043). With the moon
+-- as one of the bar's segments: `☁ 52°`. With the moon
 -- on, the moon follows in the same segment (`☁ 52° · ◐ 62%`) and draws the
 -- hairline after both. Noctalia's own weather service does the lookup; this
 -- only reads the reading it keeps on disk, so nothing new is fetched. Click:

@@ -230,7 +230,7 @@ interactive_choose_kind() {
       host=$(choose "${found[@]}" "Type an address") || exit 1
       if [[ $host == "Type an address" ]]; then host=""; fi
     fi
-    [[ -n ${host:-} ]] || host=$(ask "NAS address (name or IP, e.g. truenas.local or 192.168.1.100)") || exit 1
+    [[ -n ${host:-} ]] || host=$(ask "NAS address (name or IP, e.g. nas.local or 192.168.1.100)") || exit 1
     valid_host "$host" || die "that doesn't look like an address: '$host'"
   fi
   case $kind in

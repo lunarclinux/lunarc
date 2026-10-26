@@ -1,5 +1,5 @@
 # Run in the VM by vm/test-install as the desktop user (@ID@ = distro id).
-# Night light on forces Noctalia's night light (decision record 0042). The VM's
+# Night light on forces Noctalia's night light. The VM's
 # display can't take gamma ramps, so this reads Noctalia's log instead: it
 # logs "target 4000K ... force=true" whenever forcing turns on, and nothing
 # when it turns off. To tell whether it is forced right now, toggle it once by

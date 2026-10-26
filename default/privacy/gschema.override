@@ -1,4 +1,4 @@
-# GNOME app defaults (decision record 0031). Compiled by glib2's pacman hook.
+# GNOME app defaults. Compiled by glib2's pacman hook.
 [org.gnome.calculator]
 # Don't download currency exchange rates in the background (0 = never). To
 # convert currencies, set an update interval in Calculator's Preferences.

@@ -1,6 +1,6 @@
 # Run in the VM by vm/test-install as the desktop user (@ID@ = distro id,
 # @PW@ = the user's password, for sudo; ~/mpris-stub.py copied in first).
-# Decision record 0031: the installed desktop must not connect anywhere except
+# The installed desktop must not connect anywhere except
 # the documented exceptions, at the shell's start, with every panel open, or
 # idle.
 #

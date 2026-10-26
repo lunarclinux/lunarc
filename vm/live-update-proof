@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Proves an update takes effect without logging out (decision record 0040):
+# Proves an update takes effect without logging out:
 # reboots distro-clean into a desktop session, builds a strictly newer package
 # that adds a session service and a keybind (temporary commits, reset
 # afterwards), installs it with pacman -U while the desktop runs, and checks

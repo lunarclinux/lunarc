@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Windows and terminals take the Frosted Terminal look (decision record 0043):
+# Windows and terminals take the Frosted Terminal look:
 # Hyprland's borders, corners, blur and glow now come from the theme's design
 # tokens (`theme` writes them for default/hypr/look.lua), and Ghostty gets Geist
 # Mono and the theme's translucent background.

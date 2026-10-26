@@ -1,5 +1,5 @@
 # Run in the VM by vm/test-install as the desktop user (@ID@ = distro id,
-# @PW@ = the user's password, for sudo). Decision record 0046: systemd-resolved
+# @PW@ = the user's password, for sudo). systemd-resolved
 # runs only while encrypted DNS is on and never uses LLMNR or multicast DNS;
 # nothing but Avahi listens for mDNS, nothing listens for LLMNR; `privacy dns
 # on` and `off` each leave a working, consistent setup; the migration stops a
