@@ -13,7 +13,7 @@ terminal.notifications = off
 # Quick settings (`@DISTRO_ID@ quick`): which show in the bar's toggles and which in
 # the quick settings popover (SUPER+S), in order. Unset: the defaults.
 #quick.bar = stay-awake nightlight gravity silence reminders recorder dictate
-#quick.panel = wifi bluetooth stay-awake nightlight silence power dark mic
+#quick.panel = wifi bluetooth stay-awake nightlight silence power dark mic gravity reminders recorder dictate
 # The browser web apps (app install <web app>) open in: chromium, edge or chrome.
 app.web_browser = chromium
 # The login screen's password field has an eye that shows what's typed: on or off.

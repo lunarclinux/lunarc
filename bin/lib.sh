@@ -239,7 +239,7 @@ look_apply() {
 # they show unless `quick` changed it.
 QUICK_IDS=(wifi bluetooth stay-awake nightlight silence power dark mic gravity reminders recorder dictate)
 QUICK_BAR_DEFAULT="stay-awake nightlight gravity silence reminders recorder dictate"
-QUICK_PANEL_DEFAULT="wifi bluetooth stay-awake nightlight silence power dark mic"
+QUICK_PANEL_DEFAULT="wifi bluetooth stay-awake nightlight silence power dark mic gravity reminders recorder dictate"
 quick_widget() { # quick_widget <id> → the bar widget's name
   case $1 in
     stay-awake|gravity|silence|reminders|recorder|dictate) echo "$1" ;;
