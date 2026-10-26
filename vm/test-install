@@ -1430,6 +1430,7 @@ if (( rollback )) && (( ! encrypt )); then
   "$here/ssh" "$vm" "$user" -- "echo '$password' | sudo -S -p '' systemctl reboot" || true
   sleep 15; wait_ssh "$user" 300
   check "rollback: the install is undone" "! command -v tree"
+  check "rollback: no pacman lock left behind (updates work)" "! test -e /var/lib/pacman/db.lck"
   check "rollback: booted the restored @"  "[ \"\$(findmnt -no FSROOT /)\" = /@ ]"
   check "rollback: old system kept aside"  "echo '$password' | sudo -S -p '' sh -c 'd=\$(mktemp -d); mount -o subvolid=5 \$(findmnt -no SOURCE / | sed \"s/\\[.*//\") \$d && ls \$d | grep -q ^@old-; r=\$?; umount \$d; exit \$r'"
   check "rollback: snapshots still there"  "echo '$password' | sudo -S -p '' snapper -c root list | grep -q tree"

@@ -537,6 +537,9 @@ rollback_apply() { # rollback_apply <n> <dry-run 0|1>
   if (( dry )); then info "(dry run: nothing changed)"; return 0; fi
 
   btrfs -q subvolume snapshot "$snap" "$new"
+  # Snapshots taken before an install are made while pacman runs, so they hold
+  # its lock; nothing runs in the copy, so the lock would only block updates.
+  rm -f "$new/var/lib/pacman/db.lck"
   # Renaming the subvolume that's mounted as / is fine: the mount holds it by id.
   mv "$top/@" "$old"
   mv "$new" "$top/@"
