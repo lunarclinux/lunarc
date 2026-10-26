@@ -59,6 +59,7 @@ pkg/build          # distro packages into pkg/out-test/repo (tests, development)
 pkg/build --chroot # the same in a clean Arch chroot, into pkg/out/repo; publishing is: pkg/build --chroot && tools/publish
 pkg/build --dev    # test packages for this machine, into pkg/out-dev/repo: versioned so the next release replaces them (ADR 0056)
 tools/cve-check    # known vulnerabilities in what we build ourselves (pkg/*); tools/release stops on one (ADR 0057)
+tools/cve-check --system   # every package an install gets, at the repositories' versions; tools/release holds the ISO on a critical unfixed one
 vm/build-iso       # installer ISO (built in the dev VM)
 vm/test-install    # install into the clean VM and run the checks
 tools/lint         # what CI runs
