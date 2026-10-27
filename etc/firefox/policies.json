@@ -3,7 +3,6 @@
     "DisableTelemetry": true,
     "DisableFirefoxStudies": true,
     "DisableFeedbackCommands": true,
-    "SkipTermsOfUse": true,
     "FirefoxHome": {
       "SponsoredTopSites": false,
       "SponsoredStories": false,
