@@ -45,6 +45,8 @@ pkg/build --chroot       # the same in a clean Arch chroot, into pkg/out/repo (f
 pkg/build --dev          # test packages for this machine, versioned below the next release
 vm/test-install          # install into a clean virtual machine and run the checks
 tools/lint               # what CI runs
+tools/cve-check          # known vulnerabilities in the packages built here
+tools/cve-check --system # every package an install gets; tools/release holds the ISO on a critical unfixed one
 tools/release            # a release: clean packages, vulnerability checks, publish, ISO, website
 ```
 

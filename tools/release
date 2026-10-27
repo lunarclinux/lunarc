@@ -11,10 +11,12 @@
 # token (~/.config/cloudflare-<id>-token). Without the token it stops after
 # signing the ISO and prints what's left.
 #
-# Vulnerability checks are optional and external: with RELEASE_VULN_CHECK set
-# to a checker (a command taking this checkout as --repo), it runs on the fresh
-# build before anything is published, and with --system --gate before the ISO.
-# A failure stops the release there.
+# Before anything is published, tools/cve-check reads the fresh build: a
+# known vulnerability in a package we build ourselves stops the release
+# (RELEASE_SKIP_CVE_CHECK=1 to go ahead anyway, after reading it). Before the
+# ISO, tools/cve-check --system checks every package an install gets: a
+# critical CVE that Arch hasn't fixed yet holds the ISO back (the packages are
+# out by then; RELEASE_SKIP_SYSTEM_CVE_CHECK=1 builds the ISO anyway).
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd); cd "$root"
 source distro.conf
@@ -31,21 +33,19 @@ git pull -q --ff-only
 step "1/6 packages in the clean chroot (sudo once; the key passphrase to sign)"
 pkg/build --chroot
 
-vuln_check() { # vuln_check <args...>: the external checker, if one is set
-  [[ -n ${RELEASE_VULN_CHECK:-} ]] || return 0
-  "$RELEASE_VULN_CHECK" --repo "$root" "$@"
-}
-if [[ -n ${RELEASE_VULN_CHECK:-} ]]; then
-  step "checking what we build for known vulnerabilities"
-  vuln_check || fail "the vulnerability check found an affected package (above)"
+step "checking what we build for known vulnerabilities (tools/cve-check)"
+if ! tools/cve-check; then
+  [[ ${RELEASE_SKIP_CVE_CHECK:-} == 1 ]] || fail "a package we build is affected (above); fix it, or RELEASE_SKIP_CVE_CHECK=1 tools/release"
+  echo "release: going ahead (RELEASE_SKIP_CVE_CHECK=1)"
 fi
 
 step "2/6 publishing the package repository"
 tools/publish
 
-if [[ -n ${RELEASE_VULN_CHECK:-} ]]; then
-  step "checking every package an install gets"
-  vuln_check --system --gate --quiet || fail "a critical vulnerability affects the image's packages (above); the packages are published, the ISO isn't built"
+step "checking every package an install gets (tools/cve-check --system --gate)"
+if ! tools/cve-check --system --gate --quiet; then
+  [[ ${RELEASE_SKIP_SYSTEM_CVE_CHECK:-} == 1 ]] || fail "a critical CVE affects the image and Arch has no fix yet (above); the packages are published. Review it (tools/cve-triage.tsv if it doesn't apply), or RELEASE_SKIP_SYSTEM_CVE_CHECK=1 tools/release"
+  echo "release: building the ISO anyway (RELEASE_SKIP_SYSTEM_CVE_CHECK=1)"
 fi
 
 step "3/6 the ISO from those packages (sudo)"
