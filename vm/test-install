@@ -336,7 +336,7 @@ if "$here/ssh" "$vm" "$user" -- "pacman -Q $id >/dev/null 2>&1"; then
   check "distro packages installed"     "pacman -Q $id $id-settings"
   # Privacy and security by default.
   sudo_vm="echo '$password' | sudo -S -p ''"
-  check "firefox policies in place"     "jq -e '.policies.DisableTelemetry == true and .policies.DNSOverHTTPS.Enabled == false and .policies.HttpsOnlyMode == \"enabled\"' /etc/firefox/policies/policies.json >/dev/null"
+  check "firefox has Mozilla's defaults" "[ ! -e /etc/firefox/policies/policies.json ]"
   check "telemetry opt-outs in shells"  "bash -lc 'echo \$DO_NOT_TRACK \$DOTNET_CLI_TELEMETRY_OPTOUT \$DISABLE_TELEMETRY' | grep -qx '1 1 1'"
   check "firewall refuses incoming"     "$sudo_vm firewall-cmd --state | grep -qx running && $sudo_vm firewall-cmd --get-default-zone | grep -qx public && $sudo_vm firewall-cmd --permanent --zone=public --get-target | grep -qx default && [ -z \"\$($sudo_vm firewall-cmd --zone=public --list-ports)\" ]"
   check "network share: checks, mount on use, write, remove" "$(sed -e "s/@ID@/$id/g" -e "s/@PW@/$password/g" "$here/checks/share.sh")"

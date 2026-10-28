@@ -1,9 +1,10 @@
 # What Lunarc connects to
 
 Lunarc sends nothing about you anywhere: no telemetry, no usage statistics, no
-crash uploads, from Lunarc itself or from the apps it includes. This page lists
-every connection a fresh install makes, why, and how to turn it off. Apps you
-install yourself are yours to configure.
+crash uploads, from Lunarc itself or from the apps it includes, with one
+exception: Firefox comes with Mozilla's own settings, including its data
+collection (below). This page lists every connection a fresh install makes, why,
+and how to turn it off. Apps you install yourself are yours to configure.
 
 `lunarc privacy` shows the switches; `lunarc firewall` shows what may connect in.
 
@@ -15,7 +16,7 @@ install yourself are yours to configure.
 | Network connectivity check | `http://ping.archlinux.org/nm-check.txt` | every few minutes while connected | detects Wi-Fi login pages (hotels, airports) | `lunarc privacy connectivity off` |
 | Packager key refresh | archlinux.org (WKD) | weekly (`archlinux-keyring-wkd-sync.timer`) | picks up new and revoked packager keys | `sudo systemctl disable archlinux-keyring-wkd-sync.timer` (not recommended) |
 | Firefox security services | Mozilla and Google Safe Browsing (via Mozilla), Mozilla's remote settings | while Firefox runs | phishing/malware lists, certificate revocation, add-on blocklists, login-page detection | Firefox Settings › Privacy & Security |
-| uBlock Origin filter lists | the list publishers (GitHub, CDNs) | about daily while Firefox runs | keeps ad and tracker blocking current | uBlock Origin's dashboard |
+| Firefox data collection | Mozilla | while Firefox runs | Mozilla's technical and usage data, studies, sponsored suggestions and stories | Firefox Settings › Privacy & Security › Firefox Data Collection and Use; Settings › Home and Search for sponsored content |
 | DHCP, DNS | the network you join | when you connect | getting an address and resolving names | — (your hostname is not sent; Wi-Fi uses a random hardware address per network) |
 
 Nothing else runs in the background: no update checks (unless you turn on
@@ -61,7 +62,7 @@ features below.
 - **Disk encryption** is the installer's default (LUKS2). TRIM passes through it so the SSD stays fast; that lets someone holding the disk see which blocks are empty, never what's in them. Backups are encrypted (Pika Backup). Saved passwords and clipboard history live in the keyring.
 - **Firewall:** incoming connections are refused (firewalld, zone `public`), except mDNS replies from the local network, which finding printers needs. `lunarc firewall allow localsend` (or `kdeconnect`, `syncthing`, `ssh`, `steam-streaming`, `8080/tcp`) opens one; `deny` closes it.
 - **Wi-Fi:** a random hardware (MAC) address per network, temporary IPv6 addresses, and your computer's name isn't sent to the network.
-- **Firefox:** telemetry, studies, sponsored tiles and stories, Firefox Suggest and recommendations off; strict tracking protection; HTTPS-only mode; search suggestions off; DuckDuckGo as the search engine; uBlock Origin installed (removable). Firefox's own DNS-over-HTTPS stays off so it doesn't send your lookups to a provider you didn't choose; use `lunarc privacy dns` for the whole system instead. All of these can be changed in Firefox's settings.
+- **Firefox** is Mozilla's, as Mozilla ships it: Lunarc doesn't change its settings. Its data collection, sponsored content, search engine, tracking protection and HTTPS-only mode are in its settings; for encrypted DNS for the whole system, use `lunarc privacy dns`.
 - **Developer tools:** `DO_NOT_TRACK=1` and the tools' own opt-outs (.NET, Next.js, Astro, Nuxt, Gatsby, Homebrew, Azure, PowerShell, Hugging Face, Turborepo, Angular, Storybook, Google Cloud SDK and others) are set for every session and shell. VS Code, Code - OSS and Zed installed through `lunarc app` start with telemetry off.
 - **Kernel:** kernel addresses and logs hidden from users, no unprivileged BPF, debugging limited to a process's parent, no runtime kernel replacement (kexec), ICMP redirects ignored.
 - **Printing:** the print service answers only this computer and never shares its printers; Avahi looks for printers but never announces this computer's name, address or services.

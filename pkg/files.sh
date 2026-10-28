@@ -192,9 +192,6 @@ case $part in
     # makepkg without separate -debug packages for AUR builds; a backup
     # file, so a local edit survives updates.
     put "$src/etc/makepkg.conf.d/no-debug.conf" "$dest/etc/makepkg.conf.d/$id.conf"
-    # Firefox's system policies: no telemetry, studies or sponsored content,
-    # strict tracking protection, HTTPS-only, uBlock Origin.
-    put "$src/etc/firefox/policies.json" "$dest/etc/firefox/policies/policies.json"
     # Network privacy: random Wi-Fi MAC per network, IPv6 privacy addresses,
     # the hostname not sent to DHCP servers.
     put "$src/etc/NetworkManager/privacy.conf" "$dest/etc/NetworkManager/conf.d/50-$id-privacy.conf"
