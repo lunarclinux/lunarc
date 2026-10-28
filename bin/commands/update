@@ -177,8 +177,11 @@ security_set() { # security_set install|notify|off
       set_setting update.security "$1"
       systemctl --user enable --now "$timer" >/dev/null 2>&1 || die "couldn't start $timer"
       if [[ $1 == install ]]; then
-        { sudo install -d -m 755 "${security_conf%/*}" && printf 'install\n' | sudo tee "$security_conf" >/dev/null; } \
-          || die "couldn't turn on automatic installs"
+        local tmp
+        tmp=$(mktemp)
+        printf 'install\n' > "$tmp"
+        sudo install -D -m 644 "$tmp" "$security_conf" || { rm -f "$tmp"; die "couldn't turn on automatic installs"; }
+        rm -f "$tmp"
         sudo systemctl start "$DISTRO_ID-security-update.timer" 2>/dev/null || true
       elif [[ -e $security_conf ]]; then
         sudo rm -f "$security_conf"
