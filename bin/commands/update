@@ -213,9 +213,12 @@ security_check() { # security_check [--notify|--cached]
   local feed=$STATE_DIR/advisories.json waiting n seen=$STATE_DIR/security-seen new top
   mkdir -p "$STATE_DIR"
   if [[ ${1:-} != --cached ]]; then
-    fetch_feed "$feed" || info "(couldn't download the security feed; using the last copy)"
+    if ! fetch_feed "$feed"; then
+      if [[ -s $feed ]]; then info "(couldn't download the list of security fixes; using the copy from $(date -r "$feed" '+%b %-d %H:%M'))"
+      else info "The list of security fixes couldn't be downloaded yet; it's tried again every six hours."; return 0; fi
+    fi
   fi
-  [[ -s $feed ]] || { info "no security feed yet"; return 0; }
+  [[ -s $feed ]] || { info "The list of security fixes hasn't been downloaded yet; it's tried every six hours."; return 0; }
   waiting=$(feed_waiting "$feed")
   printf '%s\n' "$waiting" | grep . > "$STATE_DIR/security" || true
   noctalia msg plugin "$DISTRO_ID/utilities:menu-button" all refresh >/dev/null 2>&1 || true
