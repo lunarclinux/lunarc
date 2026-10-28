@@ -11,6 +11,8 @@ After=network-online.target
 
 [Service]
 Type=oneshot
+# The CLI reads $HOME, which systemd leaves unset for root services.
+Environment=HOME=/root
 ExecStart=/usr/bin/@DISTRO_ID@ update security apply
 Nice=10
 IOSchedulingClass=idle
