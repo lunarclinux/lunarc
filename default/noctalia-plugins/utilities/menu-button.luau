@@ -4,7 +4,8 @@
 -- menu; right-click: apps (both set in the bar config's [widget.menu.actions]).
 -- With the daily update check on (`@DISTRO_ID@ update auto-check on`), a small
 -- dark dot beside the moon says updates are waiting (the menu's Update has
--- the count). `@DISTRO_ID@ update check` refreshes it.
+-- the count). `@DISTRO_ID@ update check` refreshes it. With security fixes on
+-- (`@DISTRO_ID@ update security`), the dot turns red while a security fix waits.
 local seg = require("./seg.luau")
 local cli = "@DISTRO_ID@"
 
@@ -22,19 +23,31 @@ local function waiting()
   return n
 end
 
+-- The security fixes `update security check` last found waiting.
+local function security()
+  local text = noctalia.readFile(noctalia.expandPath("~/.local/state/" .. cli .. "/security")) or ""
+  local n = 0
+  for _ in string.gmatch(text, "[^\n]+") do n = n + 1 end
+  return n > 0 and n or nil
+end
+
 local function render()
   local h = seg.height()
   local n = waiting()
+  local sec = security()
   barWidget.render(ui.row({
     align = "center", justify = "center", height = h, minWidth = h + 4, paddingH = 10, gap = 2,
     fill = "primary", radius = seg.rounded() and h / 2 or 0,
   }, {
     ui.glyph({ name = "moon", size = seg.GLYPH, color = "on_primary" }),
     ui.column({ width = 5, height = seg.GLYPH, flexGrow = 0, justify = "start" }, {
-      ui.box({ width = 5, height = 5, radius = 2.5, fill = n and "on_primary" or "#00000000" }),
+      ui.box({ width = 5, height = 5, radius = 2.5, fill = sec and "error" or (n and "on_primary" or "#00000000") }),
     }),
   }))
-  barWidget.setTooltip(n and ("Menu (SUPER+Space) · " .. n .. " updates ready") or "Menu (SUPER+Space)")
+  local tip = "Menu (SUPER+Space)"
+  if sec then tip = tip .. " · " .. sec .. (sec == 1 and " security fix" or " security fixes") .. " waiting"
+  elseif n then tip = tip .. " · " .. n .. " updates ready" end
+  barWidget.setTooltip(tip)
 end
 
 function onIpc(event, _payload)

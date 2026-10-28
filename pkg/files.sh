@@ -30,6 +30,7 @@ case $part in
     put "$src/bin/cli" "$dest/usr/bin/$id" 755
     put "$src/bin/lib.sh" "$dest/usr/lib/$id/lib.sh"
     put "$src/bin/ui.sh" "$dest/usr/lib/$id/ui.sh"
+    put "$src/bin/security-feed.sh" "$dest/usr/lib/$id/security-feed.sh"
     put "$src/bin/agent-usage.jq" "$dest/usr/lib/$id/agent-usage.jq"
     put "$src/bin/workspace-watch" "$dest/usr/lib/$id/workspace-watch" 755
     put "$src/bin/app-entries" "$dest/usr/lib/$id/app-entries" 755
@@ -103,6 +104,8 @@ case $part in
     put "$src/etc/systemd/user/update-check.timer" "$units/$id-update-check.timer"
     put "$src/etc/systemd/user/security-watch.service" "$units/$id-security-watch.service"
     put "$src/etc/systemd/user/security-watch.timer" "$units/$id-security-watch.timer"
+    put "$src/etc/systemd/user/security-fixes.service" "$units/$id-security-fixes.service"
+    put "$src/etc/systemd/user/security-fixes.timer" "$units/$id-security-fixes.timer"
     put "$src/etc/systemd/user/battery-watch.service" "$units/$id-battery-watch.service"
     put "$src/etc/systemd/user/workspace-watch.service" "$units/$id-workspace-watch.service"
     put "$src/etc/systemd/user/idle-watch.service" "$units/$id-idle-watch.service"
@@ -122,6 +125,12 @@ case $part in
     put "$src/etc/systemd/system/charge-limit.service" "$dest/usr/lib/systemd/system/$id-charge-limit.service"
     install -d "$dest/usr/lib/systemd/system/multi-user.target.wants"
     ln -s "../$id-charge-limit.service" "$dest/usr/lib/systemd/system/multi-user.target.wants/$id-charge-limit.service"
+    # Automatic security installs (`update security install`): the timer always
+    # runs; the service does nothing unless they're turned on.
+    put "$src/etc/systemd/system/security-update.service" "$dest/usr/lib/systemd/system/$id-security-update.service"
+    put "$src/etc/systemd/system/security-update.timer" "$dest/usr/lib/systemd/system/$id-security-update.timer"
+    install -d "$dest/usr/lib/systemd/system/timers.target.wants"
+    ln -s "../$id-security-update.timer" "$dest/usr/lib/systemd/system/timers.target.wants/$id-security-update.timer"
     put "$src/etc/systemd/system-sleep/charge-limit" "$dest/usr/lib/systemd/system-sleep/$id-charge-limit" 755
 
     # pacman hook keeping Limine current at the UEFI fallback path.

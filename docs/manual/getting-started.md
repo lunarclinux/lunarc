@@ -187,7 +187,9 @@ Moving to a new computer: `lunarc app export apps.txt` lists what you've install
 
 At the end it says what changed, which snapshot to go back to, and whether to restart for a new kernel.
 
-A newer Hyprland release than the one Lunarc's settings were tested with is held back (with its libraries) until a Lunarc update says it's tested; `lunarc update --all` takes it anyway. `lunarc update check` lists what's waiting without installing. `lunarc update auto-check on` checks once a day by itself (off by default). pacman's output is in colour; `lunarc update candy on` draws its progress bars as Pac-Man eating dots (`off` to stop).
+A newer Hyprland release than the one Lunarc's settings were tested with is held back (with its libraries) until a Lunarc update says it's tested; `lunarc update --all` takes it anyway. `lunarc update check` lists what's waiting without installing. `lunarc update auto-check on` checks once a day by itself (off by default).
+
+**Security fixes** can arrive on their own. `lunarc update security install` (or System › Security fixes: automatic, or the first-login choice) installs an update by itself when an installed package has a high or critical CVE whose fix is out, usually within hours: on mains power, not on a metered connection, with a snapshot before and after like any update, and a notification afterwards (restart when it says a new kernel was installed). `lunarc update security notify` only tells you, with an Update button; the bar's menu button shows a red dot while one waits. Either way it reads one public file, the security feed, every six hours; `lunarc update security` shows what's waiting, `off` turns it off. Apps from the AUR and Flatpak still update with `lunarc update`. pacman's output is in colour; `lunarc update candy on` draws its progress bars as Pac-Man eating dots (`off` to stop).
 
 If an update breaks something: `lunarc update snapshots` lists the snapshots, and `lunarc update rollback <number>` puts the system back as it was in that snapshot, then you restart. Your files, `/home` and logs are not touched. The replaced system is kept until `lunarc update rollback --clean`.
 

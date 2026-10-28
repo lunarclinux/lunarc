@@ -1,0 +1,11 @@
+# Off unless turned on: `@DISTRO_ID@ update security notify|install` enables it.
+[Unit]
+Description=Look for waiting security fixes every six hours
+
+[Timer]
+OnCalendar=00/6:00
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

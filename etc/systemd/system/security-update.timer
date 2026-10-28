@@ -1,0 +1,12 @@
+# Started by the package (timers.target.wants); the service does nothing
+# unless automatic security installs are turned on.
+[Unit]
+Description=Install waiting security fixes every six hours
+
+[Timer]
+OnCalendar=00/6:00
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

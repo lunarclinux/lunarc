@@ -1,0 +1,81 @@
+# Known vulnerabilities, every six hours (and by hand):
+# - every package an install gets, at the repositories' current versions
+#   (tools/cve-check --system); the run fails when a critical one has no fix
+#   yet, so the maintainers hear about it;
+# - the security feed installs read (`<id> update security`): high and critical
+#   CVEs whose fix is in the repositories, uploaded to this repository's
+#   release named "security" as advisories.json;
+# - what the distribution builds itself (tools/cve-check), failing when one of
+#   its packages is affected.
+# The report is the run's summary. NVD_API_KEY (a repository secret, optional)
+# makes the NVD step faster.
+name: security
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write   # the "security" release
+
+concurrency:
+  group: security
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    timeout-minutes: 60
+    steps:
+      - name: Install tools
+        run: pacman -Syu --noconfirm --needed base-devel git python fakeroot github-cli
+      - uses: actions/checkout@v4
+      - name: Cache CVE data
+        uses: actions/cache@v4
+        with:
+          path: /home/builder/.cache
+          key: cve-${{ github.run_id }}
+          restore-keys: cve-
+      - name: Scan every package an install gets, and write the feed
+        id: system
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          id -u builder >/dev/null 2>&1 || useradd -m builder
+          mkdir -p /home/builder/.cache && chown -R builder /home/builder "$GITHUB_WORKSPACE"
+          rc=0
+          su builder -w NVD_API_KEY,GITHUB_TOKEN -c \
+            "tools/cve-check --system --days 60 --gate --advisories advisories.json --report report.md" || rc=$?
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          test -s advisories.json
+      - name: Scan what the distribution builds
+        id: own
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          rc=0
+          su builder -w GITHUB_TOKEN -c "tools/cve-check --days 60" > own.txt || rc=$?
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+      - name: Publish the feed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view security --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create security --repo "$GITHUB_REPOSITORY" --title "Security feed" --latest=false \
+              --notes "advisories.json: high and critical CVEs whose fix is in the repositories, for \`update security\`. Rewritten every six hours by .github/workflows/security.yml."
+          fi
+          gh release upload security advisories.json --repo "$GITHUB_REPOSITORY" --clobber
+      - name: Report
+        if: always()
+        run: |
+          { [ -s report.md ] && awk 'n >= 2; /^---$/ { n++ }' report.md
+            echo; echo '## What the distribution builds'; echo '```'; cat own.txt 2>/dev/null; echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Fail on a critical unfixed CVE or an affected package of ours
+        run: |
+          [ "${{ steps.system.outputs.rc }}" = 0 ] || { echo "a critical CVE affects the image's packages and has no fix yet"; exit 1; }
+          [ "${{ steps.own.outputs.rc }}" = 0 ] || { echo "a package the distribution builds is affected"; exit 1; }
