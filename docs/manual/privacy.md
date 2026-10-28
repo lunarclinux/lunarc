@@ -1,10 +1,10 @@
 # What Lunarc connects to
 
-Lunarc sends nothing about you anywhere: no telemetry, no usage statistics, no
-crash uploads, from Lunarc itself or from the apps it includes, with one
-exception: Firefox comes with Mozilla's own settings, including its data
-collection (below). This page lists every connection a fresh install makes, why,
-and how to turn it off. Apps you install yourself are yours to configure.
+Lunarc itself collects nothing and tracks nothing: no telemetry, no usage
+statistics, no crash uploads. The apps it includes are their makers', with their
+makers' settings; where an app's own opt-out can be set for the whole system,
+it is (below). Firefox keeps Mozilla's defaults, data collection included. This
+page lists every connection a fresh install makes, why, and how to turn it off.
 
 `lunarc privacy` shows the switches; `lunarc firewall` shows what may connect in.
 

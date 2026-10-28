@@ -24,7 +24,7 @@ privacy_choose() { # privacy_choose <option>... -> the chosen option
 step_run() {
   local choice
   ui_step "$STEP" "$STEPS" "Privacy"
-  ui_text "$C_TEXT" "$DISTRO_NAME sends nothing about you anywhere: no telemetry, no usage statistics, nothing from the apps we include except Firefox, which keeps Mozilla's own settings (Firefox Settings › Privacy & Security turns its data collection off). Three optional things need the internet:"
+  ui_text "$C_TEXT" "$DISTRO_NAME itself collects nothing and tracks nothing. The apps it includes keep their makers' settings: Firefox's data collection, for one, is turned off in Firefox Settings › Privacy & Security. Three optional things need the internet:"
   printf '\n'
   local zone city
   zone=$(timedatectl show -p Timezone --value 2>/dev/null || true)
