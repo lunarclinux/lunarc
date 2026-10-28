@@ -55,6 +55,10 @@ id = "network"
 entry = "network.luau"
 
 [[widget]]
+id = "bluetooth"
+entry = "bluetooth.luau"
+
+[[widget]]
 id = "bell"
 entry = "bell.luau"
 
@@ -136,6 +140,15 @@ id = "network-panel"
 entry = "network-panel.luau"
 width = 380
 height = 560
+placement = "floating"
+open_near_click = true
+
+# The Bluetooth popover, under the Bluetooth segment.
+[[panel]]
+id = "bluetooth-panel"
+entry = "bluetooth-panel.luau"
+width = 380
+height = 480
 placement = "floating"
 open_near_click = true
 

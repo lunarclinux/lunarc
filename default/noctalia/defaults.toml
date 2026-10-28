@@ -137,7 +137,7 @@ enabled = true
 # what's playing. Centre: the clock, pinned to the exact middle (anchor), with
 # the toggles that are on flush against its left and
 # the opt-in moon and weather to its right. Right: stats, notifications,
-# network, volume, battery, power. Its height, corners and inset follow
+# network, Bluetooth, volume, battery, power. Its height, corners and inset follow
 # `@DISTRO_ID@ theme shape`, and the lists follow the bar settings; both are
 # written by `@DISTRO_ID@` into your config.toml (bar_apply). Values here are
 # the terminal shape's.
@@ -165,7 +165,7 @@ capsule_thickness = 1.0
 capsule_radius = 0
 start  = ["menu", "workspaces", "window", "media"]
 center = ["toggles", "stay-awake", "night-light", "gravity", "silence", "reminders", "recorder", "dictate", "clock"]  # + "moon", "weather" when turned on (bar_apply)
-end    = ["tray", "ai-usage", "crashes", "stats", "bell", "keyboard_layout", "net", "sound", "battery", "power-divider", "session"]
+end    = ["tray", "ai-usage", "crashes", "stats", "bell", "keyboard_layout", "net", "bluetooth", "sound", "battery", "power-divider", "session"]
 
 [widget.menu]
 type = "@DISTRO_ID@/utilities:menu-button"
@@ -297,6 +297,12 @@ capsule = false
 
 [widget.net]
 type = "@DISTRO_ID@/utilities:network"
+capsule = false
+
+# Bluetooth: off, on or connected; click for the devices (hidden without
+# Bluetooth hardware).
+[widget.bluetooth]
+type = "@DISTRO_ID@/utilities:bluetooth"
 capsule = false
 
 # Sound: the output's icon and volume as a segment; scroll for volume, click for
