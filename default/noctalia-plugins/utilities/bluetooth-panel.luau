@@ -10,6 +10,10 @@ local bt = require("./bluetooth-common.luau")
 local st = nil
 local devs = {}
 local busy = nil
+-- After the switch: BlueZ takes a moment to power up or down, so the chosen
+-- state shows at once and is re-read quickly until BlueZ agrees (or 8 s pass).
+local want = nil
+local SLOW, FAST = 5000, 700
 
 local function changed() noctalia.state.set("bluetooth-changed", noctalia.nowMs()) end
 
@@ -19,6 +23,15 @@ end
 
 local function reload()
   bt.status(function(s)
+    if want then
+      if s.on == want.on or noctalia.nowMs() > want.until then
+        want = nil
+        noctalia.setUpdateInterval(SLOW)
+        changed()
+      else
+        s.on = want.on
+      end
+    end
     st = s
     if s.present and s.on then
       bt.devices(function(d) devs = d; render() end)
@@ -38,8 +51,12 @@ local function toggle(d)
 end
 
 local function setPower(on)
+  want = { on = on, until = noctalia.nowMs() + 8000 }
+  noctalia.setUpdateInterval(FAST)
   run({ "noctalia", "msg", on and "bluetooth-enable" or "bluetooth-disable" }, function(_r) changed(); reload() end)
-  st.on = on; render()
+  st.on = on
+  if not on then devs = {} end
+  render()
 end
 
 local function pairNew() run({ "noctalia", "msg", "panel-toggle", "control-center", "bluetooth" }) end
@@ -86,7 +103,7 @@ end
 
 function onOpen(_context)
   noctalia.state.set("bluetooth-open", true)
-  noctalia.setUpdateInterval(5000)
+  noctalia.setUpdateInterval(want and FAST or SLOW)
   reload()
   render()
 end
