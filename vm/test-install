@@ -334,6 +334,7 @@ check "root account locked"            "echo '$password' | sudo -S -p '' passwd 
 check "/boot is root-only"           'test "$(stat -c %a /boot)" = 700'
 if "$here/ssh" "$vm" "$user" -- "pacman -Q $id >/dev/null 2>&1"; then
   check "distro packages installed"     "pacman -Q $id $id-settings"
+  check "Hyprland is the tested one"     "[ \"\$(pacman -Q hyprland | awk '{ print \$2 }')\" = \"\$(head -1 /usr/lib/hyprland-plugins/hyprbars.hyprland)\" ]"
   # Privacy and security by default.
   sudo_vm="echo '$password' | sudo -S -p ''"
   check "firefox has Mozilla's defaults" "[ ! -e /etc/firefox/policies/policies.json ]"

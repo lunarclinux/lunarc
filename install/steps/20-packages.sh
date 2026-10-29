@@ -52,6 +52,20 @@ info "${#pkgs[@]} packages and their dependencies"
 # pacstrap's output is long; keep it in a log and show only problems.
 pacstrap -K "$MNT" "${pkgs[@]}" > /tmp/pacstrap.log 2>&1 || { tail -30 /tmp/pacstrap.log; die "pacstrap failed"; }
 grep -iE '^(error|warning):' /tmp/pacstrap.log | grep -v 'directory permissions differ on /mnt/boot' || true
+# Hyprland as tested: the window header plugin is built for one exact Arch
+# Hyprland (hyprbars.hyprland) and `update` holds newer ones back until the
+# distro has tested them. A release Arch published after this installer was
+# made is replaced by that one, from the Arch Linux Archive (signed by Arch).
+# (Hyprland 0.57.0 left the shell unable to start in a VM, 2026-10-28.)
+tested=$(head -1 "$MNT/usr/lib/hyprland-plugins/hyprbars.hyprland" 2>/dev/null || true)
+have=$(arch-chroot "$MNT" pacman -Q hyprland 2>/dev/null | awk '{ print $2 }')
+if [[ $tested =~ ^[0-9][0-9.]*-[0-9]+$ && -n $have && $have != "$tested" ]]; then
+  info "Hyprland $have is newer than the tested $tested; installing $tested"
+  if ! arch-chroot "$MNT" pacman -U --noconfirm \
+      "https://archive.archlinux.org/packages/h/hyprland/hyprland-$tested-x86_64.pkg.tar.zst" >>/tmp/pacstrap.log 2>&1; then
+    info "WARNING: couldn't install Hyprland $tested; keeping $have (the desktop may not start; see /tmp/pacstrap.log)"
+  fi
+fi
 genfstab -U "$MNT" >> "$MNT/etc/fstab"
 # The EFI partition holds the bootloader and random seed: root-only, like the
 # Arch Wiki advises. Applied here rather than at mount time so pacstrap doesn't
