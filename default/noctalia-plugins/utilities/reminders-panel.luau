@@ -53,7 +53,7 @@ end
 render = function()
   local rows = {}
   for _, r in ipairs(reminders) do
-    table.insert(rows, ui.row({ key = r.id, align = "center", gap = 10, padding = 10, radius = 10, fill = "surface_variant/0.6" }, {
+    table.insert(rows, ui.row({ key = r.id, align = "center", gap = 10, padding = 10, radius = 10, fill = "surface_container/0.6" }, {
       ui.glyph({ name = "alarm", size = 16, color = "primary" }),
       ui.column({ flexGrow = 1, gap = 2 }, {
         ui.label({ text = r.text, fontWeight = "bold", maxLines = 2 }),

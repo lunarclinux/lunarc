@@ -1,8 +1,8 @@
 diff --git a/src/shell/control_center/tabs/home_tab.cpp b/src/shell/control_center/tabs/home_tab.cpp
-index 240a069..426fec3 100644
+index 412782b..ef227cd 100644
 --- a/src/shell/control_center/tabs/home_tab.cpp
 +++ b/src/shell/control_center/tabs/home_tab.cpp
-@@ -119,7 +119,14 @@ namespace {
+@@ -120,7 +120,14 @@ namespace {
  
    std::string userHostLine() { return std::format("{}@{}", sessionUserName(), hostName()); }
  
@@ -16,5 +16,5 @@ index 240a069..426fec3 100644
 +    return std::format("Noctalia {}", noctalia::build_info::displayVersion());
 +  }
  
-   void applyHomeCardStyle(Flex& card, float scale, float fillOpacity) {
-     applySectionCardStyle(card, scale, fillOpacity);
+   // The compositor's own version line already names it; fall back to the detected name.
+   std::string compositorLine(const std::optional<std::string>& versionLine) {

@@ -1,6 +1,6 @@
 # The desktop shell (bar, launcher, panels, notifications, OSD, lock screen),
 # built from the same release and checksum as Arch's own package, with seven
-# patches of ours. Arch's PKGBUILD for 5.3.0-1 is the model: same
+# patches of ours. Arch's PKGBUILD for 5.4.0-1 is the model: same
 # source, dependencies, meson options and files.
 #
 # top-highlight.patch (ours, not sent upstream): Frosted Terminal's finish on
@@ -59,7 +59,7 @@
 # A host build (pkg/build without --chroot) skips makedepends, so the build
 # machine may lack libraries it builds against. Then the exact Arch packages
 # below (those Arch's 5.2.1-1 was built with, libical since raised to 4.0.7;
-# still what 5.3.0 builds against) are unpacked into a private
+# still what 5.4.0 builds against) are unpacked into a private
 # folder for the build only, checksum-pinned (signatures checked against Arch's
 # keyring when pinned); installed systems get the same libraries through
 # depends. They are always downloaded, and prepare() decides, once the
@@ -74,11 +74,12 @@
 # the fit, bar.cpp, widget.h, label.h, active_window_widget.cpp
 # and plugin_widget.{h,cpp}; the surface colours, palette.{h,cpp},
 # config_types.h, config_schema.cpp, application_services.cpp, the control
-# center's tab.cpp and button.cpp; no-background-fetch, application_services.cpp,
+# center's tab.cpp and button.cpp (5.4.0 renamed the roles they replace:
+# surface_container, outline_variant); no-background-fetch, application_services.cpp,
 # config_types.h, config_schema.cpp, mpris_art.{h,cpp} and notification_toast.cpp),
 # and the pinned build libraries; reset pkgrel.
 pkgname=noctalia
-pkgver=5.3.0
+pkgver=5.4.0
 pkgrel=1
 epoch=1
 pkgdesc='A sleek, customizable desktop shell crafted for Wayland (with a top-edge highlight patch)'
@@ -102,14 +103,18 @@ source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz"
         no-background-fetch.patch
         bar-hover-fit.patch
         os-release-version.patch)
-sha256sums=('7677b5d7da80cf89c7a8232de26d25380aa5fcaf34fb38abddd4fe7cb676161a'
-            'e9e77c7ab68b08339cb2c136d3a29b4eeddc30ae402b99fe9957981c0d052e0e'
-            'f499c11d674575d48d131aa50de2d6b2744737dcea64e1c7e90a155b66310720'
-            'd60e97afd47a30d7b06bf05a14baf53be4a7bcc845ce6c24eff3f619bed296a1'
-            '7a8d4e1b94c6a5d2fe03ecc67e748aa5f29f57842adb6123a3baa6bcd553c141'
-            '5e37dca32aa75bfd0d87f87d0355987fabd888f3daea81c1e3e9aaa3cd21d31d'
-            '4cccf900fa310ba82aaea1392bfb37d4dc4b84b029b1453eab60a70051b8fca2'
-            '8e53afb817e16b464382fa5f676c8a5e5661b080309a9c2ce1975a672bfcd2f7')
+sha256sums=('47130d9cf1cdd637f5fe6f88f1706e7be900faa3e62c83390499d3daef32de59'
+            'e9abb41a8dcb0b3c4764d41b4ae74b26fe7447b191c08cdc165252ec224b3646'
+            '1150ce369eaf6141d9e531f14eb3e4517560e74d9d5168653a8dc9fac5ba0c74'
+            'a13af07fbd9db310efbd44f5b2442640c411e0d79d4afbd52f21e8a8afc85523'
+            '09abdbb9765f288b042d6943c1db12ffd2c96bf068b31353bd5ca45961b9eb67'
+            '1ed52154810d651d09c7accf5fb714fb0adab9bd06ae5ae762db39dec9582f04'
+            'fe6208099b0f9ee01a1a875d040ca938b4cf51d43421e2653c19295f8cec6dc4'
+            '93cfd05765f8e0835f6cf84e8500592846111079b73b8f6acd165a55f8a9faa5'
+            'ac95d08aa2e829aea1cd022d9062ce0cb4b0ef156a49ed18ca8605fdc9b73c1f'
+            '2a12f2cd48271158532ae98c02273127611eedc1d70f97e2f14e8bde34f52a14'
+            '55968568ee1c8f3ffe691b51d4f6660acb40ee82f474d41fc6e18c571e87ddc4'
+            '286f2694dccf92acd197940b6ca068d3a6d5c763123e02a0e4fe26e611a97f25')
 
 _archive=https://archive.archlinux.org/packages
 _buildlibs=(libqalculate-5.13.2-1-x86_64 libical-4.0.7-1-x86_64
@@ -118,10 +123,6 @@ source+=("$_archive/l/libqalculate/${_buildlibs[0]}.pkg.tar.zst"
          "$_archive/l/libical/${_buildlibs[1]}.pkg.tar.zst"
          "$_archive/n/nlohmann-json/${_buildlibs[2]}.pkg.tar.zst"
          "$_archive/s/stb/${_buildlibs[3]}.pkg.tar.zst")
-sha256sums+=('ac95d08aa2e829aea1cd022d9062ce0cb4b0ef156a49ed18ca8605fdc9b73c1f'
-             '2a12f2cd48271158532ae98c02273127611eedc1d70f97e2f14e8bde34f52a14'
-             '55968568ee1c8f3ffe691b51d4f6660acb40ee82f474d41fc6e18c571e87ddc4'
-             '286f2694dccf92acd197940b6ca068d3a6d5c763123e02a0e4fe26e611a97f25')
 noextract=("${_buildlibs[@]/%/.pkg.tar.zst}")
 
 _have_buildlibs() {
@@ -176,10 +177,17 @@ build() {
     -Db_ndebug=true -Dtests=disabled \
     build-release "$pkgname-$pkgver"
   _meson compile -C build-release
+  local shell
+  for shell in bash fish zsh; do
+    build-release/noctalia completions "$shell" > "$shell-completion"
+  done
 }
 
 package() {
   _meson install -C build-release --destdir "$pkgdir"
   install -Dm644 "$pkgname-$pkgver/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
   install -Dm644 "$pkgname-$pkgver/README.md" "$pkgdir/usr/share/doc/$pkgname/README.md"
+  install -Dm644 bash-completion "$pkgdir/usr/share/bash-completion/completions/noctalia"
+  install -Dm644 fish-completion "$pkgdir/usr/share/fish/vendor_completions.d/noctalia.fish"
+  install -Dm644 zsh-completion "$pkgdir/usr/share/zsh/site-functions/_noctalia"
 }

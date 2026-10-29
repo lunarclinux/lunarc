@@ -81,7 +81,7 @@ local function crashRow(c)
   if expanded[c.id] then
     table.insert(children, ui.markdown({ text = detailText(c) }))
   end
-  return ui.column({ key = c.id, gap = 6, padding = 12, radius = 10, fill = "surface_variant/0.6" }, children)
+  return ui.column({ key = c.id, gap = 6, padding = 12, radius = 10, fill = "surface_container/0.6" }, children)
 end
 
 render = function()

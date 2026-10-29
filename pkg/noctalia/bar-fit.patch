@@ -1,8 +1,8 @@
-diff --git i/src/shell/bar/bar.cpp w/src/shell/bar/bar.cpp
-index e509dde..ba7c15d 100644
---- i/src/shell/bar/bar.cpp
-+++ w/src/shell/bar/bar.cpp
-@@ -977,6 +977,7 @@ namespace {
+diff --git a/src/shell/bar/bar.cpp b/src/shell/bar/bar.cpp
+index 52b58c6..22d0c14 100644
+--- a/src/shell/bar/bar.cpp
++++ b/src/shell/bar/bar.cpp
+@@ -1021,6 +1021,7 @@ namespace {
          if (auto* tray = dynamic_cast<TrayWidget*>(widget.get())) {
            tray->setCapsuleCross(capsuleCross);
          }
@@ -10,7 +10,7 @@ index e509dde..ba7c15d 100644
          if (widget->root() != nullptr) {
            widget->layout(renderer, barAreaW, barAreaH);
          }
-@@ -1244,6 +1245,58 @@ namespace {
+@@ -1290,6 +1291,58 @@ namespace {
        configureSlot(instance.endSlot, contentMainEnd - endSlotMain, endSlotMain);
      }
  
@@ -69,11 +69,11 @@ index e509dde..ba7c15d 100644
      if (isVertical) {
        instance.startSection->setPosition((slotCross - instance.startSection->width()) * 0.5F, 0.0F);
        instance.centerSection->setPosition((slotCross - instance.centerSection->width()) * 0.5F, centerSectionOffset);
-diff --git i/src/shell/bar/widget.h w/src/shell/bar/widget.h
-index 7efd751..1cc9641 100644
---- i/src/shell/bar/widget.h
-+++ w/src/shell/bar/widget.h
-@@ -107,6 +107,11 @@ public:
+diff --git a/src/shell/bar/widget.h b/src/shell/bar/widget.h
+index d552ec5..6af112e 100644
+--- a/src/shell/bar/widget.h
++++ b/src/shell/bar/widget.h
+@@ -112,6 +112,11 @@ public:
    void setConfigName(std::string name) { m_configName = std::move(name); }
    [[nodiscard]] std::string_view configName() const noexcept { return m_configName; }
    void setAnchor(bool anchor) noexcept { m_anchor = anchor; }
@@ -83,9 +83,9 @@ index 7efd751..1cc9641 100644
 +  [[nodiscard]] float fitMain() const noexcept { return m_fitMain; }
 +  [[nodiscard]] virtual bool canShortenText() const { return false; }
    [[nodiscard]] bool isAnchor() const noexcept { return m_anchor; }
- 
-   void setBarCapsuleSpec(WidgetBarCapsuleSpec spec) noexcept { m_barCapsuleSpec = std::move(spec); }
-@@ -167,6 +172,7 @@ protected:
+   // Bar-owned gate: when false the bar never shows this widget's tooltips; widgets keep setting their content.
+   [[nodiscard]] bool showsTooltip() const noexcept { return m_showTooltip; }
+@@ -174,6 +179,7 @@ protected:
    virtual void doUpdate(Renderer& renderer) { (void)renderer; }
  
    float m_contentScale = 1.0F;
@@ -93,10 +93,10 @@ index 7efd751..1cc9641 100644
    float m_fontScale = 1.0F;
    FontWeight m_labelFontWeight = FontWeight::Medium;
    std::string m_labelFontFamily; // empty = inherit renderer-global family
-diff --git i/src/shell/bar/widgets/active_window_widget.cpp w/src/shell/bar/widgets/active_window_widget.cpp
+diff --git a/src/shell/bar/widgets/active_window_widget.cpp b/src/shell/bar/widgets/active_window_widget.cpp
 index 6d6c2dd..6bbe5a9 100644
---- i/src/shell/bar/widgets/active_window_widget.cpp
-+++ w/src/shell/bar/widgets/active_window_widget.cpp
+--- a/src/shell/bar/widgets/active_window_widget.cpp
++++ b/src/shell/bar/widgets/active_window_widget.cpp
 @@ -83,7 +83,11 @@ void ActiveWindowWidget::doLayout(Renderer& renderer, float containerWidth, floa
    const bool showingEmptyPlaceholder = m_lastEmptyState && m_showEmptyLabel;
    const bool isVertical = containerHeight > containerWidth;
@@ -110,10 +110,10 @@ index 6d6c2dd..6bbe5a9 100644
    const float minLength = std::clamp(m_minWidth * m_contentScale, 0.0F, maxLength);
    m_icon->setSize(iconSize, iconSize);
  
-diff --git i/src/shell/bar/widgets/active_window_widget.h w/src/shell/bar/widgets/active_window_widget.h
+diff --git a/src/shell/bar/widgets/active_window_widget.h b/src/shell/bar/widgets/active_window_widget.h
 index 6077464..fb70f85 100644
---- i/src/shell/bar/widgets/active_window_widget.h
-+++ w/src/shell/bar/widgets/active_window_widget.h
+--- a/src/shell/bar/widgets/active_window_widget.h
++++ b/src/shell/bar/widgets/active_window_widget.h
 @@ -46,6 +46,7 @@ public:
  
  private:
@@ -122,10 +122,10 @@ index 6077464..fb70f85 100644
    void doUpdate(Renderer& renderer) override;
    void applyTitleScrollMode(bool titleVisible);
    void syncWidgetVisibility(bool showWidget);
-diff --git i/src/shell/bar/widgets/plugin_widget.cpp w/src/shell/bar/widgets/plugin_widget.cpp
-index 1a0fa67..879ed8f 100644
---- i/src/shell/bar/widgets/plugin_widget.cpp
-+++ w/src/shell/bar/widgets/plugin_widget.cpp
+diff --git a/src/shell/bar/widgets/plugin_widget.cpp b/src/shell/bar/widgets/plugin_widget.cpp
+index 2ad7f96..92a3ba2 100644
+--- a/src/shell/bar/widgets/plugin_widget.cpp
++++ b/src/shell/bar/widgets/plugin_widget.cpp
 @@ -10,6 +10,7 @@
  #include "render/scene/input_area.h"
  #include "render/scene/node.h"
@@ -134,7 +134,7 @@ index 1a0fa67..879ed8f 100644
  #include "ui/palette.h"
  #include "ui/style.h"
  
-@@ -326,6 +327,73 @@ void PluginWidget::handleAudioSpectrumChanged() {
+@@ -347,6 +348,73 @@ void PluginWidget::handleAudioSpectrumChanged() {
    );
  }
  
@@ -208,7 +208,7 @@ index 1a0fa67..879ed8f 100644
  void PluginWidget::doLayout(Renderer& renderer, float containerWidth, float containerHeight) {
    m_isVertical = containerHeight > containerWidth;
    if (!m_flex)
-@@ -343,6 +411,27 @@ void PluginWidget::doLayout(Renderer& renderer, float containerWidth, float cont
+@@ -364,6 +432,27 @@ void PluginWidget::doLayout(Renderer& renderer, float containerWidth, float cont
      m_reconciler.setColorDefaults(widgetForegroundOr(fallback), widgetIconColorOr(fallback));
      (void)m_reconciler.reconcile(*m_uiHost, *m_tree, renderer);
      m_uiHost->layout(renderer);
@@ -235,11 +235,11 @@ index 1a0fa67..879ed8f 100644
 +    }
      if (m_area)
        m_area->setSize(m_uiHost->width(), m_uiHost->height());
-     return;
-diff --git i/src/shell/bar/widgets/plugin_widget.h w/src/shell/bar/widgets/plugin_widget.h
-index 678d4f1..91d01a9 100644
---- i/src/shell/bar/widgets/plugin_widget.h
-+++ w/src/shell/bar/widgets/plugin_widget.h
+     if (m_dragOverlay != nullptr) {
+diff --git a/src/shell/bar/widgets/plugin_widget.h b/src/shell/bar/widgets/plugin_widget.h
+index 3295cc5..62beeff 100644
+--- a/src/shell/bar/widgets/plugin_widget.h
++++ b/src/shell/bar/widgets/plugin_widget.h
 @@ -47,6 +47,9 @@ public:
    ~PluginWidget() override;
  
@@ -250,15 +250,15 @@ index 678d4f1..91d01a9 100644
  
    void luaSetText(std::string_view text);
    void luaSetGlyph(std::string_view name);
-diff --git i/src/ui/controls/label.h w/src/ui/controls/label.h
-index a61e50e..26be4e7 100644
---- i/src/ui/controls/label.h
-+++ w/src/ui/controls/label.h
+diff --git a/src/ui/controls/label.h b/src/ui/controls/label.h
+index cde703a..69376fc 100644
+--- a/src/ui/controls/label.h
++++ b/src/ui/controls/label.h
 @@ -73,6 +73,7 @@ public:
    [[nodiscard]] float fontSize() const noexcept;
    [[nodiscard]] const Color& color() const noexcept;
    [[nodiscard]] float maxWidth() const noexcept;
 +  [[nodiscard]] int maxLines() const noexcept { return m_userMaxLines; }
-   [[nodiscard]] FontWeight fontWeight() const noexcept;
+   [[nodiscard]] const TextFont& font() const noexcept;
    [[nodiscard]] TextAlign textAlign() const noexcept;
    [[nodiscard]] TextEllipsize ellipsize() const noexcept;
