@@ -2,9 +2,10 @@
 # shellcheck shell=bash
 # The things that are off by default but people often want: weather in the
 # bar (sends your city name online), encrypted DNS (sends your lookups to a
-# provider you pick instead of the network's) and a daily update check
-# (downloads the package lists). All stay off unless chosen here; all can be
-# changed later (`<id> privacy`, `<id> update auto-check`).
+# provider you pick instead of the network's), a daily update check
+# (downloads the package lists) and security fixes (reads the security feed,
+# installs or notifies). All stay off unless chosen here; all can be
+# changed later (`<id> privacy`, `<id> update auto-check`, `<id> update security`).
 
 step_applies() { [[ -z $(setting privacy.asked) ]]; }
 
@@ -77,8 +78,19 @@ step_run() {
   if [[ $choice == "Check daily" ]]; then
     "/usr/bin/$DISTRO_ID" update auto-check on || true
   fi
+
+  ui_step "$STEP" "$STEPS" "Privacy"
+  ui_text "$C_BOLD$C_TEXT" "Security fixes"
+  ui_text "$C_MUTED" "When a serious security problem is found in an installed package and the fix is out, $DISTRO_NAME can install it for you, usually within hours. Every six hours it downloads one public list of fixes (nothing about you is sent). Installs happen on mains power, never on a metered connection, with a snapshot first."
+  printf '\n'
+  choice=$(privacy_choose "Install them automatically (recommended)" "Tell me when one is waiting" "Only when I update")
+  case $choice in
+    Install*) "/usr/bin/$DISTRO_ID" update security install >/dev/null || true ;;
+    Tell*) "/usr/bin/$DISTRO_ID" update security notify >/dev/null || true ;;
+    *) "/usr/bin/$DISTRO_ID" update security off >/dev/null || true ;;
+  esac
   set_setting privacy.asked yes
   printf '\n'
-  ui_text "$C_MUTED" "Change these any time: '$DISTRO_ID privacy' (and '$DISTRO_ID privacy weather location' for the place) and '$DISTRO_ID update auto-check', or the menu's Setup › Privacy, Setup › Weather location and System › Check for updates daily."
+  ui_text "$C_MUTED" "Change these any time: '$DISTRO_ID privacy' (and '$DISTRO_ID privacy weather location' for the place) '$DISTRO_ID update auto-check' and '$DISTRO_ID update security', or the menu's Setup › Privacy, Setup › Weather location, System › Check for updates daily and System › Security fixes."
   ui_continue
 }

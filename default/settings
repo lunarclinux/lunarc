@@ -30,6 +30,9 @@ privacy.aur_search = on
 # Check for updates once a day in the background (downloads the package lists
 # from the Arch and distro package servers): `@DISTRO_ID@ update auto-check on`.
 update.auto_check = off
+# Security fixes: notify (say when one is waiting) or install (automatically);
+# reads the public security feed every six hours. `@DISTRO_ID@ update security`.
+update.security = off
 terminal = ghostty
 agent = claude
 crash.notify = first

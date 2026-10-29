@@ -1,0 +1,18 @@
+# Installs waiting security fixes, when turned on (`@DISTRO_ID@ update security
+# install` writes /etc/@DISTRO_ID@/security-updates): the normal update of Arch
+# and distro packages, unattended, on mains power and not on a metered
+# connection. Snapshots are taken before and after, as for any update.
+[Unit]
+Description=Install waiting security fixes
+ConditionPathExists=/etc/@DISTRO_ID@/security-updates
+ConditionACPower=true
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+# The CLI reads $HOME, which systemd leaves unset for root services.
+Environment=HOME=/root
+ExecStart=/usr/bin/@DISTRO_ID@ update security apply
+Nice=10
+IOSchedulingClass=idle

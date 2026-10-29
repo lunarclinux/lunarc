@@ -2,10 +2,11 @@
 # summary: Update the system safely, see what's waiting, or roll back
 set -euo pipefail
 source "$DISTRO_LIB/lib.sh"
+source "$DISTRO_LIB/security-feed.sh"
 
 usage() {
   cat <<USAGE
-Usage: $DISTRO_ID update [--all] | check | new-apps | firmware | snapshots | rollback <n> [--dry-run] | rollback --clean | candy on|off
+Usage: $DISTRO_ID update [--all] | check | security [...] | new-apps | firmware | snapshots | rollback <n> [--dry-run] | rollback --clean | candy on|off
 
   (no argument)   update everything: keyrings first, then Arch and $DISTRO_NAME
                   packages (a snapshot is taken before and after), then AUR
@@ -17,6 +18,15 @@ Usage: $DISTRO_ID update [--all] | check | new-apps | firmware | snapshots | rol
                   check once a day in the background (off by default): downloads
                   the package lists from the Arch and $DISTRO_NAME package servers;
                   the menu's Update and a dot on the bar's menu button show the count
+  security        security fixes: what's waiting, and how they arrive
+  security install|notify|off
+                  install: when an installed package has a high or critical
+                  CVE whose fix is in the repositories, update in the
+                  background (on mains power, not on a metered connection,
+                  with the usual snapshot first) and say so afterwards;
+                  notify: only say so, with an Update button; off (default).
+                  Every six hours it downloads one public file, the security
+                  feed (repo.conf's ADVISORIES_URL); nothing is sent about you
   doctor          check what updates need (network, clock, package key) and fix
                   what it can
   candy on|off    pacman's progress bars drawn as Pac-Man eating dots (off by default)
@@ -148,6 +158,165 @@ auto_check() { # auto_check on|off|toggle|status
     status|"") info "checking for updates daily: $(setting update.auto_check off)" ;;
     *) die "auto-check on, off or toggle?" ;;
   esac
+}
+
+# --- Security fixes (setting update.security; install also /etc/<id>/security-updates)
+# A user timer reads the feed and notifies (notify and install); a system
+# timer, only with the /etc file, installs (`security apply`, as root).
+security_conf=/etc/$DISTRO_ID/security-updates
+
+security_mode() {
+  if [[ -r $security_conf ]] && grep -qx install "$security_conf"; then echo install; return; fi
+  case $(setting update.security off) in notify|install) echo notify ;; *) echo off ;; esac
+}
+
+security_set() { # security_set install|notify|off
+  local timer=$DISTRO_ID-security-fixes.timer
+  case $1 in
+    install|notify)
+      set_setting update.security "$1"
+      systemctl --user enable --now "$timer" >/dev/null 2>&1 || die "couldn't start $timer"
+      if [[ $1 == install ]]; then
+        local tmp
+        tmp=$(mktemp)
+        printf 'install\n' > "$tmp"
+        sudo install -D -m 644 "$tmp" "$security_conf" || { rm -f "$tmp"; die "couldn't turn on automatic installs"; }
+        rm -f "$tmp"
+        sudo systemctl start "$DISTRO_ID-security-update.timer" 2>/dev/null || true
+      elif [[ -e $security_conf ]]; then
+        sudo rm -f "$security_conf"
+      fi
+      security_check "" || true ;;
+    off)
+      set_setting update.security off
+      systemctl --user disable --now "$timer" >/dev/null 2>&1 || true
+      if [[ -e $security_conf ]]; then sudo rm -f "$security_conf"; fi
+      rm -f "$STATE_DIR/security"
+      noctalia msg plugin "$DISTRO_ID/utilities:menu-button" all refresh >/dev/null 2>&1 || true ;;
+    *) die "security install, notify or off?" ;;
+  esac
+  set_setting privacy.security_asked yes
+  info "security fixes: $(security_mode)"
+}
+
+security_say_mode() {
+  case $(security_mode) in
+    install) info "Security fixes: installed automatically (on mains power, not on a metered connection)" ;;
+    notify) info "Security fixes: you're told when one is waiting" ;;
+    off) info "Security fixes: arrive with your own updates ($DISTRO_ID update security install turns on automatic installs)" ;;
+  esac
+}
+
+# Reads the feed (downloading it unless --cached) and lists what's waiting;
+# with --notify, new ones get a notification with an Update button.
+security_check() { # security_check [--notify|--cached]
+  local feed=$STATE_DIR/advisories.json waiting n seen=$STATE_DIR/security-seen new top
+  mkdir -p "$STATE_DIR"
+  if [[ ${1:-} != --cached ]]; then
+    if ! fetch_feed "$feed"; then
+      if [[ -s $feed ]]; then info "(couldn't download the list of security fixes; using the copy from $(date -r "$feed" '+%b %-d %H:%M'))"
+      else info "The list of security fixes couldn't be downloaded yet; it's tried again every six hours."; return 0; fi
+    fi
+  fi
+  [[ -s $feed ]] || { info "The list of security fixes hasn't been downloaded yet; it's tried every six hours."; return 0; }
+  waiting=$(feed_waiting "$feed")
+  printf '%s\n' "$waiting" | grep . > "$STATE_DIR/security" || true
+  noctalia msg plugin "$DISTRO_ID/utilities:menu-button" all refresh >/dev/null 2>&1 || true
+  n=$(grep -c . <<<"$waiting" || true)
+  if [[ ${1:-} != --notify ]]; then
+    if (( n )); then
+      info "Security fixes waiting ($DISTRO_ID update installs them):"
+      awk '{ s = $5 == "-" ? "" : " (" $5 ")"; printf "  %s %s -> %s  %s%s\n", $1, $2, $3, $4, s }' <<<"$waiting"
+    else
+      info "No security fixes waiting."
+    fi
+    return 0
+  fi
+  (( n )) || return 0
+  [[ -f $seen ]] || : > "$seen"
+  new=$(awk 'NR == FNR { old[$0] = 1; next } !(($4 "|" $1) in old)' "$seen" - <<<"$waiting")
+  { awk '{ print $4 "|" $1 }' <<<"$waiting"; cat "$seen"; } | sort -u > "$seen.part" && mv -f "$seen.part" "$seen"
+  [[ -n $new ]] || return 0
+  [[ $(security_mode) == install ]] && return 0   # the system timer installs it and says so
+  top=$(head -1 <<<"$waiting")
+  systemd-run --user --quiet --collect -- bash -c 'a=$(notify-send -a "Security fixes" -u critical \
+      --action=update=Update --wait -- "$1" "$2" 2>/dev/null) || exit 0
+    [[ $a == update ]] && exec "/usr/bin/$3" terminal run -- "/usr/bin/$3" update' _ \
+    "Security fix waiting$( (( n > 1 )) && echo "s ($n)")" \
+    "$(awk '{ printf "%s: %s", $1, $4; if ($5 != "-") printf " (%s)", $5 }' <<<"$top")$( (( n > 1 )) && echo ", and $((n - 1)) more")" \
+    "$DISTRO_ID" >/dev/null 2>&1 || true
+}
+
+# Root's notification to everyone logged in to a desktop.
+notify_desktops() { # notify_desktops <urgency> <title> <body>
+  local s uid name type active
+  while read -r s _; do
+    [[ -n $s ]] || continue
+    { read -r uid; read -r name; read -r type; read -r active; } < <(loginctl show-session "$s" -p User -p Name -p Type -p Active --value 2>/dev/null)
+    [[ $active == yes && $type =~ ^(wayland|x11)$ && $uid =~ ^[0-9]+$ ]] || continue
+    runuser -u "$name" -- env DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" XDG_RUNTIME_DIR="/run/user/$uid" \
+      notify-send -a "Security fixes" -u "$1" -- "$2" "$3" >/dev/null 2>&1 || true
+  done < <(loginctl list-sessions --no-legend 2>/dev/null)
+}
+
+metered() { # true when the connection in use is metered (phone hotspot, mobile data)
+  local dev
+  dev=$(ip route show default 2>/dev/null | awk '{ for (i = 1; i < NF; i++) if ($i == "dev") { print $(i + 1); exit } }')
+  [[ -n $dev ]] || return 1
+  nmcli -t -g GENERAL.METERED device show "$dev" 2>/dev/null | grep -qE '^yes'
+}
+
+# The system timer's job (root): when a security fix is waiting, the normal
+# update of Arch and distro packages, unattended. Keyrings first, held-back
+# Hyprland honoured, snapshots before and after (snap-pac); no AUR or Flatpak,
+# no new default apps (the next `update` does those).
+security_apply() { # security_apply [--dry-run]
+  local dry=0 feed waiting pend ignore=() held=() keyrings=() o before after changed names kernel=0 log
+  [[ ${1:-} == --dry-run ]] && dry=1
+  [[ $EUID -eq 0 ]] || die "security apply runs as root (the system timer)"
+  [[ -r $security_conf ]] && grep -qx install "$security_conf" || { info "automatic security installs are off"; return 0; }
+  [[ $(booted_snapshot) == 0 ]] || { info "started from a snapshot; not updating"; return 0; }
+  install -d -m 755 "/var/lib/$DISTRO_ID"
+  feed=/var/lib/$DISTRO_ID/advisories.json
+  fetch_feed "$feed" || info "couldn't download the security feed; using the last copy"
+  [[ -s $feed ]] || return 0
+  waiting=$(feed_waiting "$feed")
+  if [[ -z $waiting ]]; then info "no security fixes waiting"; return 0; fi
+  info "waiting: $(awk '{ printf "%s%s (%s)", sep, $1, $4; sep = ", " }' <<<"$waiting")"
+  names=$(awk '{ print $1 }' <<<"$waiting" | sort -u | tr '\n' ' ')
+  if command -v systemd-ac-power >/dev/null && ! systemd-ac-power; then info "on battery; later"; return 0; fi
+  if metered; then
+    info "metered connection; not downloading"
+    (( dry )) || notify_desktops normal "Security fix waiting" "$names- not installed automatically on a metered connection. Menu › Update installs it."
+    return 0
+  fi
+  if [[ -e /var/lib/pacman/db.lck ]]; then info "another package operation is running; later"; return 0; fi
+  if (( dry )); then info "would update now (dry run)"; return 0; fi
+  log=$(mktemp)
+  # shellcheck disable=SC2064
+  trap "rm -f '$log'" RETURN
+  keyrings=(archlinux-keyring)
+  if ! pacman -Sy --noconfirm >"$log" 2>&1; then
+    info "the package lists could not be downloaded"; cat "$log"; return 1
+  fi
+  if pacman -Si "$DISTRO_ID-keyring" >/dev/null 2>&1; then keyrings+=("$DISTRO_ID-keyring"); fi
+  pacman -S --needed --noconfirm "${keyrings[@]}" >>"$log" 2>&1 || true
+  pend=$(pending)
+  mapfile -t held < <(held_back "$pend")
+  for o in "${ours_over_arch[@]}"; do if ours_current "$o"; then ignore+=(--ignore "$o"); fi; done
+  for o in "${held[@]}"; do ignore+=(--ignore "$o"); done
+  before=$(pacman -Q)
+  if ! pacman -Su --noconfirm "${ignore[@]}" >>"$log" 2>&1; then
+    cat "$log"
+    notify_desktops critical "Security fixes couldn't install themselves" "Menu › Update installs them and shows why ($names)."
+    return 1
+  fi
+  after=$(pacman -Q)
+  changed=$(comm -13 <(sort <<<"$before") <(sort <<<"$after") | awk '{ print $1 }')
+  if grep -qE '^linux(-lts|-zen|-hardened)?$' <<<"$changed" || [[ ! -d /usr/lib/modules/$(uname -r) ]]; then kernel=1; fi
+  info "updated $(grep -c . <<<"$changed" || true) package(s)"
+  printf '%s %s\n' "$(date +%s)" "$names" > "/var/lib/$DISTRO_ID/security-installed"
+  notify_desktops normal "Security fixes installed" "$names$( (( kernel )) && echo "- restart to finish (a new kernel)")"
 }
 
 latest_snapshot() { snapper -c root --csvout list --columns number 2>/dev/null | tail -1 | tr -cd '0-9'; }
@@ -432,6 +601,7 @@ update_all() { # update_all [1 = take held-back Hyprland too]
   if (( aur_failed )); then info "Some AUR apps didn't update; the rest of the system did. Run 'yay -Sua' to see why."; fi
   if (( kernel )); then info "A new kernel was installed: restart to use it."; fi
   remember_pending 0
+  if [[ $(security_mode) != off ]]; then security_check --cached >/dev/null 2>&1 || true; fi
 }
 
 check() { # check [--background]: --background is the daily timer's (no AUR)
@@ -648,6 +818,14 @@ case ${1:-} in
   --all) update_all 1 ;;
   check) check "${2:-}" ;;
   auto-check) auto_check "${2:-status}" ;;
+  security)
+    case ${2:-} in
+      "") security_say_mode; if [[ $(security_mode) != off ]]; then security_check --cached; fi ;;
+      install|notify|off) security_set "$2" ;;
+      check) security_check "${3:-}" ;;
+      apply) security_apply "${3:-}" ;;
+      *) die "security install, notify, off or check?" ;;
+    esac ;;
   new-apps) sudo -v; new_default_apps ;;
   firmware)
     command -v fwupdmgr >/dev/null || die "fwupd isn't installed (sudo pacman -S fwupd)"

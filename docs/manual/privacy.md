@@ -20,7 +20,7 @@ page lists every connection a fresh install makes, why, and how to turn it off.
 | DHCP, DNS | the network you join | when you connect | getting an address and resolving names | — (your hostname is not sent; Wi-Fi uses a random hardware address per network) |
 
 Nothing else runs in the background: no update checks (unless you turn on
-the daily one, below), no weather, no location lookups, no plugin catalogs,
+the daily one or security fixes, below), no weather, no location lookups, no plugin catalogs,
 no exchange-rate downloads, no colour-palette or template catalogs, no
 public-IP lookup, no cover art or notification icons fetched from the web, and
 no usage ping from the desktop shell (Noctalia). The desktop itself (the
@@ -37,6 +37,7 @@ features below.
 | Encrypted DNS (off by default) | the provider you pick: Quad9, Mullvad or Cloudflare (DNS over TLS) | after `lunarc privacy dns <provider>` |
 | Installing apps | Arch mirrors, the AUR, the app's own site (web apps) | `lunarc app install`, `lunarc package install`, the menu's Install |
 | Daily update check (off by default) | your Arch mirrors and `pkgs.lunarclinux.com` (the package lists only; the AUR isn't asked) | once a day, after `lunarc update auto-check on`, choosing it at first login, or System › Check for updates daily in the menu |
+| Security fixes (off by default) | `github.com` (one public file, the security feed); in automatic mode, then your Arch mirrors and `pkgs.lunarclinux.com` for the update itself | every six hours, after `lunarc update security notify` or `install`, choosing it at first login, or System › Security fixes in the menu |
 | Searching the AUR | `aur.archlinux.org` (the word you typed, three letters or more) | typing in the menu's Install; off with `lunarc privacy aur-search off` |
 | AI coding agents | the agent's provider (Anthropic, OpenAI, Google, ...) | when you run one; their telemetry is turned off (`DISABLE_TELEMETRY`, Gemini's usage statistics, opencode sharing) |
 | AI crash diagnosis | your chosen agent's provider, with the crash report | when you click Diagnose (or set background diagnosis yourself) |

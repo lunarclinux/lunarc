@@ -1,0 +1,11 @@
+# Security fixes, when turned on (`@DISTRO_ID@ update security notify|install`):
+# reads the security feed and says when an installed package has a high or
+# critical CVE whose fix is waiting. Installs nothing (the system timer does,
+# in install mode).
+[Unit]
+Description=Look for waiting security fixes
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/@DISTRO_ID@ update security check --notify

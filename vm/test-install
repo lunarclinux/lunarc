@@ -1322,6 +1322,21 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     menu_is "update auto-check: the menu finds its item" '.rows[0] == "System › Check for updates [daily]"'
     key KEY_ENTER; sleep 2
     check "update auto-check: the menu's item turns it on" "systemctl --user is-enabled --quiet $id-update-check.timer && $hypr $id update auto-check off >/dev/null"
+    # Security fixes: off by default; install mode turns on the user timer
+    # (notifications) and the system one (installs). A made-up feed with a
+    # fix for bash finds it waiting, the unattended update runs, and off
+    # turns both off again. (The feed's download may fail before the
+    # repository is public; the last copy is used.)
+    sp="echo '$password' | sudo -S -p ''"
+    # The CLI's own sudo calls get the password through an exported wrapper.
+    sudo_fn="sudo() { printf '%s\\n' '$password' | command sudo -S -p '' \"\$@\"; }; export -f sudo;"
+    fakefeed='{"version":1,"generated":"2026-10-28T00:00:00Z","advisories":[{"id":"CVE-0000-0001","pkg":"bash","fixed":"99-1","score":9.8,"summary":"test advisory"}]}'
+    check "security fixes: off by default" "$id update security | grep -q 'arrive with your own updates' && ! systemctl --user is-enabled --quiet $id-security-fixes.timer && test ! -e /etc/$id/security-updates && systemctl is-active --quiet $id-security-update.timer"
+    check "security fixes: install turns on both timers" "$sudo_fn $hypr $id update security install >/dev/null && grep -qx install /etc/$id/security-updates && systemctl --user is-active --quiet $id-security-fixes.timer && systemctl is-active --quiet $id-security-update.timer && grep -qx 'update.security = install' ~/.config/$id/settings"
+    check "security fixes: a waiting fix is found" "mkdir -p ~/.local/state/$id && printf '%s\n' '$fakefeed' > ~/.local/state/$id/advisories.json && $hypr $id update security check --cached | grep -q 'bash .* -> 99-1  CVE-0000-0001 (9.8)' && grep -q '^bash ' ~/.local/state/$id/security"
+    check "security fixes: the unattended update runs" "printf '%s\n' '$fakefeed' > /tmp/fakefeed.json && $sp install -D -m 644 /tmp/fakefeed.json /var/lib/$id/advisories.json && $sp $id update security apply 2>&1 | tee /dev/stderr | grep -q 'updated [0-9]* package' && $sp test -s /var/lib/$id/security-installed"
+    check "security fixes: the system service starts cleanly" "$sp systemctl start $id-security-update.service && ! systemctl is-failed --quiet $id-security-update.service"
+    check "security fixes: off turns both off" "$sudo_fn $hypr $id update security off >/dev/null && test ! -e /etc/$id/security-updates && ! systemctl --user is-enabled --quiet $id-security-fixes.timer && test ! -e ~/.local/state/$id/security"
     # Pre-checks: offline, a wrong clock and an untrusted
     # key each give one plain message instead of pacman errors. Offline runs
     # detached (it takes the network away from this SSH session too).
