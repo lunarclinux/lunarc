@@ -65,5 +65,15 @@ done < <(git ls-files)
 awk -F'|' '!/^[[:space:]]*#/ && NF > 5 { printf "default/menu/menu:%d: %d fields, at most 5 (a \"|\" in a command or description?)\n", NR, NF; bad = 1 } END { exit bad }' \
   default/menu/menu || problem "menu lines with too many fields"
 
+# The shell's plugins: a Luau syntax error (a reserved word as a field name)
+# stops the plugin from loading and took the shell down with it.
+if command -v luau-compile >/dev/null; then
+  while read -r f; do
+    luau-compile --null "$f" >/dev/null 2>&1 || problem "$f: $(luau-compile --null "$f" 2>&1 | grep -m1 Error)"
+  done < <(git ls-files '*.luau')
+else
+  echo "lint: luau-compile not installed; Luau syntax not checked"
+fi
+
 (( fail )) && exit 1
 echo "lint: ok (${#scripts[@]} shell scripts)"

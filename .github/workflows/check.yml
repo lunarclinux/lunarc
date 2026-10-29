@@ -51,6 +51,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0   # pkg/build versions packages from the layer tags
+      - name: Luau syntax (the shell's plugins)
+        run: |
+          pacman -S --noconfirm --needed luau
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          for f in $(git ls-files '*.luau'); do luau-compile --null "$f" >/dev/null || exit 1; done
       - name: Build packages
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"

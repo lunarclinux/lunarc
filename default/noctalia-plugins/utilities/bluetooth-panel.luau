@@ -24,7 +24,7 @@ end
 local function reload()
   bt.status(function(s)
     if want then
-      if s.on == want.on or noctalia.nowMs() > want.until then
+      if s.on == want.on or noctalia.nowMs() > want.deadline then
         want = nil
         noctalia.setUpdateInterval(SLOW)
         changed()
@@ -51,7 +51,7 @@ local function toggle(d)
 end
 
 local function setPower(on)
-  want = { on = on, until = noctalia.nowMs() + 8000 }
+  want = { on = on, deadline = noctalia.nowMs() + 8000 }
   noctalia.setUpdateInterval(FAST)
   run({ "noctalia", "msg", on and "bluetooth-enable" or "bluetooth-disable" }, function(_r) changed(); reload() end)
   st.on = on
