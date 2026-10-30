@@ -32,19 +32,19 @@ local function tile(id)
   local dim = editing and place == "off"
   local kids = {
     ui.glyph({ name = it.glyph(s), size = 18,
-      color = dim and "on_surface_variant/0.5" or (s.color or (on and "primary" or "on_surface")) }),
+      color = dim and "on_surface_variant/0.5" or (s.color or (on and "on_primary_container" or "on_surface")) }),
     pop.text(label, { fontSize = 10.5, maxLines = 1, textAlign = "center",
-      color = dim and "on_surface_variant/0.5" or (on and "primary" or "on_surface_variant") }),
+      color = dim and "on_surface_variant/0.5" or (on and "on_primary_container" or "on_surface_variant") }),
   }
   if editing then
     table.insert(kids, pop.text(place, { fontSize = 9.5, color = place == "off" and "on_surface_variant/0.5" or "primary" }))
   elseif s.text and id ~= "power" then
     kids[2] = pop.text(label .. " " .. s.text, { fontSize = 10.5, maxLines = 1, textAlign = "center",
-      color = on and "primary" or "on_surface_variant" })
+      color = on and "on_primary_container" or "on_surface_variant" })
   end
   return ui.column({ key = "t-" .. id, gap = 5, align = "center", justify = "center", flexGrow = 1, width = 80,
     height = editing and 72 or 62, radius = 8,
-    fill = (on and not editing) and "primary/0.14" or "on_surface/0.05",
+    fill = (on and not editing) and "primary_container" or "on_surface/0.05",
     border = (on and not editing) and "primary/0.5" or "on_surface/0.12", borderWidth = 1,
     tooltip = it.title,
     onClick = function()

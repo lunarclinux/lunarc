@@ -32,7 +32,11 @@ function render()
       if i > LIMIT then break end
       local parts = {
         ui.row({ gap = 8, align = "center" }, {
-          pop.text(n.app, { fontSize = 11, color = n.urgency == "critical" and "error" or "primary", flexGrow = 1, maxLines = 1 }),
+          n.urgency == "critical"
+            and ui.row({ fill = "error_container", radius = 6, paddingH = 6, flexGrow = 1 }, {
+              pop.text(n.app, { fontSize = 11, color = "on_error_container", maxLines = 1 }),
+            })
+            or pop.text(n.app, { fontSize = 11, color = "primary", flexGrow = 1, maxLines = 1 }),
           pop.muted(nt.ago(n.at), { fontSize = 10 }),
         }),
       }

@@ -404,7 +404,7 @@ local function row(entry, idx, selected, f)
   local p = look.p
   local it = entry.item
   local kids = {}
-  table.insert(kids, look.label("▸", 14, selected and p.amber or "#00000000", { key = "m", width = 14 }))
+  table.insert(kids, look.label("▸", 14, selected and p.selectedText or "#00000000", { key = "m", width = 14 }))
   if not lv() then
     local glyph = entry.root and entry.root.glyph or it.glyph or "·"
     table.insert(kids, look.row({ key = "g", width = 18, justify = "center", align = "center" }, { look.label(glyph, 14, p.amber) }))
@@ -417,7 +417,7 @@ local function row(entry, idx, selected, f)
   if pre ~= "" then
     table.insert(title, look.runs({ { text = pre, hit = false } }, 14, p.dim, "pre"))
   end
-  table.insert(title, look.runs(match.runs(shownTitle, hitsFor({ title = shownTitle }, f)), 14, selected and p.amberLight or p.text, "title"))
+  table.insert(title, look.runs(match.runs(shownTitle, hitsFor({ title = shownTitle }, f)), 14, selected and p.selectedText or p.text, "title"))
   table.insert(kids, look.row({ key = "t", flexGrow = 1, gap = 0, align = "center" }, title))
   if capture and capture == it then
     table.insert(kids, look.label("press the new keys", 12, p.amber, { key = "d" }))
