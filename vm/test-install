@@ -1213,7 +1213,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
         report "$(( rc == 1 ? 0 : 1 ))" "lock: no hint before a key"
         report "$(( $(lit_dots "$last_shot") == 0 ? 0 : 1 ))" "lock: no dot lit before a key"
       fi
-      check "lock: the screensaver plays behind it" "pgrep -x windowtolayer >/dev/null && for i in \$(seq 20); do pgrep -x tte >/dev/null && exit 0; sleep 1; done; exit 1"
+      check "lock: the screensaver plays behind it" "for i in \$(seq 20); do pgrep -x windowtolayer >/dev/null && pgrep -x tte >/dev/null && exit 0; sleep 1; done; pgrep -a windowtolayer; pgrep -a tte; exit 1"
       wait_until "$locked_at" 7
       quick_shot lock-idle
       if (( have_ocr )); then
