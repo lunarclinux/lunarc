@@ -66,6 +66,20 @@ if [[ $tested =~ ^[0-9][0-9.]*-[0-9]+$ && -n $have && $have != "$tested" ]]; the
     info "WARNING: couldn't install Hyprland $tested; keeping $have (the desktop may not start; see /tmp/pacstrap.log)"
   fi
 fi
+# Ghostty as tested (default/tested/ghostty), with the two packages that move
+# with it. (Ghostty 1.4.0 crashed as the lock screen's screensaver, 2026-10-31.)
+tested=$(grep -vE '^[[:space:]]*(#|$)' "$root/default/tested/ghostty" 2>/dev/null | head -1 | tr -d '[:space:]')
+have=$(arch-chroot "$MNT" pacman -Q ghostty 2>/dev/null | awk '{ print $2 }')
+if [[ $tested =~ ^[0-9][0-9.]*-[0-9]+$ && -n $have && $have != "$tested" ]]; then
+  info "Ghostty $have is newer than the tested $tested; installing $tested"
+  urls=()
+  for p in ghostty ghostty-terminfo ghostty-shell-integration; do
+    urls+=("https://archive.archlinux.org/packages/g/$p/$p-$tested-x86_64.pkg.tar.zst")
+  done
+  if ! arch-chroot "$MNT" pacman -U --noconfirm "${urls[@]}" >>/tmp/pacstrap.log 2>&1; then
+    info "WARNING: couldn't install Ghostty $tested; keeping $have (the lock screen may show no screensaver)"
+  fi
+fi
 genfstab -U "$MNT" >> "$MNT/etc/fstab"
 # The EFI partition holds the bootloader and random seed: root-only, like the
 # Arch Wiki advises. Applied here rather than at mount time so pacstrap doesn't

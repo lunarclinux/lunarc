@@ -269,9 +269,20 @@ SETUP
   started=$SECONDS
   # As `update` does: keyrings first, then everything (the migration hook runs
   # the system migrations), new default apps, then the user's migrations.
-  upgrade "$sudo_up pacman -Syy --needed --noconfirm archlinux-keyring $id-keyring >/dev/null && $sudo_up pacman -Su --noconfirm > /tmp/upgrade.log 2>&1; rc=\$?; grep -iE 'migration|error|warning' /tmp/upgrade.log; exit \$rc" \
+  # Releases the distro holds back (default/tested: Hyprland and Ghostty, as
+  # `update` does) are left out, unless they're the tested ones.
+  upgrade 'cat > ~/holds.sh' <<HOLDS
+checkupdates 2>/dev/null | awk -v h="$(grep -vE '^[[:space:]]*(#|$)' "$repo/default/tested/hyprland" | head -1)" \\
+  -v g="$(grep -vE '^[[:space:]]*(#|$)' "$repo/default/tested/ghostty" | head -1)" '
+  \$1 ~ /^(hyprland|aquamarine|hypr[a-z-]*|xdg-desktop-portal-hyprland)\$/ { hypr = hypr " " \$1 }
+  \$1 == "hyprland" && index(\$4, h) != 1 { newer = 1 }
+  \$1 ~ /^ghostty(-terminfo|-shell-integration)?\$/ && \$4 != g { print \$1 }
+  END { if (newer) { n = split(hypr, p, " "); for (i = 1; i <= n; i++) print p[i] } }' | paste -sd,
+HOLDS
+  upgrade "ign=\$(bash ~/holds.sh); echo \"held: \${ign:-none}\"; $sudo_up pacman -Syy --needed --noconfirm archlinux-keyring $id-keyring >/dev/null && $sudo_up pacman -Su --noconfirm \${ign:+--ignore \$ign} > /tmp/upgrade.log 2>&1; rc=\$?; grep -iE 'migration|error|warning' /tmp/upgrade.log; exit \$rc" \
     || { log "UPDATE FAILED"; upgrade 'tail -40 /tmp/upgrade.log'; exit 1; }
   upgrade "printf '%s\\ny\\n' '$password' | sudo -k -S -p '' $id update new-apps 2>&1 | tail -3" || log "new default apps: not installed"
+  upgrade "printf '%s\\ny\\n' '$password' | sudo -k -S -p '' $id update restore 2>&1 | tail -3" || log "held packages: not restored"
   pending=$(upgrade "$sudo_up $id migrate --system --list | grep -v '^applied'" || true)
   if [[ -n $pending ]]; then log "SYSTEM MIGRATIONS NOT ALL APPLIED:"; printf '%s\n' "$pending"; fi
   upgrade "$session $id migrate --user" || { log "USER MIGRATIONS FAILED"; exit 1; }
@@ -334,6 +345,7 @@ check "root account locked"            "echo '$password' | sudo -S -p '' passwd 
 check "/boot is root-only"           'test "$(stat -c %a /boot)" = 700'
 if "$here/ssh" "$vm" "$user" -- "pacman -Q $id >/dev/null 2>&1"; then
   check "distro packages installed"     "pacman -Q $id $id-settings"
+  check "Ghostty is the tested one"      "[ \"\$(pacman -Q ghostty | awk '{ print \$2 }')\" = \"\$(grep -vE '^[[:space:]]*(#|\$)' /usr/share/$id/default/tested/ghostty | head -1)\" ]"
   check "Hyprland is the tested one"     "[ \"\$(pacman -Q hyprland | awk '{ print \$2 }')\" = \"\$(head -1 /usr/lib/hyprland-plugins/hyprbars.hyprland)\" ]"
   # Privacy and security by default.
   sudo_vm="echo '$password' | sudo -S -p ''"

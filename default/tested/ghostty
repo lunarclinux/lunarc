@@ -1,0 +1,7 @@
+# The Ghostty release the distro was last tested with: an exact Arch package
+# version. `update` holds newer ones back (with ghostty-terminfo and
+# ghostty-shell-integration, which move with it), the installer installs this
+# one from the Arch Linux Archive when Arch has moved on, and an update brings
+# an install that already took a newer one back to it once. Ghostty 1.4.0
+# (2026-10-27) crashes as the lock screen's screensaver terminal.
+1.3.1-2

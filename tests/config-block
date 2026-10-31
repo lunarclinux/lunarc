@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Checks config_block (bin/lib.sh), which rewrites the distro's managed blocks
+# in Noctalia's config: 20 writers at once leave exactly one copy of the block
+# and everything else in the file as it was; an empty write removes the block;
+# a file that is a link is written through it. (Two writers at once used to
+# leave the bar's block twice, and Noctalia refused the file, 2026-10-30.)
+#
+#   tests/config-block
+set -euo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd)
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+export DISTRO_ID=distro DISTRO_LIB=$root/bin XDG_RUNTIME_DIR=$work HOME=$work
+source "$root/bin/lib.sh"
+set +e
+fails=0
+expect() { # expect <description> <expected> <actual>
+  if [[ $2 == "$3" ]]; then printf 'ok    %s\n' "$1"; else printf 'FAIL  %s: expected "%s", got "%s"\n' "$1" "$2" "$3"; fails=$((fails + 1)); fi
+}
+
+cfg=$work/config.toml
+printf 'theme = "moonlit"\n\n[other]\nk = 1\n' > "$cfg"
+b="# >>> distro bar" e="# <<< distro bar"
+for i in $(seq 20); do
+  printf '%s\n[bar.default]\nthickness = %s\n%s\n' "$b" "$i" "$e" | config_block "$cfg" "$b" "$e" &
+done
+wait
+expect "20 writers at once: one block" 1 "$(grep -cxF "$b" "$cfg")"
+expect "...one [bar.default]" 1 "$(grep -cx '\[bar.default\]' "$cfg")"
+expect "...the rest kept" 'theme = "moonlit"|[other]|k = 1' "$(grep -vE '^(#|\[bar|thickness|$)' "$cfg" | paste -sd'|')"
+if command -v python3 >/dev/null; then
+  expect "...valid TOML" ok "$(python3 -c "import tomllib,sys; tomllib.load(open(sys.argv[1],'rb')); print('ok')" "$cfg" 2>&1)"
+fi
+config_block "$cfg" "$b" "$e" </dev/null
+expect "an empty write removes it" 0 "$(grep -cxF "$b" "$cfg")"
+
+mkdir -p "$work/dots"; mv "$cfg" "$work/dots/config.toml"; ln -s "$work/dots/config.toml" "$cfg"
+printf '%s\nx = 1\n%s\n' "$b" "$e" | config_block "$cfg" "$b" "$e"
+expect "a linked file stays a link" yes "$([[ -L $cfg ]] && echo yes || echo no)"
+expect "...and its target is written" 1 "$(grep -cxF "$b" "$work/dots/config.toml")"
+
+(( fails == 0 )) || { echo "$fails failed"; exit 1; }

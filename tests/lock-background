@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Checks `lock background` (bin/commands/lock), the lock screen's screensaver
+# terminal: one that fails at once is started again by swaylock-plugin, but a
+# third start after two quick failures in one lock just waits (the lock keeps
+# its plain background) instead of crashing again. A stand-in windowtolayer;
+# no display, no lock.
+#
+#   tests/lock-background
+set -euo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd)
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+mkdir -p "$work/bin"
+cat > "$work/bin/windowtolayer" <<'STUB'
+#!/bin/sh
+echo started >> "$STUB_LOG"
+exit 139
+STUB
+chmod +x "$work/bin/windowtolayer"
+export DISTRO_ID=distro DISTRO_LIB=$root/bin XDG_RUNTIME_DIR=$work HOME=$work STUB_LOG=$work/starts PATH=$work/bin:$PATH
+run() { timeout 2 bash "$root/bin/commands/lock" background >/dev/null 2>&1; echo $?; }
+fails=0
+expect() { if [[ $2 == "$3" ]]; then printf 'ok    %s\n' "$1"; else printf 'FAIL  %s: expected "%s", got "%s"\n' "$1" "$2" "$3"; fails=$((fails + 1)); fi; }
+
+expect "first start: the crash is passed on" 139 "$(run)"
+expect "second start: the same" 139 "$(run)"
+expect "third start: waits instead (stopped by the test's timeout)" 124 "$(run)"
+expect "the terminal was started twice, not three times" 2 "$(wc -l < "$work/starts")"
+rm -f "$work/distro-lock-background-fails"
+expect "a new lock starts counting again" 139 "$(run)"
+(( fails == 0 )) || { echo "$fails failed"; exit 1; }

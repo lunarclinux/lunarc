@@ -146,18 +146,33 @@ function M.build()
 end
 
 -- Catalog rows: { id, cat, name, src, target, note }.
+-- The catalog and what's installed from it, read once per menu open
+-- (M.forget(), from the panel's onOpen): searches run on every key, within
+-- Noctalia's time limit for a plugin call, and re-reading the file and
+-- checking every web app's launcher and every agent's command each time
+-- overran it (2026-10-30).
+local catalogRows = nil
+local haveCache = {}
+function M.forget()
+  catalogRows = nil
+  haveCache = {}
+end
+
 function M.catalog()
+  if catalogRows then return catalogRows end
   local rows = {}
   for _, line in ipairs(readLines(catalogFile)) do
     local t = trim(line)
     if t ~= "" and string.sub(t, 1, 1) ~= "#" then
       local f = string.split(line, "|")
       if #f >= 5 then
+        local target = trim(f[5])
         table.insert(rows, { id = trim(f[1]), cat = trim(f[2]), name = (string.gsub(trim(f[3]), "@DISTRO_ID@", cli)),
-          src = trim(f[4]), target = trim(f[5]), note = trim(f[6]) })
+          src = trim(f[4]), target = target, note = trim(f[6]), pkg = string.split(target, " ")[1] })
       end
     end
   end
+  catalogRows = rows
   return rows
 end
 
@@ -166,11 +181,17 @@ local srcTag = { repo = "REPO", multilib = "REPO", gpu = "REPO", aur = "AUR", we
 
 -- A catalog app as an Install row; installed: the set of installed packages.
 function M.catalogItem(a, installed)
-  local pkg = string.split(a.target, " ")[1]
+  local pkg = a.pkg or string.split(a.target, " ")[1]
   local have = false
   if a.src == "repo" or a.src == "multilib" or a.src == "aur" then have = installed[pkg] == true
-  elseif a.src == "web" then have = noctalia.fileExists(noctalia.expandPath("~/.local/share/applications/" .. cli .. "-web-" .. a.id .. ".desktop"))
-  elseif a.src == "agent" then have = noctalia.commandExists(a.target) end
+  else
+    if haveCache[a.id] == nil then
+      if a.src == "web" then haveCache[a.id] = noctalia.fileExists(noctalia.expandPath("~/.local/share/applications/" .. cli .. "-web-" .. a.id .. ".desktop"))
+      elseif a.src == "agent" then haveCache[a.id] = noctalia.commandExists(a.target)
+      else haveCache[a.id] = false end
+    end
+    have = haveCache[a.id]
+  end
   local note = a.note ~= "" and a.note or (catLabel[a.cat] or a.cat)
   if note == "default" then note = "comes with the system" end
   return { kind = "install", src = "catalog", name = a.id, title = a.name, desc = note,
@@ -296,7 +317,7 @@ function M.search(roots, f, cache)
       if t then add(it, n, t - 1) end
     end
     if n.gen == "apps" then
-      for _, e in ipairs(apps.list()) do
+      for _, e in ipairs(apps.entries()) do
         total += 1
         local s2 = apps.score(f, e)
         if s2 then
@@ -312,10 +333,11 @@ function M.search(roots, f, cache)
     elseif n.gen == "install" and #f >= 2 then
       for _, a in ipairs(M.catalog()) do
         total += 1
-        local it = M.catalogItem(a, cache.installed or {})
-        if not it.installed then
-          local s2 = match.score(f, a.name, a.id)
-          if s2 and s2 >= 3000 then add(it, n, s2 - 2500) end
+        -- Match first: building the item checks whether it's installed.
+        local s2 = match.score(f, a.name, a.id)
+        if s2 and s2 >= 3000 then
+          local it = M.catalogItem(a, cache.installed or {})
+          if not it.installed then add(it, n, s2 - 2500) end
         end
       end
     end
