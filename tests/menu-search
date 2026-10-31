@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# Times the menu's search (items.search in the utilities plugin) the way typing
+# runs it: one call per key, for a few searches typed a letter at a time,
+# against the real app catalog and 400 installed apps. Noctalia gives a plugin
+# call 25 ms of CPU, and the redraw shares it, so each search must stay well
+# under that: this fails above 8 ms, or when the checks whether a web app or
+# agent is installed (disk access) repeat on every key. (Typing hit the limit
+# on 2026-10-30.)
+# Needs the standalone Luau interpreter (Arch's luau package); skipped without.
+#
+#   tests/menu-search
+set -euo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd)
+command -v luau >/dev/null || { echo "menu-search: luau not installed; skipped"; exit 0; }
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+plugins=$root/default/noctalia-plugins/utilities
+
+# One script: the modules inlined in place of their require() calls (the
+# interpreter has no file access), Noctalia's API stubbed, then the timing.
+id=$(sed -n 's/^DISTRO_ID=\([^ ]*\).*/\1/p' "$root/distro.conf")
+python3 - "$plugins" "$root/default/apps/catalog" "$id" > "$work/run.luau" <<'PY'
+import re, sys
+plugins, catalog, distro = sys.argv[1], sys.argv[2], sys.argv[3]
+def module(name):
+    src = open(f"{plugins}/{name}").read().replace("@DISTRO_ID@", distro)
+    src = re.sub(r'^--!\w+\n', '', src)
+    return src
+print('''
+local catalogText = [==[''' + open(catalog).read() + ''']==]
+local calls = { exists = 0 }
+noctalia = {
+  string = { trim = function(s) return (string.gsub(s or "", "^%s+", ""):gsub("%s+$", "")) end },
+  readFile = function(p) if string.find(p, "apps/catalog", 1, true) then return catalogText end return nil end,
+  expandPath = function(p) return p end,
+  fileExists = function(_) calls.exists += 1; return false end,
+  commandExists = function(_) calls.exists += 1; return false end,
+  getSetting = function(_) return nil end,
+  nowMs = function() return os.clock() * 1000 end,
+  runAsync = function() end,
+  json = { decode = function() return nil end },
+  -- A plain subsequence score, in place of Noctalia's native one.
+  fuzzyScore = function(f, t)
+    local i, score = 1, 0
+    for c in string.gmatch(f, ".") do
+      local j = string.find(t, c, i, true)
+      if not j then return nil end
+      score += (j == i) and 3 or 1
+      i = j + 1
+    end
+    return score
+  end,
+}
+''')
+for var, name in (("__match", "menu-match.luau"), ("__apps", "apps.luau")):
+    print(f"local {var} = (function()\n{module(name)}\nend)()")
+items = module("menu-items.luau")
+items = items.replace('require("./menu-match.luau")', "__match").replace('require("./apps.luau")', "__apps")
+items = re.sub(r'require\("\./[a-z-]+\.luau"\)', "{}", items)
+print(f"local items = (function()\n{items}\nend)()")
+print('''
+-- 400 installed apps, like a desktop with games and tools.
+local words = { "studio", "player", "editor", "viewer", "manager", "tool", "monitor", "client", "office", "launcher" }
+local list = {}
+for i = 1, 400 do
+  local name = "App " .. words[(i % #words) + 1] .. " " .. i
+  table.insert(list, { id = "app" .. i, name = name, nameLower = string.lower(name), comment = "Does thing " .. i,
+    generic = words[((i * 7) % #words) + 1], genericLower = words[((i * 7) % #words) + 1], path = "/x/" .. i .. ".desktop",
+    keywords = { "kw" .. i, words[((i * 3) % #words) + 1] }, categories = { "Utility", "Development" } })
+end
+noctalia.runAsync = function(_, cb) cb({ exitCode = 0, stdout = "" }) end
+noctalia.json.decode = function() return list end
+__apps.refresh()
+
+local roots = items.build()
+local cache = { installed = {}, binds = {} }
+if items.forget then items.forget() end
+local checkable = 0
+for _, a in ipairs(items.catalog()) do if a.src == "web" or a.src == "agent" then checkable += 1 end end
+local worst, worstAt, n = 0, "", 0
+for _, query in ipairs({ "firefox", "steam", "obsidian", "reboot", "visual studio code" }) do
+  for k = 1, #query do
+    local f = string.sub(query, 1, k)
+    local t0 = os.clock()
+    items.search(roots, f, cache)
+    local ms = (os.clock() - t0) * 1000
+    n += 1
+    if ms > worst then worst, worstAt = ms, f end
+  end
+end
+print(string.format("%d searches, slowest %.2f ms (\\"%s\\"), launcher/command checks: %d", n, worst, worstAt, calls.exists))
+local failed = false
+if worst > 8 then print("FAIL  a search took over 8 ms") failed = true else print("ok    every search under 8 ms") end
+-- Checking whether a web app or agent is installed touches the disk: at most
+-- once per catalog entry for the whole menu open, never once per key.
+if calls.exists > checkable then
+  print(string.format("FAIL  %d launcher/command checks for %d catalog entries (they repeat on every key)", calls.exists, checkable))
+  failed = true
+else
+  print("ok    launcher/command checks happen once per menu open")
+end
+if failed then os.exit(1) end
+''')
+PY
+luau "$work/run.luau"
