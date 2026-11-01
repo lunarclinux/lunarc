@@ -138,6 +138,8 @@ first_login() {
   # Each screen's size from its dimensions rather than Hyprland's guess, which
   # can be 150% on a 15" laptop screen. The setup window offers to change it.
   if [[ -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then "/usr/bin/$DISTRO_ID" display apply >/dev/null || true; fi
+  # Documents, Downloads, Pictures, Music and Videos in Files' sidebar.
+  files_bookmarks || true
   # Weather is opt-in (it looks up the city online): the privacy step asks.
   mkdir -p "$STATE_DIR"; date -Is > "$done_file"
   # The live system has nothing to keep; installed systems get the setup window.

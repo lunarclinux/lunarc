@@ -275,6 +275,29 @@ config_block() { # config_block <file> <begin> <end> < text
   ) 9>"$USER_RUNTIME/$DISTRO_ID-config.lock"
 }
 
+# Files' sidebar: the standard folders (Documents, Downloads, Pictures, Music,
+# Videos), from where xdg-user-dirs keeps them (renamed or translated ones
+# too), as bookmarks above the user's own. Files shows nothing for them
+# otherwise; GNOME writes these with xdg-user-dirs-gtk at login. Folders
+# already bookmarked are left where they are, and missing ones are skipped
+# (xdg-user-dirs creates them at login; a deleted one stays deleted).
+files_bookmarks() {
+  local file=${XDG_CONFIG_HOME:-$HOME/.config}/gtk-3.0/bookmarks dir uri add=() tmp
+  mkdir -p "${file%/*}"; [[ -e $file ]] || : > "$file"
+  for dir in DOCUMENTS DOWNLOAD PICTURES MUSIC VIDEOS; do
+    dir=$(xdg-user-dir "$dir" 2>/dev/null) || continue
+    # Not set (xdg-user-dir then says $HOME), or an odd path: skipped.
+    dir=${dir%/}
+    [[ -n $dir && $dir != "${HOME%/}" && $dir == /* && $dir != *$'\n'* && -d $dir ]] || continue
+    # A file URI: spaces and other unusual characters percent-encoded.
+    uri="file://$(printf '%s' "$dir" | jq -sRr '@uri | gsub("%2F"; "/")')"
+    if ! awk -v u="$uri" '$1 == u { found = 1 } END { exit !found }' "$file"; then add+=("$uri"); fi
+  done
+  (( ${#add[@]} )) || return 0
+  tmp=$(mktemp "${file%/*}/.bookmarks.XXXXXX")
+  { printf '%s\n' "${add[@]}"; cat "$file"; } > "$tmp" && mv -f "$tmp" "$file"
+}
+
 bar_apply() {
   look_apply
   local config=${XDG_CONFIG_HOME:-$HOME/.config}/noctalia/config.toml start center
