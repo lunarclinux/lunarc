@@ -511,6 +511,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
     for _ in $(seq 20); do "$here/ssh" "$vm" "$user" -- "test -f ~/.local/state/$id/first-login-done" && break; sleep 2; done
     check "CLI lists its commands"        "$id help | grep -q theme"
     check "first-login setup ran"         "test -f ~/.local/state/$id/first-login-done"
+    check "Files' sidebar has the standard folders" "for d in DOCUMENTS DOWNLOAD PICTURES MUSIC VIDEOS; do grep -qx \"file://\$(xdg-user-dir \$d)\" ~/.config/gtk-3.0/bookmarks || { echo \"no \$d\"; exit 1; }; done"
     # The setup window opens once at first login: welcome, then backups.
     # (An updated install had its first login before the update.)
     (( upgraded )) || check "setup window opens at first login" "$hypr for i in \$(seq 20); do hyprctl clients -j | jq -e '.[] | select(.class == \"$id.setup\")' >/dev/null && exit 0; sleep 1; done; exit 1"
