@@ -13,11 +13,14 @@ local function render()
   local shift = 0
   if wiggleTicks > 0 then shift = (wiggleTicks % 2 == 0) and 3 or 0 end
   local container = barWidget.isVertical() and ui.column or ui.row
-  barWidget.render(container({ gap = 4, align = "center" }, {
+  -- A chip in error_container, whose text colour stays readable on it in every
+  -- theme (the error colour on the bar itself was faint in some).
+  barWidget.render(container({ gap = 0, align = "center" }, {
     ui.box({ width = shift, height = 1, opacity = 0 }),
-    ui.glyph({ name = "bug", size = 15, color = "error" }),
-    -- The count as plain text, like the bar's other figures (no pill).
-    ui.label({ text = tostring(count), fontSize = 12, color = "error", fontWeight = "semibold" }),
+    container({ gap = 4, align = "center", fill = "error_container", radius = 8, paddingH = 7, paddingV = 2 }, {
+      ui.glyph({ name = "bug", size = 14, color = "on_error_container" }),
+      ui.label({ text = tostring(count), fontSize = 12, color = "on_error_container", fontWeight = "semibold" }),
+    }),
     ui.box({ width = 3 - shift, height = 1, opacity = 0 }),
   }))
   barWidget.setTooltip(count == 1 and "1 open crash" or (tostring(count) .. " open crashes"))

@@ -54,7 +54,10 @@ function M.load()
     amberLight = color(get("accent", "amberLight")) or "primary",
     onAmber = color(get("accent", "onAmber")) or "on_primary",
     body = color(get("text", "body")) or "on_surface",
-    selected = color(get("state", "selectedBg")) or "primary/0.14",
+    -- The selected row: Noctalia's primary_container and its text colour, which
+    -- it keeps readable (4.5:1) in every theme and mode.
+    selected = "primary_container",
+    selectedText = "on_primary_container",
     ring = color(get("state", "selectedRing")) or "primary/0.32",
     cyan = color(get("signal", "cyan")) or "tertiary",
     violet = color(get("signal", "violet")) or "secondary",

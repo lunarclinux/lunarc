@@ -1,5 +1,5 @@
 diff --git a/src/app/application_services.cpp b/src/app/application_services.cpp
-index 4fadf04..b8bc3d0 100644
+index 0d90203..23e3dff 100644
 --- a/src/app/application_services.cpp
 +++ b/src/app/application_services.cpp
 @@ -581,6 +581,12 @@ void Application::initStyleThemeAndWayland() {
@@ -16,10 +16,10 @@ index 4fadf04..b8bc3d0 100644
      lastCornerRadiusScale = corner;
      if (cornerChanged) {
 diff --git a/src/config/config_types.h b/src/config/config_types.h
-index 775b651..2b45784 100644
+index 2351890..7d61e7c 100644
 --- a/src/config/config_types.h
 +++ b/src/config/config_types.h
-@@ -1278,6 +1278,11 @@ struct ShellConfig {
+@@ -1346,6 +1346,11 @@ struct ShellConfig {
    // on_surface at 7% and 2% (sheen).
    bool topHighlight = false;
    std::optional<ColorSpec> topHighlightColor;
@@ -32,10 +32,10 @@ index 775b651..2b45784 100644
    std::optional<ColorSpec> sheenTopColor;
    std::optional<ColorSpec> sheenBottomColor;
 diff --git a/src/config/schema/config_schema.cpp b/src/config/schema/config_schema.cpp
-index 8003569..bccf410 100644
+index 3baa253..0db1ff5 100644
 --- a/src/config/schema/config_schema.cpp
 +++ b/src/config/schema/config_schema.cpp
-@@ -1640,6 +1640,10 @@ namespace noctalia::config::schema {
+@@ -1795,6 +1795,10 @@ namespace noctalia::config::schema {
          field(&ShellConfig::showCloseButtons, "show_close_buttons"),
          field(&ShellConfig::topHighlight, "top_highlight"),
          colorSpecField(&ShellConfig::topHighlightColor, "top_highlight_color", /*alwaysEmit=*/false),
@@ -65,20 +65,20 @@ index b008d45..3b1f64b 100644
      card.setAlign(FlexAlign::Stretch);
      card.setGap(Style::spaceSm * scale);
 diff --git a/src/ui/controls/button.cpp b/src/ui/controls/button.cpp
-index 8ad2653..a4e9da1 100644
+index 449b7ba..fc09e9e 100644
 --- a/src/ui/controls/button.cpp
 +++ b/src/ui/controls/button.cpp
 @@ -36,7 +36,8 @@ namespace {
        return Button::ButtonPalette{
            .borderWidth = Style::borderWidth,
            .normal = makeState(
--              colorSpecFromRole(ColorRole::SurfaceVariant), colorSpecFromRole(ColorRole::Outline),
-+              surface_colors::overrides().buttonFill.value_or(colorSpecFromRole(ColorRole::SurfaceVariant)),
-+              surface_colors::overrides().buttonBorder.value_or(colorSpecFromRole(ColorRole::Outline)),
+-              colorSpecFromRole(ColorRole::SurfaceContainer), colorSpecFromRole(ColorRole::OutlineVariant),
++              surface_colors::overrides().buttonFill.value_or(colorSpecFromRole(ColorRole::SurfaceContainer)),
++              surface_colors::overrides().buttonBorder.value_or(colorSpecFromRole(ColorRole::OutlineVariant)),
                colorSpecFromRole(ColorRole::OnSurface)
            ),
            .hover =
-@@ -594,7 +595,9 @@ void Button::applyColors(const Color& bg, const Color& border, const Color& labe
+@@ -598,7 +599,9 @@ void Button::applyColors(const Color& bg, const Color& border, const Color& labe
    if (m_badge != nullptr) {
      m_badge->setFill(Color{label.r, label.g, label.b, label.a * 0.85F});
      if (m_badgeLabel != nullptr) {
@@ -90,10 +90,10 @@ index 8ad2653..a4e9da1 100644
    }
    m_visualStateInitialized = true;
 diff --git a/src/ui/palette.cpp b/src/ui/palette.cpp
-index d2f01b5..0d08a36 100644
+index ccc6213..b26320e 100644
 --- a/src/ui/palette.cpp
 +++ b/src/ui/palette.cpp
-@@ -125,6 +125,14 @@ void setPalette(const Palette& p) {
+@@ -174,6 +174,14 @@ void setPalette(const Palette& p) {
    paletteChanged().emit();
  }
  
@@ -109,10 +109,10 @@ index d2f01b5..0d08a36 100644
    std::scoped_lock lock(g_paletteMutex);
    return colorForRole(role);
 diff --git a/src/ui/palette.h b/src/ui/palette.h
-index d405342..7339a9a 100644
+index 325c920..0c75820 100644
 --- a/src/ui/palette.h
 +++ b/src/ui/palette.h
-@@ -147,6 +147,20 @@ void setPalette(const Palette& p);
+@@ -171,6 +171,20 @@ void setPalette(const Palette& p);
  // and re-apply palette-derived colors to their scene nodes on each emit.
  Signal<>& paletteChanged();
  

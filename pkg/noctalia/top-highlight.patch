@@ -1,5 +1,5 @@
 diff --git a/src/app/application_services.cpp b/src/app/application_services.cpp
-index 03a253d..4fadf04 100644
+index 02080a3..0d90203 100644
 --- a/src/app/application_services.cpp
 +++ b/src/app/application_services.cpp
 @@ -92,6 +92,7 @@
@@ -34,10 +34,10 @@ index 03a253d..4fadf04 100644
      if (cornerChanged) {
        m_notificationToast.requestLayout();
 diff --git a/src/config/config_types.h b/src/config/config_types.h
-index e16fb17..775b651 100644
+index 1b3b54a..2351890 100644
 --- a/src/config/config_types.h
 +++ b/src/config/config_types.h
-@@ -1272,6 +1272,15 @@ struct ShellConfig {
+@@ -1340,6 +1340,15 @@ struct ShellConfig {
    bool popupShadows = true;
    bool cardBorders = true;
    bool showCloseButtons = true;
@@ -54,10 +54,10 @@ index e16fb17..775b651 100644
    std::string lang; // empty = auto-detect from $LC_ALL/$LC_MESSAGES/$LANG
    std::string timeFormat = "{:%H:%M}";
 diff --git a/src/config/schema/config_schema.cpp b/src/config/schema/config_schema.cpp
-index 8619822..8003569 100644
+index d162fd4..3baa253 100644
 --- a/src/config/schema/config_schema.cpp
 +++ b/src/config/schema/config_schema.cpp
-@@ -1638,6 +1638,11 @@ namespace noctalia::config::schema {
+@@ -1793,6 +1793,11 @@ namespace noctalia::config::schema {
          field(&ShellConfig::popupShadows, "popup_shadows"),
          field(&ShellConfig::cardBorders, "card_borders"),
          field(&ShellConfig::showCloseButtons, "show_close_buttons"),
@@ -70,10 +70,10 @@ index 8619822..8003569 100644
          custom<ShellConfig>(
              "font_family",
 diff --git a/src/shell/bar/bar.cpp b/src/shell/bar/bar.cpp
-index 46eadf6..68a1296 100644
+index 713f72c..52b58c6 100644
 --- a/src/shell/bar/bar.cpp
 +++ b/src/shell/bar/bar.cpp
-@@ -3307,6 +3307,7 @@ void Bar::buildScene(BarInstance& instance, std::uint32_t width, std::uint32_t h
+@@ -3433,6 +3433,7 @@ void Bar::buildScene(BarInstance& instance, std::uint32_t width, std::uint32_t h
  
      // Bar background
      instance.bg = static_cast<Box*>(instance.slideRoot->addChild(ui::box()));
@@ -82,7 +82,7 @@ index 46eadf6..68a1296 100644
      // Shadow — bar shape copy rendered with large SDF softness to simulate a blurred drop shadow.
      if (shadowSize > 0.0F) {
 diff --git a/src/shell/notification/notification_toast.cpp b/src/shell/notification/notification_toast.cpp
-index ba8fd22..60a3667 100644
+index 094376d..f1827a8 100644
 --- a/src/shell/notification/notification_toast.cpp
 +++ b/src/shell/notification/notification_toast.cpp
 @@ -2802,6 +2802,7 @@ InputArea* NotificationToast::buildCard(
@@ -94,10 +94,10 @@ index ba8fd22..60a3667 100644
        })
    );
 diff --git a/src/shell/osd/osd_overlay.cpp b/src/shell/osd/osd_overlay.cpp
-index 48363fd..f22ec4b 100644
+index f0228e1..0c0aa6f 100644
 --- a/src/shell/osd/osd_overlay.cpp
 +++ b/src/shell/osd/osd_overlay.cpp
-@@ -671,6 +671,7 @@ void OsdOverlay::buildScene(Instance& inst, std::uint32_t width, std::uint32_t h
+@@ -739,6 +739,7 @@ void OsdOverlay::buildScene(Instance& inst, std::uint32_t width, std::uint32_t h
              box.setRadius(osdCardRadius(cw, ch, s));
              box.setPosition(cardX, cardY);
              box.setZIndex(0);
@@ -106,10 +106,10 @@ index 48363fd..f22ec4b 100644
        })
    );
 diff --git a/src/shell/panel/panel_manager.cpp b/src/shell/panel/panel_manager.cpp
-index 4a6c83f..75016eb 100644
+index 12b3896..c2013a8 100644
 --- a/src/shell/panel/panel_manager.cpp
 +++ b/src/shell/panel/panel_manager.cpp
-@@ -2677,6 +2677,7 @@ void PanelManager::buildScene(std::uint32_t width, std::uint32_t height) {
+@@ -2691,6 +2691,7 @@ void PanelManager::buildScene(std::uint32_t width, std::uint32_t height) {
            );
          }
        }
@@ -130,7 +130,7 @@ index 852757c..09f43a2 100644
    }
  
 diff --git a/src/ui/controls/box.cpp b/src/ui/controls/box.cpp
-index e72d160..94e53f9 100644
+index 15d52e0..c5f431a 100644
 --- a/src/ui/controls/box.cpp
 +++ b/src/ui/controls/box.cpp
 @@ -5,8 +5,18 @@

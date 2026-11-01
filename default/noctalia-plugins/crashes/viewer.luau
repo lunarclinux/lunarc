@@ -56,8 +56,8 @@ local function crashRow(c)
       ui.glyph({ name = "bug", size = 16, color = "error" }),
       ui.label({ text = c.comm, fontWeight = "bold", flexGrow = 1 }),
       ui.box({ width = offset, height = 1, opacity = 0 }),
-      ui.row({ fill = "error/0.22", radius = 8, paddingH = 7, align = "center" }, {
-        ui.label({ text = "×" .. tostring(c.count), color = "error", fontWeight = "bold" }),
+      ui.row({ fill = "error_container", radius = 8, paddingH = 7, align = "center" }, {
+        ui.label({ text = "×" .. tostring(c.count), color = "on_error_container", fontWeight = "bold" }),
       }),
       ui.box({ width = 3 - offset, height = 1, opacity = 0 }),
     }),
@@ -81,7 +81,7 @@ local function crashRow(c)
   if expanded[c.id] then
     table.insert(children, ui.markdown({ text = detailText(c) }))
   end
-  return ui.column({ key = c.id, gap = 6, padding = 12, radius = 10, fill = "surface_variant/0.6" }, children)
+  return ui.column({ key = c.id, gap = 6, padding = 12, radius = 10, fill = "surface_container_low" }, children)
 end
 
 render = function()

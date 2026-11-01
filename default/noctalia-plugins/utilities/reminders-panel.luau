@@ -53,7 +53,7 @@ end
 render = function()
   local rows = {}
   for _, r in ipairs(reminders) do
-    table.insert(rows, ui.row({ key = r.id, align = "center", gap = 10, padding = 10, radius = 10, fill = "surface_variant/0.6" }, {
+    table.insert(rows, ui.row({ key = r.id, align = "center", gap = 10, padding = 10, radius = 10, fill = "surface_container_low" }, {
       ui.glyph({ name = "alarm", size = 16, color = "primary" }),
       ui.column({ flexGrow = 1, gap = 2 }, {
         ui.label({ text = r.text, fontWeight = "bold", maxLines = 2 }),
@@ -74,7 +74,11 @@ render = function()
     ui.input({ key = "add-" .. tostring(inputRev), placeholder = "stretch in 20m · call Sam at 15:30",
       submitOnEnter = true, focus = true, onSubmit = add }),
   }
-  if message ~= "" then table.insert(children, ui.label({ text = message, color = "error", fontSize = 12 })) end
+  if message ~= "" then
+    table.insert(children, ui.row({ fill = "error_container", radius = 6, paddingH = 8, paddingV = 4 }, {
+      ui.label({ text = message, color = "on_error_container", fontSize = 12 }),
+    }))
+  end
   table.insert(children, ui.scroll({ flexGrow = 1, gap = 8 }, rows))
   panel.render(ui.column({ flexGrow = 1, gap = 12 }, children))
 end
