@@ -249,16 +249,64 @@ quick_widget() { # quick_widget <id> → the bar widget's name
   esac
 }
 
+# A config file's text without a managed block (every copy of the lines
+# from <begin> to <end>).
+config_without_block() { # config_without_block <file> <begin> <end>
+  awk -v b="$2" -v e="$3" '$0 == b { skip = 1 } !skip { print } $0 == e { skip = 0 }' "$1" 2>/dev/null
+}
+
+# Replaces a managed block in a config file with the text on stdin (empty: the
+# block is only removed), every copy of it, in one atomic write under a lock.
+# Deleting the block and appending the new one as two steps let two writers at
+# once both append: Noctalia then refused its whole config, which defined
+# [bar.default] twice (2026-10-30). A file that is a link is written through it.
+config_block() { # config_block <file> <begin> <end> < text
+  local file=$1 begin=$2 end=$3 text
+  text=$(cat)
+  [[ -L $file ]] && file=$(readlink -f "$file")
+  mkdir -p "${file%/*}"; [[ -e $file ]] || : > "$file"
+  (
+    flock -w 5 9 || true
+    tmp=$(mktemp "${file%/*}/.${file##*/}.XXXXXX") || exit 1
+    config_without_block "$file" "$begin" "$end" > "$tmp"
+    if [[ -n $text ]]; then printf '%s\n' "$text" >> "$tmp"; fi
+    chmod --reference="$file" "$tmp" 2>/dev/null || true
+    mv -f "$tmp" "$file"
+  ) 9>"$USER_RUNTIME/$DISTRO_ID-config.lock"
+}
+
+# Files' sidebar: the standard folders (Documents, Downloads, Pictures, Music,
+# Videos), from where xdg-user-dirs keeps them (renamed or translated ones
+# too), as bookmarks above the user's own. Files shows nothing for them
+# otherwise; GNOME writes these with xdg-user-dirs-gtk at login. Folders
+# already bookmarked are left where they are, and missing ones are skipped
+# (xdg-user-dirs creates them at login; a deleted one stays deleted).
+files_bookmarks() {
+  local file=${XDG_CONFIG_HOME:-$HOME/.config}/gtk-3.0/bookmarks dir uri add=() tmp
+  mkdir -p "${file%/*}"; [[ -e $file ]] || : > "$file"
+  for dir in DOCUMENTS DOWNLOAD PICTURES MUSIC VIDEOS; do
+    dir=$(xdg-user-dir "$dir" 2>/dev/null) || continue
+    # Not set (xdg-user-dir then says $HOME), or an odd path: skipped.
+    dir=${dir%/}
+    [[ -n $dir && $dir != "${HOME%/}" && $dir == /* && $dir != *$'\n'* && -d $dir ]] || continue
+    # A file URI: spaces and other unusual characters percent-encoded.
+    uri="file://$(printf '%s' "$dir" | jq -sRr '@uri | gsub("%2F"; "/")')"
+    if ! awk -v u="$uri" '$1 == u { found = 1 } END { exit !found }' "$file"; then add+=("$uri"); fi
+  done
+  (( ${#add[@]} )) || return 0
+  tmp=$(mktemp "${file%/*}/.bookmarks.XXXXXX")
+  { printf '%s\n' "${add[@]}"; cat "$file"; } > "$tmp" && mv -f "$tmp" "$file"
+}
+
 bar_apply() {
   look_apply
   local config=${XDG_CONFIG_HOME:-$HOME/.config}/noctalia/config.toml start center
   local begin="# >>> $DISTRO_ID bar" end="# <<< $DISTRO_ID bar"
   local thickness=30 inset=0 radius=0 hairline='#e6e2d621' opacity=0.52 v
   mkdir -p "${config%/*}"; touch "$config"
-  sed -i "\|^$begin\$|,\|^$end\$|d" "$config"
   # The older workspaces-style block this replaces.
   sed -i '/^# workspaces style (set by `.* workspaces style`)$/,/^start = .*$/d' "$config"
-  if grep -q '^\[bar\.default\]' "$config"; then
+  if config_without_block "$config" "$begin" "$end" | grep -q '^\[bar\.default\]'; then
     info "your $config has its own [bar.default]; edit it there"
     return 0
   fi
@@ -288,7 +336,8 @@ bar_apply() {
     hairline=$(awk '{ printf "#%02x%02x%02x%02x", $1, $2, $3, int($4 * 255 + 0.5) }' <<<"$v")
   fi
   printf '%s\n# Written by `%s` from its settings (shape, workspaces style, moon, weather)\n# and the theme; rewritten when they change.\n[bar.default]\nstart = %s\ncenter = %s\nthickness = %s\nmargin_edge = %s\nmargin_ends = %s\nradius = %s\nborder = "%s"\nbackground_opacity = %s\n%s\n' \
-    "$begin" "$DISTRO_ID" "$start" "$center" "$thickness" "$inset" "$inset" "$radius" "$hairline" "$opacity" "$end" >> "$config"
+    "$begin" "$DISTRO_ID" "$start" "$center" "$thickness" "$inset" "$inset" "$radius" "$hairline" "$opacity" "$end" \
+    | config_block "$config" "$begin" "$end"
 }
 
 # Laptop performance mode (setting power.mode): battery (the default: a

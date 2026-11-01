@@ -32,6 +32,9 @@ Usage: $DISTRO_ID update [--all] | check | security [...] | new-apps | firmware 
   candy on|off    pacman's progress bars drawn as Pac-Man eating dots (off by default)
   new-apps        install default apps added since this computer was installed
                   (an update does this; each is offered once)
+  restore         put back the tested release of a package the distro holds
+                  (Ghostty) if a newer one arrived before the hold (an update
+                  does this, once)
   firmware        check for and install firmware updates (BIOS/UEFI, SSD, dock...)
                   through fwupd; firmware lists are only downloaded when you run this
   snapshots       list the snapshots taken before updates
@@ -44,6 +47,8 @@ USAGE
 
 tested_file=$SHARE/default/tested/hyprland
 hypr_family='^(hyprland|aquamarine|hypr[a-z-]*|xdg-desktop-portal-hyprland)$'
+ghostty_tested_file=$SHARE/default/tested/ghostty
+ghostty_family='^ghostty(-terminfo|-shell-integration)?$'
 
 step() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 
@@ -74,11 +79,33 @@ plugin_hyprland() { # plugin_hyprland <pending lines>
   fi
 }
 
+# The Ghostty release the distro was tested with (an exact package version).
+tested_ghostty() {
+  [[ -f $ghostty_tested_file ]] || return 0
+  grep -vE '^[[:space:]]*(#|$)' "$ghostty_tested_file" | head -1 | tr -d '[:space:]'
+}
+
+# Ghostty and its two companion packages, when the waiting Ghostty isn't the
+# tested one.
+held_ghostty() { # held_ghostty <pending lines>
+  local tested new
+  new=$(awk '$1 == "ghostty" { print $4 }' <<<"$1")
+  tested=$(tested_ghostty)
+  [[ -n $new && -n $tested ]] || return 0
+  case $new in "$tested"|"$tested".*|"$tested"-*) return 0 ;; esac
+  awk '{ print $1 }' <<<"$1" | grep -E "$ghostty_family" || true
+}
+
 # Packages to hold back: Hyprland and its own libraries (the plugin among
 # them), when the waiting Hyprland is newer than the tested release, or isn't
 # the one the plugin is built for: a plugin built for another Hyprland doesn't
 # load, so both wait until the distro repository has the matching pair.
 held_back() { # held_back <pending lines>
+  held_hyprland "$1"
+  held_ghostty "$1"
+}
+
+held_hyprland() { # held_hyprland <pending lines>
   local tested new plugin hold=0
   new=$(awk '$1 == "hyprland" { print $4 }' <<<"$1")
   if [[ -z $new ]]; then
@@ -502,6 +529,29 @@ new_default_apps() {
   sudo rm -f "$new_apps_list"
 }
 
+# An install that took a Ghostty release before the distro held it back (a
+# system migration flags it) goes back to the tested one, once, from the Arch
+# Linux Archive (packages signed by Arch).
+ghostty_restore_flag=/var/lib/$DISTRO_ID/restore-tested-ghostty
+restore_tested_ghostty() {
+  local tested have p urls=()
+  [[ -f $ghostty_restore_flag ]] || return 0
+  tested=$(tested_ghostty)
+  have=$(pacman -Q ghostty 2>/dev/null | awk '{ print $2 }')
+  if [[ $tested =~ ^[0-9][0-9.]*-[0-9]+$ && -n $have && $have != "$tested" ]]; then
+    step "Ghostty"
+    info "Ghostty $have crashes as the lock screen's screensaver; going back to the tested $tested."
+    for p in ghostty ghostty-terminfo ghostty-shell-integration; do
+      if pacman -Q "$p" >/dev/null 2>&1; then urls+=("https://archive.archlinux.org/packages/g/$p/$p-$tested-x86_64.pkg.tar.zst"); fi
+    done
+    if ! sudo pacman -U --noconfirm "${urls[@]}"; then
+      info "Ghostty stays at $have for now; the next update tries again."
+      return 0
+    fi
+  fi
+  sudo rm -f "$ghostty_restore_flag"
+}
+
 update_all() { # update_all [1 = take held-back Hyprland too]
   local all=$1 before after pend changed others snap snap_before pre p
   local held=() ignore=() keyrings=(archlinux-keyring) aur_failed=0 kernel=0 errlog
@@ -531,11 +581,15 @@ update_all() { # update_all [1 = take held-back Hyprland too]
   if [[ -z $all ]]; then mapfile -t held < <(held_back "$pend"); fi
   if [[ ${held[*]} == hyprland-plugin-hyprbars ]]; then
     info "Holding back the window header plugin until the Hyprland it's built for arrives."
-  elif (( ${#held[@]} )); then
+  elif printf '%s\n' "${held[@]}" | grep -qE "$hypr_family"; then
     info "Holding back Hyprland $(awk '$1 == "hyprland" { print $4 }' <<<"$pend") and its libraries."
     info "$DISTRO_NAME's settings and window header plugin are made for Hyprland $(pacman -Q hyprland | awk '{ print $2 }');"
     info "a $DISTRO_NAME update takes the new release once it's tested. '$DISTRO_ID update --all'"
     info "takes it now (terminal windows lose their header strip until then)."
+  fi
+  if printf '%s\n' "${held[@]}" | grep -qE "$ghostty_family"; then
+    info "Holding back Ghostty $(awk '$1 == "ghostty" { print $4 }' <<<"$pend") until it's tested ($DISTRO_NAME stays on $(tested_ghostty));"
+    info "'$DISTRO_ID update --all' takes it now."
   fi
   for o in "${ours_over_arch[@]}"; do
     p=$(arch_waiting "$o")
@@ -564,6 +618,7 @@ update_all() { # update_all [1 = take held-back Hyprland too]
   fi
 
   new_default_apps
+  restore_tested_ghostty
 
   if command -v yay >/dev/null && [[ -n $(pacman -Qqm) ]]; then
     step "AUR apps"
@@ -827,6 +882,7 @@ case ${1:-} in
       *) die "security install, notify, off or check?" ;;
     esac ;;
   new-apps) sudo -v; new_default_apps ;;
+  restore) sudo -v; restore_tested_ghostty ;;
   firmware)
     command -v fwupdmgr >/dev/null || die "fwupd isn't installed (sudo pacman -S fwupd)"
     # Downloads the firmware list from the Linux Vendor Firmware Service (LVFS)

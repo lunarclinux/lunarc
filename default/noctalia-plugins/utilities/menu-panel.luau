@@ -61,9 +61,10 @@ end
 local function installRows(f)
   local out, taken = {}, {}
   for _, a in ipairs(items.catalog()) do
-    local it = items.catalogItem(a, cache.installed or {})
-    local s = f == "" and 0 or match.score(f, a.name, a.id .. " " .. it.pkg)
+    -- Match first: building the item checks whether it's installed.
+    local s = f == "" and 0 or match.score(f, a.name, a.id .. " " .. a.pkg)
     if s then
+      local it = items.catalogItem(a, cache.installed or {})
       table.insert(out, { item = it, score = s })
       taken[it.pkg] = true
     end
@@ -528,6 +529,7 @@ end
 function onOpen(context)
   isOpen = true
   look.load()
+  items.forget()
   roots = items.build()
   badge()
   stack, filter, sel, top, found = {}, "", 1, 1, {}

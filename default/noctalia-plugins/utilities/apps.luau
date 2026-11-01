@@ -26,6 +26,10 @@ function M.refresh(cb)
   end)
 end
 
+-- Every app as read, in no particular order: for searches, which sort by
+-- score anyway (M.list() copies and sorts the whole list each call).
+function M.entries() return entries end
+
 -- Every app, pinned ones first (Noctalia's [shell.launcher] pinned), then by name.
 function M.list()
   local out = table.clone(entries)

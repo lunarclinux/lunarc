@@ -92,12 +92,12 @@ write_weather() {
   local lines
   lines=$(location_lines "$(weather_location)")
   mkdir -p "${noctalia_config%/*}"; touch "$noctalia_config"
-  sed -i "\|^$mark_start\$|,\|^$mark_end\$|d" "$noctalia_config"
-  if grep -qE '^\[(location|weather)\]' "$noctalia_config"; then
+  if config_without_block "$noctalia_config" "$mark_start" "$mark_end" | grep -qE '^\[(location|weather)\]'; then
     die "your $noctalia_config already has its own [location] or [weather] section; set enabled = true under [weather] there"
   fi
-  printf '\n%s\n# Turned on with `%s privacy weather on`; `off` removes this block.\n[location]\n%s\n\n[weather]\nenabled = true\nunit = "%s"\n%s\n' \
-    "$mark_start" "$DISTRO_ID" "$lines" "$(weather_unit)" "$mark_end" >> "$noctalia_config"
+  printf '%s\n# Turned on with `%s privacy weather on`; `off` removes this block.\n[location]\n%s\n\n[weather]\nenabled = true\nunit = "%s"\n%s\n' \
+    "$mark_start" "$DISTRO_ID" "$lines" "$(weather_unit)" "$mark_end" \
+    | config_block "$noctalia_config" "$mark_start" "$mark_end"
 }
 
 describe_location() {
@@ -145,7 +145,7 @@ weather_set_location() { # weather_set_location [time-zone|auto|<lat>,<lon>|<cit
 
 weather_off() {
   if [[ -f $noctalia_config ]]; then
-    sed -i "\|^$mark_start\$|,\|^$mark_end\$|d" "$noctalia_config"
+    config_block "$noctalia_config" "$mark_start" "$mark_end" </dev/null
   fi
   set_setting privacy.weather off
   bar_apply

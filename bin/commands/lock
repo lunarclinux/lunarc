@@ -10,6 +10,7 @@ Usage: $DISTRO_ID lock [--idle | watch]
   (none)    lock now: the screensaver plays behind the lock; start typing your
             password to unlock
   --idle    the idle timer's lock (the same lock)
+  background  the lock screen's screensaver terminal (started by the lock itself)
   watch     lock before the computer sleeps (runs as a user service)
 
 The lock is swaylock-plugin running the screensaver through windowtolayer.
@@ -49,16 +50,16 @@ screensaver_lock() {
   night=$(colour color.bg.deep 070b17ff) coral=$(colour color.signal.coral f0a39aff)
   violet=$(colour color.signal.violet a9a8f2ff) hairline=$(colour color.border.hairline e6e2d621)
 
-  # The screensaver's own terminal, one per screen, drawn as the lock background,
-  # with the screensaver window's flags so it looks the same.
-  local background="windowtolayer -- ghostty --class=$DISTRO_ID.lockscreen --gtk-single-instance=false \
---font-size=13 --window-padding-x=0 --window-padding-y=0 --cursor-style-blink=false \
---cursor-opacity=0 --confirm-close-surface=false --background-opacity=1 --scrollbar=never \
---quit-after-last-window-closed=true -e /usr/bin/$DISTRO_ID screensaver run --lock"
+  # The screensaver's own terminal, one per screen, drawn as the lock
+  # background (`lock background`, which stops retrying a terminal that keeps
+  # crashing; the lock then shows the theme's night colour).
+  local background="/usr/bin/$DISTRO_ID lock background"
+  rm -f "$bg_fails"
 
   local args=(
     --daemonize
     --command-each "$background"
+    --color "${night:0:6}ff"
     --ignore-empty-password
     --show-failed-attempts
     --font "Geist Mono"
@@ -115,6 +116,32 @@ screensaver_lock() {
     )
   fi
   timeout 10 swaylock-plugin "${args[@]}" >/dev/null 2>&1
+}
+
+# The lock's background, one per screen: the screensaver in a terminal with
+# the screensaver window's flags, so it looks the same. swaylock-plugin starts
+# it again when it ends; a terminal that crashes at once twice in one lock
+# (Ghostty 1.4.0 did, inside the lock's own display server) isn't started a
+# third time, and the lock keeps its plain night-coloured background.
+bg_fails=${XDG_RUNTIME_DIR:-/run/user/$UID}/$DISTRO_ID-lock-background-fails
+lock_background() {
+  local fails started rc
+  fails=$(cat "$bg_fails" 2>/dev/null) || fails=0
+  [[ $fails =~ ^[0-9]+$ ]] || fails=0
+  if (( fails >= 2 )); then exec sleep infinity; fi
+  started=$(date +%s)
+  windowtolayer -- ghostty --class="$DISTRO_ID.lockscreen" --gtk-single-instance=false \
+    --font-size=13 --window-padding-x=0 --window-padding-y=0 --cursor-style-blink=false \
+    --cursor-opacity=0 --confirm-close-surface=false --background-opacity=1 --scrollbar=never \
+    --quit-after-last-window-closed=true -e "/usr/bin/$DISTRO_ID" screensaver run --lock
+  rc=$?
+  # Failed within seconds of starting (a crash; windowtolayer may not pass the
+  # signal on). An unlock that soon also counts, but that lock is over, and
+  # each new lock starts counting again.
+  if (( rc != 0 && $(date +%s) - started < 15 )); then
+    printf '%s\n' "$(( fails + 1 ))" > "$bg_fails"
+  fi
+  exit "$rc"
 }
 
 # The locker that confirmed the current lock. Written only after swaylock-plugin
@@ -185,6 +212,7 @@ watch() {
 case ${1:-} in
   watch) watch ;;
   --idle|"") lock_now ;;
+  background) lock_background ;;
   -h|--help) usage ;;
   *) die "unknown lock option: $1" ;;
 esac
