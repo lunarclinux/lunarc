@@ -14,7 +14,7 @@ mkdir -p "$work/bin"
 cat > "$work/bin/windowtolayer" <<'STUB'
 #!/bin/sh
 echo started >> "$STUB_LOG"
-exit 139
+exit "${STUB_RC:-139}"
 STUB
 chmod +x "$work/bin/windowtolayer"
 export DISTRO_ID=distro DISTRO_LIB=$root/bin XDG_RUNTIME_DIR=$work HOME=$work STUB_LOG=$work/starts PATH=$work/bin:$PATH
@@ -28,4 +28,13 @@ expect "third start: waits instead (stopped by the test's timeout)" 124 "$(run)"
 expect "the terminal was started twice, not three times" 2 "$(wc -l < "$work/starts")"
 rm -f "$work/distro-lock-background-fails"
 expect "a new lock starts counting again" 139 "$(run)"
+# The real windowtolayer exits 0 when the terminal under it crashes, so a quick
+# end counts whatever the exit code (it didn't, and Ghostty 1.4.0 crashed a
+# dozen times in four seconds on 2026-11-02, taking swaylock-plugin with it).
+rm -f "$work/distro-lock-background-fails" "$work/starts"
+export STUB_RC=0
+expect "a crash reported as success: passed on" 0 "$(run)"
+expect "again" 0 "$(run)"
+expect "third start: waits" 124 "$(run)"
+expect "started twice, not three times" 2 "$(wc -l < "$work/starts")"
 (( fails == 0 )) || { echo "$fails failed"; exit 1; }
