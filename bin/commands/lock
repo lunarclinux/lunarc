@@ -135,10 +135,11 @@ lock_background() {
     --cursor-opacity=0 --confirm-close-surface=false --background-opacity=1 --scrollbar=never \
     --quit-after-last-window-closed=true -e "/usr/bin/$DISTRO_ID" screensaver run --lock
   rc=$?
-  # Failed within seconds of starting (a crash; windowtolayer may not pass the
-  # signal on). An unlock that soon also counts, but that lock is over, and
-  # each new lock starts counting again.
-  if (( rc != 0 && $(date +%s) - started < 15 )); then
+  # Ended within seconds of starting: a crash. windowtolayer exits 0 even when
+  # the terminal under it crashed, so the exit code can't tell; any quick end
+  # counts. An unlock that soon also counts, but that lock is over, and each
+  # new lock starts counting again.
+  if (( $(date +%s) - started < 15 )); then
     printf '%s\n' "$(( fails + 1 ))" > "$bg_fails"
   fi
   exit "$rc"
