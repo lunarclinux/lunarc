@@ -75,5 +75,10 @@ else
   echo "lint: luau-compile not installed; Luau syntax not checked"
 fi
 
+# The tested Hyprland family names the Hyprland the header plugin is built for.
+plugin=$(sed -n 's/^_hyprland=//p' pkg/hyprland-plugin-hyprbars/PKGBUILD)
+family=$(awk '$1 == "hyprland" { print $2 }' default/tested/hyprland-packages)
+[[ $plugin == "$family" ]] || problem "default/tested/hyprland-packages has Hyprland ${family:-none}, hyprbars is built for $plugin"
+
 (( fail )) && exit 1
 echo "lint: ok (${#scripts[@]} shell scripts)"

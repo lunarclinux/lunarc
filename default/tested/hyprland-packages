@@ -1,0 +1,19 @@
+# The Hyprland family as tested: Hyprland and the libraries and tools that move
+# with it, at the versions the distro's config was last tested with. The
+# installer puts any it got newer from Arch back to these, from the Arch Linux
+# Archive (signed by Arch), in one step: Hyprland alone can't go back once Arch
+# has moved its libraries on (aquamarine 0.16 and hyprgraphics 0.6 changed
+# their sonames, 2026-11). Keep it in step with default/tested/hyprland and
+# with the Hyprland the hyprbars plugin is built for (pkg/hyprland-plugin-hyprbars).
+# <package> <version>
+aquamarine 0.15.1-1
+hyprcursor 0.1.13-7
+hyprgraphics 0.5.1-4
+hyprland 0.56.2-4
+hyprland-guiutils 0.2.2-4
+hyprlang 0.6.8-5
+hyprpicker 0.4.7-4
+hyprtoolkit 0.6.0-1
+hyprutils 0.14.3-1
+hyprwire 0.3.1-3
+xdg-desktop-portal-hyprland 1.4.1-2
