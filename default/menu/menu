@@ -113,6 +113,7 @@ System | Manual: privacy | what connects where | xdg-open /usr/share/@DISTRO_ID@
 System | Manual: troubleshooting | | xdg-open /usr/share/@DISTRO_ID@/doc/troubleshooting.md
 System | Manual: checking downloads | | xdg-open /usr/share/@DISTRO_ID@/doc/verify.md
 System | The @DISTRO_ID@ command | what it can do | term: @DISTRO_ID@ help
+System | Report a problem | opens a bug report on GitHub | xdg-open https://github.com/lunarclinux/@DISTRO_ID@/issues/new/choose
 System | Arch Wiki | | xdg-open https://wiki.archlinux.org
 System | Hyprland Wiki | | xdg-open https://wiki.hypr.land
 System | Noctalia docs | | xdg-open https://docs.noctalia.dev

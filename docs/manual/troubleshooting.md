@@ -107,3 +107,9 @@ refused by default. `lunarc firewall allow <app or port>` opens one (`localsend`
 
 The menu's **System** group has this manual (each page), `lunarc help`, and links to the Arch
 Wiki, the Hyprland Wiki and the Noctalia docs. Most of the Arch Wiki applies to Lunarc.
+
+**Report a problem** in the same group opens a bug report on GitHub
+(github.com/lunarclinux/lunarc/issues). It asks for `pacman -Q lunarc noctalia` and,
+if you can, a few lines from `journalctl -b -p warning`: read them over for anything
+private before sending. Security problems go privately instead: the **Report a
+vulnerability** button on the repository's Security tab.
