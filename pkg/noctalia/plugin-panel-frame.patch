@@ -11,7 +11,7 @@ index e5eee6a..e0d1d69 100644
                  .shellConfig = shellConfig,
              }
 diff --git a/src/scripting/plugin_manifest.cpp b/src/scripting/plugin_manifest.cpp
-index bc79175..eee61f5 100644
+index 75de3dc..af6d4ff 100644
 --- a/src/scripting/plugin_manifest.cpp
 +++ b/src/scripting/plugin_manifest.cpp
 @@ -567,6 +567,14 @@ namespace scripting {
@@ -44,10 +44,10 @@ index 50c9aff..21b8ce9 100644
      // focus. Each is validated as a chord at parse time. While focused, a matching press
      // or release is delivered to the script's onKey(chord, pressed) and not handled by
 diff --git a/src/shell/panel/plugin_panel.cpp b/src/shell/panel/plugin_panel.cpp
-index e03127e..e5ee3cf 100644
+index ef06d92..3aabde0 100644
 --- a/src/shell/panel/plugin_panel.cpp
 +++ b/src/shell/panel/plugin_panel.cpp
-@@ -70,6 +70,7 @@ PluginPanel::PluginPanel(scripting::PluginRuntimeContext context, PluginPanelOpt
+@@ -70,6 +70,7 @@ PluginPanel::PluginPanel(scripting::PluginRuntimeContext context, const PluginPa
        m_maxContentHeight(static_cast<float>(options.maxHeight)), m_dismissOnOutsideClick(options.dismissOnOutsideClick),
        m_keyboardMode(keyboardModeFromManifest(options.keyboardFocus)),
        m_layer(layerShellLayerFromConfig(options.shellConfig.layer)), m_persistent(options.persistent),
@@ -56,7 +56,7 @@ index e03127e..e5ee3cf 100644
    // The manifest parser already validated every spec, so a parse failure here means the two
    // drifted apart. Skip the entry rather than capture a chord nobody can describe.
 diff --git a/src/shell/panel/plugin_panel.h b/src/shell/panel/plugin_panel.h
-index c74f339..4f3f3b6 100644
+index 7160969..b8890b4 100644
 --- a/src/shell/panel/plugin_panel.h
 +++ b/src/shell/panel/plugin_panel.h
 @@ -44,6 +44,8 @@ struct PluginPanelOptions {

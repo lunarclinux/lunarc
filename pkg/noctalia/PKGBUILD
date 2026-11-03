@@ -1,6 +1,6 @@
 # The desktop shell (bar, launcher, panels, notifications, OSD, lock screen),
 # built from the same release and checksum as Arch's own package, with seven
-# patches of ours. Arch's PKGBUILD for 5.4.0-1 is the model: same
+# patches of ours. Arch's PKGBUILD for 5.4.1-1 is the model: same
 # source, dependencies, meson options and files.
 #
 # top-highlight.patch (ours, not sent upstream): Frosted Terminal's finish on
@@ -59,7 +59,7 @@
 # A host build (pkg/build without --chroot) skips makedepends, so the build
 # machine may lack libraries it builds against. Then the exact Arch packages
 # below (those Arch's 5.2.1-1 was built with, libical since raised to 4.0.7;
-# still what 5.4.0 builds against) are unpacked into a private
+# still what 5.4.1 builds against) are unpacked into a private
 # folder for the build only, checksum-pinned (signatures checked against Arch's
 # keyring when pinned); installed systems get the same libraries through
 # depends. They are always downloaded, and prepare() decides, once the
@@ -79,7 +79,7 @@
 # config_types.h, config_schema.cpp, mpris_art.{h,cpp} and notification_toast.cpp),
 # and the pinned build libraries; reset pkgrel.
 pkgname=noctalia
-pkgver=5.4.0
+pkgver=5.4.1
 pkgrel=1
 epoch=1
 pkgdesc='A sleek, customizable desktop shell crafted for Wayland (with a top-edge highlight patch)'
@@ -103,14 +103,14 @@ source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz"
         no-background-fetch.patch
         bar-hover-fit.patch
         os-release-version.patch)
-sha256sums=('47130d9cf1cdd637f5fe6f88f1706e7be900faa3e62c83390499d3daef32de59'
-            'e9abb41a8dcb0b3c4764d41b4ae74b26fe7447b191c08cdc165252ec224b3646'
-            '1150ce369eaf6141d9e531f14eb3e4517560e74d9d5168653a8dc9fac5ba0c74'
-            'a13af07fbd9db310efbd44f5b2442640c411e0d79d4afbd52f21e8a8afc85523'
-            '09abdbb9765f288b042d6943c1db12ffd2c96bf068b31353bd5ca45961b9eb67'
-            '1ed52154810d651d09c7accf5fb714fb0adab9bd06ae5ae762db39dec9582f04'
-            'fe6208099b0f9ee01a1a875d040ca938b4cf51d43421e2653c19295f8cec6dc4'
-            '93cfd05765f8e0835f6cf84e8500592846111079b73b8f6acd165a55f8a9faa5'
+sha256sums=('6069d922e9d72488c74e4ce335314ce2203f08bd4641380bfe1bd137004597fa'
+            'ea6030aa8b124e6590819eaad47ce10beda3e74c454264a581a82a5931f9f501'
+            'deaede9215f74dbdb1032e3984ffd0191bf00f9596bb89dc8f15591b7adfadc8'
+            '1391d07196ddafd03a7fcdc8792a862d74e1b32f9fbae77092dab1f7c601fb1f'
+            '33927125d02582c6f48c14aeddf148fc8a0d4c1ea1a305daeee28cd2e1a3d9b1'
+            '102716e298c7906e61e0722280689a82bd77a7f986bc81b30134e01cd6b50aa6'
+            'a43a2af2720870894690ef8afdf8bb56a674fb1fbb90a45bd28f0f2e65551ee6'
+            '9a3004fee0fb77c993cf93a080944020bac98279bbdac0dc2b0d45a4f595ca90'
             'ac95d08aa2e829aea1cd022d9062ce0cb4b0ef156a49ed18ca8605fdc9b73c1f'
             '2a12f2cd48271158532ae98c02273127611eedc1d70f97e2f14e8bde34f52a14'
             '55968568ee1c8f3ffe691b51d4f6660acb40ee82f474d41fc6e18c571e87ddc4'

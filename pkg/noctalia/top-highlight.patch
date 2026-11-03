@@ -1,16 +1,16 @@
 diff --git a/src/app/application_services.cpp b/src/app/application_services.cpp
-index 02080a3..0d90203 100644
+index 9198a97..4a35e0d 100644
 --- a/src/app/application_services.cpp
 +++ b/src/app/application_services.cpp
-@@ -92,6 +92,7 @@
- #include "ui/dialogs/color_picker_dialog.h"
- #include "ui/dialogs/file_dialog.h"
- #include "ui/dialogs/glyph_picker_dialog.h"
+@@ -75,6 +75,7 @@
+ #include "system/keyboard_backlight_service.h"
+ #include "system/system_monitor_service.h"
+ #include "ui/app_icon_colorization.h"
 +#include "ui/controls/box.h"
+ #include "ui/controls/input.h"
  #include "ui/style.h"
- #include "util/file_utils.h"
- #include "util/string_utils.h"
-@@ -565,6 +566,22 @@ void Application::initStyleThemeAndWayland() {
+ 
+@@ -549,6 +550,22 @@ void Application::initStyleThemeAndWayland() {
      Style::setPopupShadowsEnabled(m_configService.config().shell.popupShadows);
      Style::setCardBordersEnabled(m_configService.config().shell.cardBorders);
      Style::setCloseButtonsEnabled(m_configService.config().shell.showCloseButtons);
@@ -34,10 +34,10 @@ index 02080a3..0d90203 100644
      if (cornerChanged) {
        m_notificationToast.requestLayout();
 diff --git a/src/config/config_types.h b/src/config/config_types.h
-index 1b3b54a..2351890 100644
+index 881cecf..7c50fa0 100644
 --- a/src/config/config_types.h
 +++ b/src/config/config_types.h
-@@ -1340,6 +1340,15 @@ struct ShellConfig {
+@@ -1344,6 +1344,15 @@ struct ShellConfig {
    bool popupShadows = true;
    bool cardBorders = true;
    bool showCloseButtons = true;
@@ -54,7 +54,7 @@ index 1b3b54a..2351890 100644
    std::string lang; // empty = auto-detect from $LC_ALL/$LC_MESSAGES/$LANG
    std::string timeFormat = "{:%H:%M}";
 diff --git a/src/config/schema/config_schema.cpp b/src/config/schema/config_schema.cpp
-index d162fd4..3baa253 100644
+index 65af38c..bf7d8cd 100644
 --- a/src/config/schema/config_schema.cpp
 +++ b/src/config/schema/config_schema.cpp
 @@ -1793,6 +1793,11 @@ namespace noctalia::config::schema {
@@ -70,10 +70,10 @@ index d162fd4..3baa253 100644
          custom<ShellConfig>(
              "font_family",
 diff --git a/src/shell/bar/bar.cpp b/src/shell/bar/bar.cpp
-index 713f72c..52b58c6 100644
+index bfcd7da..1852be4 100644
 --- a/src/shell/bar/bar.cpp
 +++ b/src/shell/bar/bar.cpp
-@@ -3433,6 +3433,7 @@ void Bar::buildScene(BarInstance& instance, std::uint32_t width, std::uint32_t h
+@@ -3424,6 +3424,7 @@ void Bar::buildScene(BarInstance& instance, std::uint32_t width, std::uint32_t h
  
      // Bar background
      instance.bg = static_cast<Box*>(instance.slideRoot->addChild(ui::box()));
@@ -82,10 +82,10 @@ index 713f72c..52b58c6 100644
      // Shadow — bar shape copy rendered with large SDF softness to simulate a blurred drop shadow.
      if (shadowSize > 0.0F) {
 diff --git a/src/shell/notification/notification_toast.cpp b/src/shell/notification/notification_toast.cpp
-index 094376d..f1827a8 100644
+index 1eefbef..e5baff4 100644
 --- a/src/shell/notification/notification_toast.cpp
 +++ b/src/shell/notification/notification_toast.cpp
-@@ -2802,6 +2802,7 @@ InputArea* NotificationToast::buildCard(
+@@ -2796,6 +2796,7 @@ InputArea* NotificationToast::buildCard(
              box.setRadius(Style::scaledRadiusXl(scale));
              box.setFill(colorSpecFromRole(ColorRole::Surface, bgAlpha));
              box.setBorder(borderColor, borderWidth);
@@ -94,10 +94,10 @@ index 094376d..f1827a8 100644
        })
    );
 diff --git a/src/shell/osd/osd_overlay.cpp b/src/shell/osd/osd_overlay.cpp
-index f0228e1..0c0aa6f 100644
+index 6a84d9f..93a37d3 100644
 --- a/src/shell/osd/osd_overlay.cpp
 +++ b/src/shell/osd/osd_overlay.cpp
-@@ -739,6 +739,7 @@ void OsdOverlay::buildScene(Instance& inst, std::uint32_t width, std::uint32_t h
+@@ -741,6 +741,7 @@ void OsdOverlay::buildScene(Instance& inst, std::uint32_t width, std::uint32_t h
              box.setRadius(osdCardRadius(cw, ch, s));
              box.setPosition(cardX, cardY);
              box.setZIndex(0);
@@ -106,10 +106,10 @@ index f0228e1..0c0aa6f 100644
        })
    );
 diff --git a/src/shell/panel/panel_manager.cpp b/src/shell/panel/panel_manager.cpp
-index 12b3896..c2013a8 100644
+index 9628fea..23fffc3 100644
 --- a/src/shell/panel/panel_manager.cpp
 +++ b/src/shell/panel/panel_manager.cpp
-@@ -2691,6 +2691,7 @@ void PanelManager::buildScene(std::uint32_t width, std::uint32_t height) {
+@@ -2694,6 +2694,7 @@ void PanelManager::buildScene(std::uint32_t width, std::uint32_t height) {
            );
          }
        }
