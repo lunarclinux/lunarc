@@ -296,16 +296,23 @@ metered() { # true when the connection in use is metered (phone hotspot, mobile 
 # The system timer's job (root): when a security fix is waiting, the normal
 # update of Arch and distro packages, unattended. Keyrings first, held-back
 # Hyprland honoured, snapshots before and after (snap-pac); no AUR or Flatpak,
-# no new default apps (the next `update` does those).
-security_apply() { # security_apply [--dry-run]
-  local dry=0 feed waiting pend ignore=() held=() keyrings=() o before after changed names kernel=0 log
-  [[ ${1:-} == --dry-run ]] && dry=1
+# no new default apps (the next `update` does those). --cached uses the feed
+# already on disk instead of downloading it (the install test's made-up one).
+security_apply() { # security_apply [--dry-run] [--cached]
+  local dry=0 cached=0 feed waiting pend ignore=() held=() keyrings=() o before after changed names kernel=0 log a
+  for a in "$@"; do
+    case $a in
+      --dry-run) dry=1 ;;
+      --cached) cached=1 ;;
+      *) die "unknown option: $a" ;;
+    esac
+  done
   [[ $EUID -eq 0 ]] || die "security apply runs as root (the system timer)"
   [[ -r $security_conf ]] && grep -qx install "$security_conf" || { info "automatic security installs are off"; return 0; }
   [[ $(booted_snapshot) == 0 ]] || { info "started from a snapshot; not updating"; return 0; }
   install -d -m 755 "/var/lib/$DISTRO_ID"
   feed=/var/lib/$DISTRO_ID/advisories.json
-  fetch_feed "$feed" || info "couldn't download the security feed; using the last copy"
+  if (( !cached )); then fetch_feed "$feed" || info "couldn't download the security feed; using the last copy"; fi
   [[ -s $feed ]] || return 0
   waiting=$(feed_waiting "$feed")
   if [[ -z $waiting ]]; then info "no security fixes waiting"; return 0; fi
@@ -878,7 +885,7 @@ case ${1:-} in
       "") security_say_mode; if [[ $(security_mode) != off ]]; then security_check --cached; fi ;;
       install|notify|off) security_set "$2" ;;
       check) security_check "${3:-}" ;;
-      apply) security_apply "${3:-}" ;;
+      apply) shift 2; security_apply "$@" ;;
       *) die "security install, notify, off or check?" ;;
     esac ;;
   new-apps) sudo -v; new_default_apps ;;
