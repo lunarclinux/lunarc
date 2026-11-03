@@ -1,8 +1,8 @@
 diff --git a/src/app/application_services.cpp b/src/app/application_services.cpp
-index 23e3dff..43dc0af 100644
+index 6ec245f..e6378fb 100644
 --- a/src/app/application_services.cpp
 +++ b/src/app/application_services.cpp
-@@ -16,6 +16,7 @@
+@@ -14,6 +14,7 @@
  #include "dbus/idle/screensaver_service.h"
  #include "dbus/logind/logind_service.h"
  #include "dbus/modem/modem_manager_service.h"
@@ -10,7 +10,7 @@ index 23e3dff..43dc0af 100644
  #include "dbus/mpris/mpris_service.h"
  #include "dbus/network/inetwork_service.h"
  #include "dbus/network/iwd_secret_agent.h"
-@@ -608,6 +609,7 @@ void Application::initStyleThemeAndWayland() {
+@@ -592,6 +593,7 @@ void Application::initStyleThemeAndWayland() {
    applyPasswordMaskStyle();
    applyInputConfig();
    m_httpClient.setOfflineMode(m_configService.config().shell.offlineMode);
@@ -18,15 +18,15 @@ index 23e3dff..43dc0af 100644
    m_scriptApi.setConfigSnapshot(m_configService.configTable());
    m_configService.addReloadCallback(applyMotionConfig);
    m_configService.addReloadCallback(applyStyleConfig);
-@@ -615,6 +617,7 @@ void Application::initStyleThemeAndWayland() {
+@@ -599,6 +601,7 @@ void Application::initStyleThemeAndWayland() {
    m_configService.addReloadCallback(applyInputConfig);
-   m_configService.addReloadCallback([this]() {
+   m_configService.addReloadCallback([this] {
      m_httpClient.setOfflineMode(m_configService.config().shell.offlineMode);
 +    mpris::setRemoteArtEnabled(m_configService.config().shell.mpris.remoteArt);
      m_scriptApi.setConfigSnapshot(m_configService.configTable());
    });
-   m_configService.addReloadCallback([this]() { syncClipboardService(); });
-@@ -625,10 +628,17 @@ void Application::initStyleThemeAndWayland() {
+   m_configService.addReloadCallback([this] { syncClipboardService(); });
+@@ -609,10 +612,17 @@ void Application::initStyleThemeAndWayland() {
      m_themeService.onConfigReload();
      m_settingsWindow.onExternalOptionsChanged();
    });
@@ -40,18 +40,18 @@ index 23e3dff..43dc0af 100644
 +    m_communityPaletteService.sync();
 +  }
    m_configService.addReloadCallback(
--      [this]() {
+-      [this] {
 -        if (m_configService.lastChange().theme) {
-+      [this, communityPalettesInUse]() {
++      [this, communityPalettesInUse] {
 +        if (m_configService.lastChange().theme && communityPalettesInUse()) {
            m_communityPaletteService.sync();
          }
        },
 diff --git a/src/config/config_types.h b/src/config/config_types.h
-index 7d61e7c..2663d3b 100644
+index 09c8714..41e248d 100644
 --- a/src/config/config_types.h
 +++ b/src/config/config_types.h
-@@ -879,6 +879,7 @@ struct NotificationConfig {
+@@ -883,6 +883,7 @@ struct NotificationConfig {
    std::vector<std::string> monitors;
    bool collapseOnDismiss = true;
    bool keepDismissedInHistory = true;
@@ -59,7 +59,7 @@ index 7d61e7c..2663d3b 100644
    int historyRetentionHours = 0;
    int maxVisible = 0; // 0 = unlimited (space-based only)
  
-@@ -1272,6 +1273,7 @@ struct ShellConfig {
+@@ -1276,6 +1277,7 @@ struct ShellConfig {
  
    struct MprisConfig {
      std::vector<std::string> blacklist;
@@ -68,7 +68,7 @@ index 7d61e7c..2663d3b 100644
      bool operator==(const MprisConfig&) const = default;
    };
 diff --git a/src/config/schema/config_schema.cpp b/src/config/schema/config_schema.cpp
-index 0db1ff5..0c432a4 100644
+index 2ce8890..9d21399 100644
 --- a/src/config/schema/config_schema.cpp
 +++ b/src/config/schema/config_schema.cpp
 @@ -308,6 +308,7 @@ namespace noctalia::config::schema {
@@ -138,10 +138,10 @@ index 8d0b8e7..9606b7a 100644
    // Ordered download URLs for an effective art URL: the primary plus any lower-res
    // fallback (e.g. i.ytimg maxresdefault → hqdefault) tried when the primary 404s.
 diff --git a/src/shell/notification/notification_toast.cpp b/src/shell/notification/notification_toast.cpp
-index f1827a8..9ca4182 100644
+index e5baff4..a6c273f 100644
 --- a/src/shell/notification/notification_toast.cpp
 +++ b/src/shell/notification/notification_toast.cpp
-@@ -3115,6 +3115,9 @@ std::string NotificationToast::resolveNotificationIconPath(const PopupEntry& ent
+@@ -3106,6 +3106,9 @@ std::string NotificationToast::resolveNotificationIconPath(const PopupEntry& ent
        return cachedPath;
      }
  

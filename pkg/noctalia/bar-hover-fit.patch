@@ -1,8 +1,8 @@
 diff --git a/src/shell/bar/bar.cpp b/src/shell/bar/bar.cpp
-index 22d0c14..328c2ff 100644
+index 636a5dd..578decc 100644
 --- a/src/shell/bar/bar.cpp
 +++ b/src/shell/bar/bar.cpp
-@@ -1389,27 +1389,18 @@ namespace {
+@@ -1379,27 +1379,18 @@ namespace {
            Node::absolutePosition(root, rootX, rootY);
            rootX -= underlayX;
            rootY -= underlayY;

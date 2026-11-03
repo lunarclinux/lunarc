@@ -1,8 +1,8 @@
 diff --git a/src/app/application_services.cpp b/src/app/application_services.cpp
-index 0d90203..23e3dff 100644
+index 4a35e0d..6ec245f 100644
 --- a/src/app/application_services.cpp
 +++ b/src/app/application_services.cpp
-@@ -581,6 +581,12 @@ void Application::initStyleThemeAndWayland() {
+@@ -565,6 +565,12 @@ void Application::initStyleThemeAndWayland() {
          finish.sheenBottom = *shell.sheenBottomColor;
        }
        Box::setGlobalSurfaceFinish(finish);
@@ -16,10 +16,10 @@ index 0d90203..23e3dff 100644
      lastCornerRadiusScale = corner;
      if (cornerChanged) {
 diff --git a/src/config/config_types.h b/src/config/config_types.h
-index 2351890..7d61e7c 100644
+index 7c50fa0..09c8714 100644
 --- a/src/config/config_types.h
 +++ b/src/config/config_types.h
-@@ -1346,6 +1346,11 @@ struct ShellConfig {
+@@ -1350,6 +1350,11 @@ struct ShellConfig {
    // on_surface at 7% and 2% (sheen).
    bool topHighlight = false;
    std::optional<ColorSpec> topHighlightColor;
@@ -32,7 +32,7 @@ index 2351890..7d61e7c 100644
    std::optional<ColorSpec> sheenTopColor;
    std::optional<ColorSpec> sheenBottomColor;
 diff --git a/src/config/schema/config_schema.cpp b/src/config/schema/config_schema.cpp
-index 3baa253..0db1ff5 100644
+index bf7d8cd..2ce8890 100644
 --- a/src/config/schema/config_schema.cpp
 +++ b/src/config/schema/config_schema.cpp
 @@ -1795,6 +1795,10 @@ namespace noctalia::config::schema {
@@ -65,7 +65,7 @@ index b008d45..3b1f64b 100644
      card.setAlign(FlexAlign::Stretch);
      card.setGap(Style::spaceSm * scale);
 diff --git a/src/ui/controls/button.cpp b/src/ui/controls/button.cpp
-index 449b7ba..fc09e9e 100644
+index 46dfa84..67392de 100644
 --- a/src/ui/controls/button.cpp
 +++ b/src/ui/controls/button.cpp
 @@ -36,7 +36,8 @@ namespace {
@@ -88,7 +88,7 @@ index 449b7ba..fc09e9e 100644
 +      m_badgeLabel->setColor(bg.a >= 0.5F ? bg : colorForRole(ColorRole::Surface));
      }
    }
-   m_visualStateInitialized = true;
+ }
 diff --git a/src/ui/palette.cpp b/src/ui/palette.cpp
 index ccc6213..b26320e 100644
 --- a/src/ui/palette.cpp

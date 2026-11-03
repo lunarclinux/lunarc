@@ -1,7 +1,8 @@
 --!nonstrict
--- Notification history, read from the file Noctalia keeps
--- (~/.local/state/noctalia/notification_history.json), and when the list was
--- last looked at (for the bell's unread dot). Used by the bell segment and
+-- Notification history, from noctalia.notificationHistory() (our patch to
+-- Noctalia; 5.4.1 encrypts the history file), or on an older Noctalia the file
+-- it kept (~/.local/state/noctalia/notification_history.json); and when the
+-- list was last looked at (for the bell's unread dot). Used by the bell segment and
 -- its popover; nothing here changes Noctalia's history except through its
 -- own commands (noctalia msg).
 local M = {}
@@ -13,19 +14,30 @@ do
 end
 M.seenFile = noctalia.pluginDataDir() .. "/notifications-seen"
 
+local function appName(name, desktopEntry)
+  if name and name ~= "" then return name end
+  return string.match(desktopEntry or "", "([^%.]+)$") or "Notification"
+end
+
 -- cb(list): newest first, { app, summary, body, at (ms), urgency, active }.
 function M.load(cb)
+  if noctalia.notificationHistory then
+    local list = {}
+    for _, n in ipairs(noctalia.notificationHistory()) do
+      table.insert(list, { app = appName(n.appName, n.desktopEntry), summary = n.summary or "", body = n.body or "",
+        at = tonumber(n.receivedMs) or 0, urgency = n.urgency, active = n.active == true })
+    end
+    table.sort(list, function(a, b) return a.at > b.at end)
+    cb(list)
+    return
+  end
   noctalia.readFileAsync(M.path, function(text, _err)
     local list = {}
     local ok, data = pcall(noctalia.json.decode, text or "")
     if ok and type(data) == "table" and type(data.entries) == "table" then
       for _, e in ipairs(data.entries) do
         local n = e.notification or {}
-        local app = n.app_name
-        if not app or app == "" then
-          app = string.match(n.desktop_entry or "", "([^%.]+)$") or "Notification"
-        end
-        table.insert(list, { app = app, summary = n.summary or "", body = n.body or "",
+        table.insert(list, { app = appName(n.app_name, n.desktop_entry), summary = n.summary or "", body = n.body or "",
           at = tonumber(n.received_wall_ms) or 0, urgency = n.urgency, active = e.active == true })
       end
     end

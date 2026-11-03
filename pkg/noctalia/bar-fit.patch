@@ -1,8 +1,8 @@
 diff --git a/src/shell/bar/bar.cpp b/src/shell/bar/bar.cpp
-index 52b58c6..22d0c14 100644
+index 1852be4..636a5dd 100644
 --- a/src/shell/bar/bar.cpp
 +++ b/src/shell/bar/bar.cpp
-@@ -1021,6 +1021,7 @@ namespace {
+@@ -1012,6 +1012,7 @@ namespace {
          if (auto* tray = dynamic_cast<TrayWidget*>(widget.get())) {
            tray->setCapsuleCross(capsuleCross);
          }
@@ -10,7 +10,7 @@ index 52b58c6..22d0c14 100644
          if (widget->root() != nullptr) {
            widget->layout(renderer, barAreaW, barAreaH);
          }
-@@ -1290,6 +1291,58 @@ namespace {
+@@ -1280,6 +1281,58 @@ namespace {
        configureSlot(instance.endSlot, contentMainEnd - endSlotMain, endSlotMain);
      }
  
@@ -94,10 +94,10 @@ index d552ec5..6af112e 100644
    FontWeight m_labelFontWeight = FontWeight::Medium;
    std::string m_labelFontFamily; // empty = inherit renderer-global family
 diff --git a/src/shell/bar/widgets/active_window_widget.cpp b/src/shell/bar/widgets/active_window_widget.cpp
-index 6d6c2dd..6bbe5a9 100644
+index 04016b7..45770a4 100644
 --- a/src/shell/bar/widgets/active_window_widget.cpp
 +++ b/src/shell/bar/widgets/active_window_widget.cpp
-@@ -83,7 +83,11 @@ void ActiveWindowWidget::doLayout(Renderer& renderer, float containerWidth, floa
+@@ -82,7 +82,11 @@ void ActiveWindowWidget::doLayout(Renderer& renderer, float containerWidth, floa
    const bool showingEmptyPlaceholder = m_lastEmptyState && m_showEmptyLabel;
    const bool isVertical = containerHeight > containerWidth;
    const float iconSize = m_iconSize * m_contentScale;
@@ -111,7 +111,7 @@ index 6d6c2dd..6bbe5a9 100644
    m_icon->setSize(iconSize, iconSize);
  
 diff --git a/src/shell/bar/widgets/active_window_widget.h b/src/shell/bar/widgets/active_window_widget.h
-index 6077464..fb70f85 100644
+index 555cba3..2eb7c50 100644
 --- a/src/shell/bar/widgets/active_window_widget.h
 +++ b/src/shell/bar/widgets/active_window_widget.h
 @@ -46,6 +46,7 @@ public:
@@ -123,7 +123,7 @@ index 6077464..fb70f85 100644
    void applyTitleScrollMode(bool titleVisible);
    void syncWidgetVisibility(bool showWidget);
 diff --git a/src/shell/bar/widgets/plugin_widget.cpp b/src/shell/bar/widgets/plugin_widget.cpp
-index 2ad7f96..92a3ba2 100644
+index b1a131b..8edb92d 100644
 --- a/src/shell/bar/widgets/plugin_widget.cpp
 +++ b/src/shell/bar/widgets/plugin_widget.cpp
 @@ -10,6 +10,7 @@
@@ -237,7 +237,7 @@ index 2ad7f96..92a3ba2 100644
        m_area->setSize(m_uiHost->width(), m_uiHost->height());
      if (m_dragOverlay != nullptr) {
 diff --git a/src/shell/bar/widgets/plugin_widget.h b/src/shell/bar/widgets/plugin_widget.h
-index 3295cc5..62beeff 100644
+index b993ccd..43b3ed8 100644
 --- a/src/shell/bar/widgets/plugin_widget.h
 +++ b/src/shell/bar/widgets/plugin_widget.h
 @@ -47,6 +47,9 @@ public:
@@ -251,10 +251,10 @@ index 3295cc5..62beeff 100644
    void luaSetText(std::string_view text);
    void luaSetGlyph(std::string_view name);
 diff --git a/src/ui/controls/label.h b/src/ui/controls/label.h
-index cde703a..69376fc 100644
+index 10adcc1..e9c1174 100644
 --- a/src/ui/controls/label.h
 +++ b/src/ui/controls/label.h
-@@ -73,6 +73,7 @@ public:
+@@ -74,6 +74,7 @@ public:
    [[nodiscard]] float fontSize() const noexcept;
    [[nodiscard]] const Color& color() const noexcept;
    [[nodiscard]] float maxWidth() const noexcept;
