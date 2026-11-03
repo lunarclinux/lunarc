@@ -1,0 +1,194 @@
+diff --git a/src/app/application.cpp b/src/app/application.cpp
+index b14d440..9c95757 100644
+--- a/src/app/application.cpp
++++ b/src/app/application.cpp
+@@ -110,6 +110,36 @@ Application::Application()
+   m_notificationManager.loadPersistedHistory();
+   notify::setInstance(&m_notificationManager);
+ 
++  // Mirror the history into the script API (noctalia.notificationHistory()): it's encrypted on
++  // disk, so plugins can no longer read the file.
++  auto pushNotificationHistory = [this] {
++    std::vector<scripting::ScriptNotification> list;
++    list.reserve(m_notificationManager.history().size());
++    for (const auto& entry : m_notificationManager.history()) {
++      const Notification& n = entry.notification;
++      const char* urgency = n.urgency == Urgency::Critical ? "critical" : n.urgency == Urgency::Low ? "low" : "normal";
++      list.push_back(
++          scripting::ScriptNotification{
++              .id = n.id,
++              .appName = n.appName,
++              .desktopEntry = n.desktopEntry.value_or(""),
++              .summary = n.summary,
++              .body = n.body,
++              .urgency = urgency,
++              .receivedMs = n.receivedWallClock
++                  ? std::chrono::duration<double, std::milli>(n.receivedWallClock->time_since_epoch()).count()
++                  : 0.0,
++              .active = entry.active,
++          }
++      );
++    }
++    m_scriptApi.setNotificationHistory(
++        std::make_shared<const std::vector<scripting::ScriptNotification>>(std::move(list))
++    );
++  };
++  m_notificationManager.setHistoryChangedCallback(pushNotificationHistory);
++  pushNotificationHistory();
++
+   m_notificationManager.addEventCallback([this](const Notification& n, NotificationEvent event) {
+     const char* kind = "updated";
+     if (event == NotificationEvent::Added) {
+diff --git a/src/notification/notification_manager.cpp b/src/notification/notification_manager.cpp
+index 29d241c..7c066b5 100644
+--- a/src/notification/notification_manager.cpp
++++ b/src/notification/notification_manager.cpp
+@@ -863,6 +863,10 @@ bool NotificationManager::toggleDoNotDisturb() {
+ 
+ void NotificationManager::setStateCallback(StateCallback callback) { m_stateCallback = std::move(callback); }
+ 
++void NotificationManager::setHistoryChangedCallback(StateCallback callback) {
++  m_historyChangedCallback = std::move(callback);
++}
++
+ void NotificationManager::setSoundPlayer(SoundPlayer* soundPlayer) { m_soundPlayer = soundPlayer; }
+ 
+ bool NotificationManager::hasUnreadNotificationHistory() const noexcept {
+@@ -888,6 +892,9 @@ void NotificationManager::schedulePersistHistory() {
+   m_persistScheduled = true;
+   DeferredCall::callLater([this] {
+     m_persistScheduled = false;
++    if (m_historyChangedCallback) {
++      m_historyChangedCallback();
++    }
+     persistHistoryToDisk();
+   });
+ }
+@@ -988,6 +995,9 @@ void NotificationManager::loadPersistedHistory() {
+     m_historyLoaded = true;
+     rebuildHistoryIndex();
+     cleanupOldHistoryEntries();
++    if (m_historyChangedCallback) {
++      m_historyChangedCallback();
++    }
+     if (m_stateCallback) {
+       m_stateCallback();
+     }
+diff --git a/src/notification/notification_manager.h b/src/notification/notification_manager.h
+index b187265..9bd253a 100644
+--- a/src/notification/notification_manager.h
++++ b/src/notification/notification_manager.h
+@@ -158,6 +158,9 @@ public:
+   [[nodiscard]] bool doNotDisturb() const noexcept;
+   [[nodiscard]] bool toggleDoNotDisturb();
+   void setStateCallback(StateCallback callback);
++  // Called (deferred, on the main thread) after any change to the history: added, updated, closed,
++  // removed, cleared, loaded or trimmed. Used to mirror the history into the plugin API.
++  void setHistoryChangedCallback(StateCallback callback);
+   void setSoundPlayer(class SoundPlayer* soundPlayer);
+ 
+   // Bar indicator: true when at least one notification was added since the user last
+@@ -230,6 +233,7 @@ private:
+   ActionInvokeCallback m_internalActionCallback;
+   CloseCallback m_closeCallback;
+   StateCallback m_stateCallback;
++  StateCallback m_historyChangedCallback;
+   ReplyCallback m_replyCallback;
+   int m_nextCallbackToken{0};
+   uint32_t m_nextId{1};
+diff --git a/src/scripting/luau_host.cpp b/src/scripting/luau_host.cpp
+index f60b049..3d29183 100644
+--- a/src/scripting/luau_host.cpp
++++ b/src/scripting/luau_host.cpp
+@@ -879,6 +879,32 @@ namespace {
+     return 1;
+   }
+ 
++  // noctalia.notificationHistory(): the history, oldest first, or an empty list before it's loaded.
++  int luau_notificationHistory(lua_State* L) {
++    auto* host = hostForState(L);
++    const auto history = host == nullptr ? nullptr : host->api().notificationHistory();
++    const int count = history == nullptr ? 0 : static_cast<int>(history->size());
++    lua_createtable(L, count, 0);
++    if (history == nullptr) {
++      return 1;
++    }
++    int index = 1;
++    for (const auto& n : *history) {
++      lua_createtable(L, 0, 8);
++      setTableNumber(L, "id", static_cast<double>(n.id));
++      setTableString(L, "appName", n.appName);
++      setTableString(L, "desktopEntry", n.desktopEntry);
++      setTableString(L, "summary", n.summary);
++      setTableString(L, "body", n.body);
++      setTableString(L, "urgency", n.urgency);
++      setTableNumber(L, "receivedMs", n.receivedMs);
++      setTableBool(L, "active", n.active);
++      lua_rawseti(L, -2, index);
++      ++index;
++    }
++    return 1;
++  }
++
+   int luau_clipboardText(lua_State* L) {
+     auto* host = hostForState(L);
+     if (host == nullptr) {
+@@ -2098,6 +2124,7 @@ namespace {
+       {"copyToClipboard", luau_copyToClipboard},
+       {"clipboardText", luau_clipboardText},
+       {"calendarEvents", luau_calendarEvents},
++      {"notificationHistory", luau_notificationHistory},
+       {"getenv", luau_getenv},
+       {"expandPath", luau_expandPath},
+       {"formatTime", luau_formatTime},
+diff --git a/src/scripting/script_api_context.h b/src/scripting/script_api_context.h
+index 570af71..df26efb 100644
+--- a/src/scripting/script_api_context.h
++++ b/src/scripting/script_api_context.h
+@@ -45,6 +45,19 @@ namespace scripting {
+     bool allDay = false;
+   };
+ 
++  // A notification history entry as exposed to plugin scripts via noctalia.notificationHistory().
++  // The history is kept encrypted on disk, so plugins read this in-memory copy instead of the file.
++  struct ScriptNotification {
++    std::uint32_t id = 0;
++    std::string appName;
++    std::string desktopEntry;
++    std::string summary;
++    std::string body;
++    std::string urgency; // "low", "normal" or "critical"
++    double receivedMs = 0.0; // wall clock, 0 when unknown
++    bool active = false;
++  };
++
+   class ScriptApiContext {
+   public:
+     using LoadSoundHook =
+@@ -139,6 +152,18 @@ namespace scripting {
+       return m_calendarEvents;
+     }
+ 
++    // Notification history, mirrored from NotificationManager on the main thread after every change,
++    // oldest first. The pointed-to list is immutable; bindings hold the shared_ptr while converting.
++    void setNotificationHistory(std::shared_ptr<const std::vector<ScriptNotification>> history) {
++      std::scoped_lock lock(m_mutex);
++      m_notificationHistory = std::move(history);
++    }
++
++    [[nodiscard]] std::shared_ptr<const std::vector<ScriptNotification>> notificationHistory() const {
++      std::scoped_lock lock(m_mutex);
++      return m_notificationHistory;
++    }
++
+     // Shell [shell].time_format / date_format — mirrored for noctalia.timeFormat() / dateFormat().
+     void setTimeFormat(std::string format) {
+       std::scoped_lock lock(m_mutex);
+@@ -311,6 +336,7 @@ namespace scripting {
+     std::unordered_map<std::string, std::string> m_wallpaperPaths;
+     std::optional<std::string> m_clipboardText;
+     std::shared_ptr<const std::vector<ScriptCalendarEvent>> m_calendarEvents;
++    std::shared_ptr<const std::vector<ScriptNotification>> m_notificationHistory;
+     std::function<void(const std::string&, bool)> m_wallpaperEnabledHook;
+     std::function<void(const std::string&, const std::string&)> m_wallpaperHook;
+     SetWallpaperMaskHook m_wallpaperMaskHook;

@@ -1,5 +1,5 @@
 # The desktop shell (bar, launcher, panels, notifications, OSD, lock screen),
-# built from the same release and checksum as Arch's own package, with seven
+# built from the same release and checksum as Arch's own package, with eight
 # patches of ours. Arch's PKGBUILD for 5.4.1-1 is the model: same
 # source, dependencies, meson options and files.
 #
@@ -38,6 +38,10 @@
 # the tray's and the power button's.
 # os-release-version.patch (ours): the control center's home card names the
 # system and its version from os-release ("<Name> 0.8.402"), not Noctalia's.
+# notification-history-api.patch (ours): noctalia.notificationHistory() gives
+# plugins the notification history (oldest first: id, appName, desktopEntry,
+# summary, body, urgency, receivedMs, active), mirrored after every change.
+# 5.4.1 encrypts the history file, which the bell and its popover used to read.
 # no-background-fetch.patch (ours): nothing is downloaded
 # for a feature that isn't in use. Upstream fetches the community palette
 # catalog (api.noctalia.dev/palettes) at every start and theme change; now only
@@ -102,7 +106,8 @@ source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz"
         surface-colors.patch
         no-background-fetch.patch
         bar-hover-fit.patch
-        os-release-version.patch)
+        os-release-version.patch
+        notification-history-api.patch)
 sha256sums=('6069d922e9d72488c74e4ce335314ce2203f08bd4641380bfe1bd137004597fa'
             'ea6030aa8b124e6590819eaad47ce10beda3e74c454264a581a82a5931f9f501'
             'deaede9215f74dbdb1032e3984ffd0191bf00f9596bb89dc8f15591b7adfadc8'
@@ -111,6 +116,7 @@ sha256sums=('6069d922e9d72488c74e4ce335314ce2203f08bd4641380bfe1bd137004597fa'
             '102716e298c7906e61e0722280689a82bd77a7f986bc81b30134e01cd6b50aa6'
             'a43a2af2720870894690ef8afdf8bb56a674fb1fbb90a45bd28f0f2e65551ee6'
             '9a3004fee0fb77c993cf93a080944020bac98279bbdac0dc2b0d45a4f595ca90'
+            '7669bb4505b6fd24fdc28c9ed7e84f3cac14f02b7464b36613adcd150be7faa2'
             'ac95d08aa2e829aea1cd022d9062ce0cb4b0ef156a49ed18ca8605fdc9b73c1f'
             '2a12f2cd48271158532ae98c02273127611eedc1d70f97e2f14e8bde34f52a14'
             '55968568ee1c8f3ffe691b51d4f6660acb40ee82f474d41fc6e18c571e87ddc4'
@@ -149,6 +155,7 @@ prepare() {
   patch -d "$pkgname-$pkgver" -p1 < no-background-fetch.patch
   patch -d "$pkgname-$pkgver" -p1 < bar-hover-fit.patch
   patch -d "$pkgname-$pkgver" -p1 < os-release-version.patch
+  patch -d "$pkgname-$pkgver" -p1 < notification-history-api.patch
   rm -rf buildlibs
   _have_buildlibs && return 0
   # /.arch-chroot: devtools' clean chroot, where depends and makedepends are installed.
