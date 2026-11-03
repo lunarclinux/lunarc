@@ -33,7 +33,7 @@ Usage: $DISTRO_ID update [--all] | check | security [...] | new-apps | firmware 
   new-apps        install default apps added since this computer was installed
                   (an update does this; each is offered once)
   restore         put back the tested release of a package the distro holds
-                  (Ghostty) if a newer one arrived before the hold (an update
+                  (Hyprland, Ghostty) if a newer one arrived before the hold (an update
                   does this, once)
   firmware        check for and install firmware updates (BIOS/UEFI, SSD, dock...)
                   through fwupd; firmware lists are only downloaded when you run this
@@ -552,6 +552,32 @@ restore_tested_ghostty() {
   sudo rm -f "$ghostty_restore_flag"
 }
 
+# Installs made while the installer couldn't pin Hyprland (Arch moved its
+# libraries on, 2026-11-02) got Hyprland 0.57, where the shell may not start
+# and the window header plugin doesn't load. A migration flags them; this puts
+# the tested family (default/tested/hyprland-packages) back once, from the Arch
+# Linux Archive, in one transaction. `update --all` still takes newer ones.
+hyprland_restore_flag=/var/lib/$DISTRO_ID/restore-tested-hyprland
+restore_tested_hyprland() {
+  local name version installed urls=()
+  [[ -f $hyprland_restore_flag ]] || return 0
+  while read -r name version; do
+    [[ $name =~ ^[a-z0-9][a-z0-9+_.-]*$ && $version =~ ^[0-9][0-9a-z.+:_]*-[0-9.]+$ ]] || continue
+    installed=$(pacman -Q "$name" 2>/dev/null | awk '{ print $2 }')
+    [[ -n $installed && $installed != "$version" ]] || continue
+    urls+=("https://archive.archlinux.org/packages/${name:0:1}/$name/$name-$version-x86_64.pkg.tar.zst")
+  done < <(grep -vE '^[[:space:]]*(#|$)' "$SHARE/default/tested/hyprland-packages" 2>/dev/null)
+  if (( ${#urls[@]} )); then
+    step "Hyprland"
+    info "Going back to the tested Hyprland ($(awk '$1 == "hyprland" { print $2 }' "$SHARE/default/tested/hyprland-packages")) and its libraries; it applies at the next login."
+    if ! sudo pacman -U --noconfirm "${urls[@]}"; then
+      info "Hyprland stays as it is for now; the next update tries again."
+      return 0
+    fi
+  fi
+  sudo rm -f "$hyprland_restore_flag"
+}
+
 update_all() { # update_all [1 = take held-back Hyprland too]
   local all=$1 before after pend changed others snap snap_before pre p
   local held=() ignore=() keyrings=(archlinux-keyring) aur_failed=0 kernel=0 errlog
@@ -618,6 +644,7 @@ update_all() { # update_all [1 = take held-back Hyprland too]
   fi
 
   new_default_apps
+  restore_tested_hyprland
   restore_tested_ghostty
 
   if command -v yay >/dev/null && [[ -n $(pacman -Qqm) ]]; then
@@ -882,7 +909,7 @@ case ${1:-} in
       *) die "security install, notify, off or check?" ;;
     esac ;;
   new-apps) sudo -v; new_default_apps ;;
-  restore) sudo -v; restore_tested_ghostty ;;
+  restore) sudo -v; restore_tested_hyprland; restore_tested_ghostty ;;
   firmware)
     command -v fwupdmgr >/dev/null || die "fwupd isn't installed (sudo pacman -S fwupd)"
     # Downloads the firmware list from the Linux Vendor Firmware Service (LVFS)
