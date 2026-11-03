@@ -54,15 +54,30 @@ pacstrap -K "$MNT" "${pkgs[@]}" > /tmp/pacstrap.log 2>&1 || { tail -30 /tmp/pacs
 grep -iE '^(error|warning):' /tmp/pacstrap.log | grep -v 'directory permissions differ on /mnt/boot' || true
 # Hyprland as tested: the window header plugin is built for one exact Arch
 # Hyprland (hyprbars.hyprland) and `update` holds newer ones back until the
-# distro has tested them. A release Arch published after this installer was
-# made is replaced by that one, from the Arch Linux Archive (signed by Arch).
-# (Hyprland 0.57.0 left the shell unable to start in a VM, 2026-10-28.)
+# distro has tested them. Releases Arch published after this installer was made
+# are put back to the tested family (default/tested/hyprland-packages), from
+# the Arch Linux Archive (signed by Arch), in one transaction: Hyprland alone
+# can't go back once Arch's aquamarine or hyprgraphics change their sonames.
+# (Hyprland 0.57.0 left the shell unable to start in a VM, 2026-10-28; the
+# libraries moved on 2026-11-02 and the Hyprland-only pin stopped working.)
+# Three tries: the archive is a single server.
 tested=$(head -1 "$MNT/usr/lib/hyprland-plugins/hyprbars.hyprland" 2>/dev/null || true)
 have=$(arch-chroot "$MNT" pacman -Q hyprland 2>/dev/null | awk '{ print $2 }')
 if [[ $tested =~ ^[0-9][0-9.]*-[0-9]+$ && -n $have && $have != "$tested" ]]; then
-  info "Hyprland $have is newer than the tested $tested; installing $tested"
-  if ! arch-chroot "$MNT" pacman -U --noconfirm \
-      "https://archive.archlinux.org/packages/h/hyprland/hyprland-$tested-x86_64.pkg.tar.zst" >>/tmp/pacstrap.log 2>&1; then
+  info "Hyprland $have is newer than the tested $tested; installing the tested Hyprland family"
+  urls=()
+  while read -r name version; do
+    [[ $name =~ ^[a-z0-9][a-z0-9+_.-]*$ && $version =~ ^[0-9][0-9a-z.+:_]*-[0-9.]+$ ]] || continue
+    installed=$(arch-chroot "$MNT" pacman -Q "$name" 2>/dev/null | awk '{ print $2 }')
+    [[ -n $installed && $installed != "$version" ]] || continue
+    urls+=("https://archive.archlinux.org/packages/${name:0:1}/$name/$name-$version-x86_64.pkg.tar.zst")
+  done < <(grep -vE '^[[:space:]]*(#|$)' "$root/default/tested/hyprland-packages" 2>/dev/null)
+  ok=""
+  for try in 1 2 3; do
+    if arch-chroot "$MNT" pacman -U --noconfirm "${urls[@]}" >>/tmp/pacstrap.log 2>&1; then ok=1; break; fi
+    sleep $(( try * 5 ))
+  done
+  if [[ -z $ok ]]; then
     info "WARNING: couldn't install Hyprland $tested; keeping $have (the desktop may not start; see /tmp/pacstrap.log)"
   fi
 fi
@@ -76,7 +91,12 @@ if [[ $tested =~ ^[0-9][0-9.]*-[0-9]+$ && -n $have && $have != "$tested" ]]; the
   for p in ghostty ghostty-terminfo ghostty-shell-integration; do
     urls+=("https://archive.archlinux.org/packages/g/$p/$p-$tested-x86_64.pkg.tar.zst")
   done
-  if ! arch-chroot "$MNT" pacman -U --noconfirm "${urls[@]}" >>/tmp/pacstrap.log 2>&1; then
+  ok=""
+  for try in 1 2 3; do
+    if arch-chroot "$MNT" pacman -U --noconfirm "${urls[@]}" >>/tmp/pacstrap.log 2>&1; then ok=1; break; fi
+    sleep $(( try * 5 ))
+  done
+  if [[ -z $ok ]]; then
     info "WARNING: couldn't install Ghostty $tested; keeping $have (the lock screen may show no screensaver)"
   fi
 fi
