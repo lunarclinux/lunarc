@@ -42,7 +42,7 @@ done
 names="\\b(${DISTRO_ID}|${DISTRO_REPO}|${DISTRO_NAME})\\b"
 blocked=$(cat "$(git rev-parse --git-common-dir 2>/dev/null)/info/blocked-references" 2>/dev/null || true)
 while read -r f; do
-  case $f in distro.conf|docs/*|site/*|.github/*|SECURITY.md|README.md|THIRD-PARTY-NOTICES.md|.githooks/*|tools/lint) continue ;; esac
+  case $f in distro.conf|docs/*|site/*|.github/*|SECURITY.md|CONTRIBUTING.md|README.md|THIRD-PARTY-NOTICES.md|.githooks/*|tools/lint) continue ;; esac
   [[ -f $f ]] || continue
   grep -qE "$names" <<<"$f" && problem "file name contains the distro name: $f"
   grep -IqE "$names" "$f" && problem "$f writes the distro name literally"

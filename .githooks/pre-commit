@@ -4,7 +4,7 @@
 #   2. match a local list of blocked references (one extended regex in
 #      .git/info/blocked-references, not committed; skipped without it), or
 #   3. contain a private key block.
-# The public text (docs/, site/, .github/, README.md, SECURITY.md,
+# The public text (docs/, site/, .github/, README.md, SECURITY.md, CONTRIBUTING.md,
 # THIRD-PARTY-NOTICES.md) is exempt from both. Run `git config core.hooksPath .githooks` once after cloning.
 set -euo pipefail
 
@@ -18,7 +18,7 @@ names="\\b(${DISTRO_ID}|${DISTRO_REPO}|${DISTRO_NAME})\\b"
 fail=0
 while IFS= read -r -d '' file; do
   case "$file" in
-    distro.conf|docs/*|site/*|.github/*|SECURITY.md|README.md|THIRD-PARTY-NOTICES.md|.githooks/*|tools/lint) continue ;;
+    distro.conf|docs/*|site/*|.github/*|SECURITY.md|CONTRIBUTING.md|README.md|THIRD-PARTY-NOTICES.md|.githooks/*|tools/lint) continue ;;
   esac
   added=$(git diff --cached -U0 -- "$file" | grep -E '^\+[^+]' || true)
   checks=("$file" "$added")
