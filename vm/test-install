@@ -783,6 +783,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
       check "attention: dot, then SUPER+U"  "$(sed "s/@ID@/$id/g" "$here/checks/attention.sh")"
       # Low Gravity: float this workspace, tile it again.
       check "Low Gravity: float, spread, new windows, off, all" "$(sed "s/@ID@/$id/g" "$here/checks/gravity.sh")"
+      check "games keep the screen awake, launchers don't" "$(sed "s/@ID@/$id/g" "$here/checks/game-awake.sh")"
       "$here/ssh" "$vm" "$user" -- "$hypr $id workspaces go 6; for i in 1 2 3; do hyprctl dispatch 'hl.dsp.exec_cmd(\"ghostty --gtk-single-instance=false\")' >/dev/null; sleep 2; done; $id gravity on >/dev/null; sleep 2" >/dev/null 2>&1 || true
       screenshot gravity-on
       "$here/ssh" "$vm" "$user" -- "$hypr $id gravity off >/dev/null; sleep 2" >/dev/null 2>&1 || true
