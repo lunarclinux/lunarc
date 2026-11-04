@@ -43,6 +43,29 @@ hl.window_rule({
     no_anim = true,
 })
 
+-- A game keeps the screen awake while it's open, so the screensaver and the
+-- idle lock never start over it (a gamepad isn't input the idle timer sees).
+-- Games, not their launchers: Steam's games (steam_app_<id>, Proton), games
+-- in gamescope, Windows games under Wine (Lutris, Heroic: <name>.exe), and any
+-- window that says it's a game. Steam, Lutris and Heroic themselves don't
+-- count, nor do the Windows store launchers Wine runs (their rule comes later,
+-- so it wins). The stay-awake toggle is separate and untouched.
+hl.window_rule({
+    name = "game-awake",
+    match = { class = "^(steam_app_[0-9]+|gamescope|.+\\.exe)$" },
+    idle_inhibit = "always",
+})
+hl.window_rule({
+    name = "game-awake-content",
+    match = { content = "game" },
+    idle_inhibit = "always",
+})
+hl.window_rule({
+    name = "game-launchers-sleep",
+    match = { class = "^(?i:battle\\.net|battle\\.net launcher|eadesktop|origin|upc|ubisoftconnect|galaxyclient|epicgameslauncher|steam|steamwebhelper|launcher|rockstarservice|rockstar games launcher|riotclientux|riotclientservices)\\.exe$" },
+    idle_inhibit = "none",
+})
+
 -- The setup window (`@DISTRO_ID@ setup`) floats in the middle, like a dialog.
 hl.window_rule({
     name = "setup",

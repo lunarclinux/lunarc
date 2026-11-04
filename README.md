@@ -58,7 +58,7 @@ git config core.hooksPath .githooks
 
 ## Reporting problems
 
-Bugs and feature requests: GitHub issues. Security issues: see `SECURITY.md`.
+Bugs and feature requests: GitHub issues. Security issues: see `SECURITY.md`. Contributing: see `CONTRIBUTING.md`.
 
 ## License
 
