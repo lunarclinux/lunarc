@@ -822,6 +822,7 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
         # (Not on an install updated from before it: no password to make it with.)
         (( upgraded )) || check "keyring: made at install, the login password unlocks it" "$(sed -e "s/@PW@/$password/g" "$here/checks/keyring.sh")"
       fi
+      check "nas: connect (key in the keyring only), status, forget" "$(sed -e "s/@ID@/$id/g" -e "s/@PW@/$password/g" "$here/checks/nas.sh")"
       check "plugins: per-version dir behind one link" "t=\$(readlink /usr/share/$id/noctalia-plugins) && [[ \$t == noctalia-plugins.d/* ]] && [ -f /usr/share/$id/noctalia-plugins/utilities/plugin.toml ] && [ ! -e /usr/share/$id/default/noctalia-plugins ] && [ -f /usr/share/libalpm/hooks/$id-shell-reload.hook ]"
       # The menu (SUPER+Space), driven with real keys
       # from here (virsh send-key); what it shows is read from its state dump

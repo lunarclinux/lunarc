@@ -48,6 +48,9 @@ case $part in
     put "$src/etc/polkit/greeter-theme.rules" "$dest/usr/share/polkit-1/rules.d/50-$id-greeter-theme.rules"
     put "$src/distro.conf" "$dest/usr/lib/$id/distro.conf"
     put "$src/repo.conf" "$dest/usr/lib/$id/repo.conf"
+    # The homelab tools (`<id> nas`): Python, one module per appliance product.
+    while IFS= read -r -d '' f; do put "$f" "$dest/usr/lib/$id/homelab/${f#"$src"/bin/homelab/}"; done \
+      < <(find "$src/bin/homelab" -name '*.py' -print0)
     for cmd in "$src"/bin/commands/*; do put "$cmd" "$dest/usr/lib/$id/commands/${cmd##*/}" 755; done
 
     # Defaults (Hyprland, Noctalia, plugins, agent guides), themes, new users' configs.

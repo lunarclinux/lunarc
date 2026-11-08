@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# summary: Your NAS from this computer: connect it, see its health (TrueNAS)
+set -euo pipefail
+source "$DISTRO_LIB/lib.sh"
+
+# The TrueNAS driver talks over a WebSocket: its library is installed the
+# first time a NAS is connected.
+if [[ ${1:-} == connect && " $* " != *" --driver fake "* ]] && ! python3 -c 'import websocket' 2>/dev/null; then
+  info "Connecting a NAS needs python-websocket-client; installing it."
+  install_packages python-websocket-client
+fi
+
+# -I: only the distro's own modules and the system's, never ones from the
+# current folder or the environment.
+exec python3 -I -c 'import sys; sys.path.insert(0, sys.argv[1])
+from homelab.cli import main
+sys.exit(main("nas", sys.argv[2:]))' "$DISTRO_LIB" "$@"
