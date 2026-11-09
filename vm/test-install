@@ -730,8 +730,9 @@ if "$here/ssh" "$vm" "$user" -- 'test -x /usr/bin/Hyprland'; then
         # The moon: off by default, right of the clock when on.
         "$here/ssh" "$vm" "$user" -- "$hypr $id bar moon on >/dev/null; sleep 3" || true
         bar_shot bar-moon; read -r _ r _ _ < <(clock_lines "$last_shot")
+        # (At new moon it reads "0%", and OCR often takes that 0 for an o.)
         text=$(ocr "$last_shot" "160x30+$((r + 1))+0" 7)
-        report "$(grep -qE '[0-9]+ ?%' <<<"$text"; echo $?)" "moon: its segment shows right of the clock (read: $(tr '\n' ' ' <<<"$text"))"
+        report "$(grep -qE '[0-9oO]+ ?%' <<<"$text"; echo $?)" "moon: its segment shows right of the clock (read: $(tr '\n' ' ' <<<"$text"))"
         # The weather (opt-in): the plugin's segment, reading Noctalia's cached
         # reading (planted here: nothing is looked up), `☁ 11° · ◐ 62%` with the
         # moon on, in the bar's colours: the temperature in the text colour, the
