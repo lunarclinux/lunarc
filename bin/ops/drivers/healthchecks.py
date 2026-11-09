@@ -14,7 +14,7 @@ import urllib.error
 import urllib.request
 
 from .. import tls
-from ..core import HomelabError
+from ..core import OpsError
 
 
 class Healthchecks:
@@ -41,18 +41,18 @@ class Healthchecks:
         hostpart = f"[{host}]" if ":" in host else host
         url = f"https://{hostpart}{'' if port == 443 else f':{port}'}{path}"
         if self.tls.get("mode") != "system":
-            raise HomelabError("connecting to Healthchecks needs a certificate the system trusts")
+            raise OpsError("connecting to Healthchecks needs a certificate the system trusts")
         ctx = ssl.create_default_context()
-        req = urllib.request.Request(url, headers={"X-Api-Key": self.key, "User-Agent": "homelab-status"})
+        req = urllib.request.Request(url, headers={"X-Api-Key": self.key, "User-Agent": "ops-status"})
         try:
             with urllib.request.urlopen(req, context=ctx, timeout=20) as r:
                 return json.load(r)
         except urllib.error.HTTPError as e:
             if e.code == 401:
-                raise HomelabError("Healthchecks refused the key")
-            raise HomelabError(f"Healthchecks answered {e.code}")
+                raise OpsError("Healthchecks refused the key")
+            raise OpsError(f"Healthchecks answered {e.code}")
         except (urllib.error.URLError, OSError, ValueError) as e:
-            raise HomelabError(f"can't reach {self.address}: {e}")
+            raise OpsError(f"can't reach {self.address}: {e}")
 
     def login(self):
         checks = self._get("/api/v3/checks/").get("checks", [])
@@ -94,3 +94,6 @@ def _ago(secs):
     if secs < 2 * 86400:
         return f"{secs // 3600} hours"
     return f"{secs // 86400} days"
+
+
+DRIVERS = [Healthchecks]

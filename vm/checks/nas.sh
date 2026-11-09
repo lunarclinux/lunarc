@@ -8,6 +8,15 @@ export XDG_RUNTIME_DIR=/run/user/$(id -u)
 export DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
 id=@ID@
 fail() { echo "nas check: $*"; exit 1; }
+# Install Ops and its TrueNAS driver (copied in by test-install), as the
+# catalog's `app install ops-truenas` would.
+printf '%s\n' '@PW@' | sudo -S -p '' pacman -U --needed --noconfirm /tmp/ops-pkgs/$id-ops-[0-9]*.pkg.tar.zst \
+  /tmp/ops-pkgs/$id-ops-truenas-*.pkg.tar.zst >/dev/null 2>&1 || fail "installing Ops failed"
+pacman -Q python-websocket-client >/dev/null || fail "the TrueNAS driver's library didn't come with it"
+"$id" --help | grep -q '^  nas ' || fail "no nas command after installing Ops"
+python3 -I -c "import sys; sys.path.insert(0, '/usr/lib/$id'); from ops import drivers
+assert 'truenas' in drivers.DRIVERS and 'healthchecks' not in drivers.DRIVERS, sorted(drivers.DRIVERS)" \
+  || fail "the installed drivers aren't TrueNAS (and the test one) only"
 work=$(mktemp -d)
 nas=$work/nas.json
 key=vm-test-$RANDOM$RANDOM
@@ -38,13 +47,12 @@ connect() { "$id" nas connect vmtest --driver fake --address "$nas" --user desk 
 
 echo wrong | connect >/dev/null 2>&1 && fail "a wrong key was accepted"
 printf '%s\n' "$key" | connect >/dev/null || fail "connect failed"
-[[ $(timeout 10 secret-tool lookup service "$id-homelab" appliance vmtest) == "$key" ]] || fail "the key isn't in the keyring"
-cfg=~/.config/$id/homelab/appliances.json
+[[ $(timeout 10 secret-tool lookup service "$id-ops" appliance vmtest) == "$key" ]] || fail "the key isn't in the keyring"
+cfg=~/.config/$id/ops/appliances.json
 [[ $(stat -c %a "$cfg") == 600 ]] || fail "settings mode $(stat -c %a "$cfg")"
 grep -rqF "$key" ~/.config/"$id" ~/.local/state/"$id" 2>/dev/null && fail "the key is in a file"
 "$id" nas status vmtest --json | jq -e '.sections[1].items[0].text == "tank: online"' >/dev/null || fail "status"
 "$id" nas list | grep -q '^vmtest	' || fail "list"
 "$id" nas forget vmtest --yes >/dev/null || fail "forget"
-timeout 10 secret-tool lookup service "$id-homelab" appliance vmtest >/dev/null && fail "forget left the key"
-"$id" --help | grep -q '^  nas ' || fail "not in the command list"
+timeout 10 secret-tool lookup service "$id-ops" appliance vmtest >/dev/null && fail "forget left the key"
 exit 0

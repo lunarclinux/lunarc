@@ -1,0 +1,16 @@
+# Ops: your NAS, firewall and monitoring from this computer (`<id> nas`):
+# the shared core, CLI and agents' MCP server. Opt-in (the app catalog);
+# each product's driver is its own package (ops-<product>). Decision 0058.
+source "${DISTRO_SRC:?build with pkg/build}/distro.conf"
+
+pkgname=$DISTRO_ID-ops
+pkgver=${PKGVER:-0.0.0}
+pkgrel=1
+pkgdesc="$DISTRO_NAME Ops: your NAS, firewall and monitoring from this computer"
+arch=(any)
+license=(GPL-3.0-or-later)
+depends=("$DISTRO_ID" python libsecret)
+
+package() {
+  bash "$DISTRO_SRC/pkg/files.sh" ops "$DISTRO_SRC" "$pkgdir"
+}

@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
-# Checks the homelab tools (`<id> nas`) against the test driver, a NAS that's
+# Checks the ops tools (`<id> nas`) against the test driver, a NAS that's
 # a JSON file: connect (wrong key, a key stronger than its level), status,
 # and the guardrails every change goes through (level, confirm, backup,
 # audit log, rate limit), the certificate pin, and what input is refused.
 # No network, no keyring (a stand-in), nothing outside a temporary folder.
 #
-#   tests/homelab
+#   tests/ops
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 DISTRO_ID=distro XDG_CONFIG_HOME=$work/config XDG_STATE_HOME=$work/state \
-  python3 -I - "$root/bin" "$work" <<'PY'
+  python3 -I -B - "$root/bin" "$work" <<'PY'
 import io, json, os, stat, sys
 sys.path.insert(0, sys.argv[1])
 work = sys.argv[2]
-from homelab import cli, core, tls
-from homelab.drivers import fake
+from ops import cli, core, tls
+from ops.drivers import fake
 
 fails = 0
 def expect(desc, ok):
@@ -86,7 +86,7 @@ def audit():
 try:
     change("snapshot", {"dataset": "tank", "name": "a"})
     expect("a snapshot is refused at watch", False)
-except core.HomelabError as e:
+except core.OpsError as e:
     expect("a snapshot is refused at watch", "needs operate" in str(e) and audit()[-1]["result"] == "refused: level")
 
 rc, out = run(base + ["--level", "operate", "--yes"], "s3cret-key\n")
@@ -102,7 +102,7 @@ expect("a snapshot at operate: done, previewed, logged with before and after",
 try:
     change("dataset_delete", {"dataset": "tank/old"})
     expect("deleting is refused below admin", False)
-except core.HomelabError:
+except core.OpsError:
     expect("deleting is refused below admin", "tank/old" in json.load(open(nas))["pools"])
 
 rc, out = run(base + ["--level", "admin", "--yes"], "s3cret-key\n")
@@ -114,12 +114,12 @@ expect("at admin, the backup comes first, then the change",
 for i in range(core.RATE_LIMIT):
     try:
         change("snapshot", {"dataset": "tank", "name": f"r{i}"})
-    except core.HomelabError:
+    except core.OpsError:
         break
 try:
     change("snapshot", {"dataset": "tank", "name": "over"})
     expect("the rate limit stops the next change", False)
-except core.HomelabError as e:
+except core.OpsError as e:
     expect("the rate limit stops the next change", "last minute" in str(e) and audit()[-1]["result"] == "refused: rate")
 
 class Sock:
@@ -130,7 +130,7 @@ tls.check_pin(Sock(b"cert-a"), pin, "home")
 try:
     tls.check_pin(Sock(b"cert-b"), pin, "home")
     expect("a different certificate is refused", False)
-except core.HomelabError as e:
+except core.OpsError as e:
     expect("a different certificate is refused", "different certificate" in str(e))
 expect("an unpinned connection is never accepted as pinned", tls.sslopt({})["cert_reqs"] == 0)
 expect("[::1]:8443 splits into host and port", tls.split_address("[::1]:8443") == ("::1", 8443))
@@ -139,7 +139,7 @@ def refused(fn, value):
     try:
         fn(value)
         return False
-    except core.HomelabError:
+    except core.OpsError:
         return True
 expect("bad names are refused", all(refused(core.check_name, v) for v in ["", "Nas", "-x", "a b", "a/b", "x" * 33]))
 expect("bad addresses are refused",
@@ -148,14 +148,14 @@ expect("good addresses pass", not any(refused(core.check_address, v)
        for v in ["nas", "nas.home.arpa", "10.0.0.20", "nas:8443", "[fd00::1]:443"]))
 
 # The agents' MCP server: tools by level, preview first, logged as the agent.
-from homelab import mcp
+from ops import mcp
 rc, out = run(base + ["--level", "watch", "--yes"], "s3cret-key\n")
 names = [t["name"] for t in mcp.tools()]
 expect("MCP at watch: status only, no change tools", names == ["nas_list", "nas_status"])
 rc, out = run(base + ["--level", "operate", "--yes"], "s3cret-key\n")
 names = [t["name"] for t in mcp.tools()]
 expect("MCP at operate: snapshot listed, delete not", "nas_snapshot" in names and "nas_dataset_delete" not in names)
-os.environ["HOMELAB_ACTOR"] = "agent"
+os.environ["OPS_ACTOR"] = "agent"
 core.RATE_LIMIT = 100  # the earlier checks used up this minute's changes
 reset()
 r = mcp.call("nas_snapshot", {"dataset": "tank", "name": "m"})
@@ -167,14 +167,14 @@ expect("with confirm it's made and logged as the agent's",
 try:
     mcp.call("nas_snapshot", {"dataset": "tank", "name": "m", "extra": "x", "confirm": True})
     expect("unexpected arguments are refused", False)
-except core.HomelabError:
+except core.OpsError:
     expect("unexpected arguments are refused", True)
 r = mcp.call("nas_status", {})
 expect("an agent reads status", "tank: online" in r["content"][0]["text"])
-del os.environ["HOMELAB_ACTOR"]
+del os.environ["OPS_ACTOR"]
 
 # A monitor's check-ins (Healthchecks, stood in for) join the NAS's status.
-from homelab.drivers import healthchecks
+from ops.drivers import healthchecks
 from datetime import datetime, timedelta, timezone
 recent = (datetime.now(timezone.utc) - timedelta(hours=6)).isoformat()
 healthchecks.Healthchecks._get = lambda self, path: {"checks": [
@@ -190,6 +190,16 @@ expect("check-ins show in the NAS's status", items == {"Restic backup: up, last 
                                                          "Old job: down": "bad"})
 rc, out = run(["forget", "hc", "--yes"])
 expect("a monitor can be forgotten", rc == 0 and "hc" not in core.load_appliances())
+
+# A product whose driver package isn't installed: says which package.
+from ops import drivers
+saved = drivers.DRIVERS.pop("truenas")
+try:
+    drivers.get("truenas")
+    expect("a missing driver names its package", False)
+except core.OpsError as e:
+    expect("a missing driver names its package", "distro-ops-truenas" in str(e))
+drivers.DRIVERS["truenas"] = saved
 
 rc, out = run(["forget", "home", "--yes"])
 expect("forget removes it and its key", rc == 0 and core.load_appliances() == {} and "home" not in keys)

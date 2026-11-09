@@ -42,6 +42,9 @@
 # packages for their build libraries; see pkg/noctalia).
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
+# The distro's own packages (pkg/<part>, built from this repository at the
+# ref): the base system, then the opt-in Ops package and its product drivers.
+distro_parts=(keyring settings main ops ops-truenas ops-healthchecks)
 chroot=0 dry=0 fresh=0 dev=0 ref=HEAD
 while (( $# )); do
   case $1 in
@@ -147,7 +150,8 @@ if (( chroot && ! dry )); then mkdir -p "$out/logs"; fi
 vendored=()
 for dir in "$work"/src/pkg/*/; do
   name=$(basename "$dir")
-  case $name in main|settings|keyring|out|out-test) continue ;; esac
+  case " ${distro_parts[*]} " in *" $name "*) continue ;; esac
+  case $name in out|out-test|out-dev) continue ;; esac
   [[ -f $dir/PKGBUILD ]] || continue
   # Software whose license doesn't allow passing it on: only the recipe is
   # ours, built on the user's machine (see the folder's README).
@@ -211,7 +215,7 @@ fi
 # the repository at the ref in distro-src (hard links; not src, which is
 # makepkg's own folder in host builds), and the version set at the top of the
 # PKGBUILD.
-for part in keyring settings main; do
+for part in "${distro_parts[@]}"; do
   build=$work/$part; mkdir -p "$build"
   cp -al "$work/src" "$build/distro-src"
   {
@@ -351,7 +355,7 @@ for name in "${order[@]}"; do
   fi
 done
 
-for part in keyring settings main; do
+for part in "${distro_parts[@]}"; do
   build=$work/$part
   # --nodeps: data and scripts only; the desktop they depend on needn't be
   # installed to build them.
@@ -378,7 +382,7 @@ if (( dry )); then
   run repo-add -q "${sign[@]}" "$db" "$out/repo/<each package>"
   echo "pkg/build: dry run, nothing built. Vendored package files, in build order (a debug package only if there are symbols):"
   for name in "${order[@]}"; do sed 's|^.*/|  |' <<<"${pkgfiles[$name]}"; done
-  echo "pkg/build: then keyring, settings, main ($ver)"
+  echo "pkg/build: then ${distro_parts[*]} ($ver)"
   exit 0
 fi
 repo-add -q "${sign[@]}" "$db" "$out"/repo/*.pkg.tar.zst

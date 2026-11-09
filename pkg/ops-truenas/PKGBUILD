@@ -1,0 +1,14 @@
+# Ops for TrueNAS (25.10 and newer): its driver, over the JSON-RPC WebSocket API.
+source "${DISTRO_SRC:?build with pkg/build}/distro.conf"
+
+pkgname=$DISTRO_ID-ops-truenas
+pkgver=${PKGVER:-0.0.0}
+pkgrel=1
+pkgdesc="$DISTRO_NAME Ops for TrueNAS"
+arch=(any)
+license=(GPL-3.0-or-later)
+depends=("$DISTRO_ID-ops=$pkgver" python-websocket-client)
+
+package() {
+  bash "$DISTRO_SRC/pkg/files.sh" ops-truenas "$DISTRO_SRC" "$pkgdir"
+}
