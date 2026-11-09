@@ -11,7 +11,7 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 DISTRO_ID=distro XDG_CONFIG_HOME=$work/config XDG_STATE_HOME=$work/state \
-  python3 -I - "$root/bin" "$work" <<'PY'
+  python3 -I -B - "$root/bin" "$work" <<'PY'
 import io, json, os, stat, sys
 sys.path.insert(0, sys.argv[1])
 work = sys.argv[2]

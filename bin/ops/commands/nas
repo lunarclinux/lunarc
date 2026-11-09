@@ -4,7 +4,9 @@ set -euo pipefail
 
 # The Ops package (<id>-ops); a product's driver comes in its own package
 # (<id>-ops-truenas, ...). -I: only the distro's own modules and the
-# system's, never ones from the current folder or the environment.
-exec python3 -I -c 'import sys; sys.path.insert(0, sys.argv[1])
+# system's, never ones from the current folder or the environment. -B: no
+# bytecode files written, so running as root leaves nothing in /usr/lib that
+# no package owns.
+exec python3 -I -B -c 'import sys; sys.path.insert(0, sys.argv[1])
 from ops.cli import main
 sys.exit(main("nas", sys.argv[2:]))' "$DISTRO_LIB" "$@"
