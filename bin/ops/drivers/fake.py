@@ -5,7 +5,7 @@ name it with --driver fake. It reads and writes only that file.
 
 import json
 
-from ..core import Action, HomelabError
+from ..core import Action, OpsError
 
 
 class FakeNAS:
@@ -27,7 +27,7 @@ class FakeNAS:
             with open(self.path) as f:
                 return json.load(f)
         except (OSError, ValueError) as e:
-            raise HomelabError(f"can't read the test NAS {self.path}: {e}")
+            raise OpsError(f"can't read the test NAS {self.path}: {e}")
 
     def _save(self, s):
         with open(self.path, "w") as f:
@@ -36,7 +36,7 @@ class FakeNAS:
     def login(self):
         s = self._load()
         if s.get("user") != self.user or s.get("key") != self.key:
-            raise HomelabError("the NAS refused the key: check the user name and the key")
+            raise OpsError("the NAS refused the key: check the user name and the key")
         return {"version": s.get("version", "test"), "stronger_than": "admin" if s.get("role") == "full" else None}
 
     def status(self):
@@ -82,3 +82,6 @@ class FakeNAS:
 
     def close(self):
         pass
+
+
+DRIVERS = [FakeNAS]

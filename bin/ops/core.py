@@ -1,4 +1,4 @@
-"""Homelab appliances: the parts every driver shares.
+"""Ops: the parts every driver shares.
 
 A machine knows appliances by a name it picks (`nas`, `office-nas`, `fw`).
 Each has a role (nas: storage; fw: router/firewall), a driver (the product:
@@ -42,7 +42,7 @@ ADDRESS_RE = re.compile(r"^([A-Za-z0-9]([A-Za-z0-9-]{0,62})(\.[A-Za-z0-9-]{1,63}
 USER_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,31}$")
 
 
-class HomelabError(Exception):
+class OpsError(Exception):
     """A problem to show the person as it is, without a traceback."""
 
 
@@ -50,12 +50,12 @@ class HomelabError(Exception):
 
 def config_dir():
     base = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
-    return os.path.join(base, DISTRO_ID, "homelab")
+    return os.path.join(base, DISTRO_ID, "ops")
 
 
 def state_dir():
     base = os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state")
-    return os.path.join(base, DISTRO_ID, "homelab")
+    return os.path.join(base, DISTRO_ID, "ops")
 
 
 def _private_dir(path):
@@ -76,7 +76,7 @@ def load_appliances():
     except FileNotFoundError:
         return {}
     except (OSError, ValueError) as e:
-        raise HomelabError(f"can't read {path}: {e}")
+        raise OpsError(f"can't read {path}: {e}")
     return data if isinstance(data, dict) else {}
 
 
@@ -97,45 +97,45 @@ def get_appliance(name=None, role=None):
     word = {"nas": "NAS", "fw": "firewall"}.get(role, "appliance")
     if name:
         if name not in data or (role and data[name].get("role") != role):
-            raise HomelabError(f"no {word} called '{name}' (see: {DISTRO_ID} {role or 'nas'} list)")
+            raise OpsError(f"no {word} called '{name}' (see: {DISTRO_ID} {role or 'nas'} list)")
         return name, data[name]
     mine = [n for n, a in data.items() if not role or a.get("role") == role]
     if not mine:
-        raise HomelabError(f"no {word} connected yet (run: {DISTRO_ID} {role or 'nas'} connect)")
+        raise OpsError(f"no {word} connected yet (run: {DISTRO_ID} {role or 'nas'} connect)")
     if len(mine) > 1:
-        raise HomelabError(f"more than one {word}: name one of {', '.join(sorted(mine))}")
+        raise OpsError(f"more than one {word}: name one of {', '.join(sorted(mine))}")
     return mine[0], data[mine[0]]
 
 
 # --- the key, in the Secret Service ------------------------------------------
 
 def _secret_attrs(name):
-    return ["service", f"{DISTRO_ID}-homelab", "appliance", name]
+    return ["service", f"{DISTRO_ID}-ops", "appliance", name]
 
 
 def store_key(name, key):
     """Hand the key to the keyring on stdin: never in argv or a file."""
     try:
-        r = subprocess.run(["secret-tool", "store", "--label", f"{DISTRO_ID} homelab: {name}", *_secret_attrs(name)],
+        r = subprocess.run(["secret-tool", "store", "--label", f"{DISTRO_ID} ops: {name}", *_secret_attrs(name)],
                            input=key.encode(), capture_output=True, timeout=60)
     except subprocess.TimeoutExpired:
-        raise HomelabError("the keyring is locked and its unlock prompt wasn't answered; nothing was saved")
+        raise OpsError("the keyring is locked and its unlock prompt wasn't answered; nothing was saved")
     except OSError as e:
-        raise HomelabError(f"couldn't reach the keyring: {e}")
+        raise OpsError(f"couldn't reach the keyring: {e}")
     if r.returncode != 0:
-        raise HomelabError("the keyring refused the key: " + r.stderr.decode(errors="replace").strip())
+        raise OpsError("the keyring refused the key: " + r.stderr.decode(errors="replace").strip())
 
 
 def lookup_key(name):
     try:
         r = subprocess.run(["secret-tool", "lookup", *_secret_attrs(name)], capture_output=True, timeout=60)
     except subprocess.TimeoutExpired:
-        raise HomelabError("the keyring is locked and its unlock prompt wasn't answered")
+        raise OpsError("the keyring is locked and its unlock prompt wasn't answered")
     except OSError as e:
-        raise HomelabError(f"couldn't reach the keyring: {e}")
+        raise OpsError(f"couldn't reach the keyring: {e}")
     key = r.stdout.decode(errors="replace").strip()
     if r.returncode != 0 or not key:
-        raise HomelabError(f"no key for '{name}' in the keyring (is it unlocked? or run: {DISTRO_ID} nas connect {name})")
+        raise OpsError(f"no key for '{name}' in the keyring (is it unlocked? or run: {DISTRO_ID} nas connect {name})")
     return key
 
 
@@ -157,7 +157,7 @@ def audit(appliance, level, what, result, before=None, after=None, actor=None):
     _private_dir(state_dir())
     entry = {
         "time": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
-        "actor": actor or os.environ.get("HOMELAB_ACTOR") or "person",
+        "actor": actor or os.environ.get("OPS_ACTOR") or "person",
         "appliance": appliance,
         "level": level,
         "what": what,
@@ -214,19 +214,19 @@ def change(name, appliance, driver, action_name, args, confirm, out=print):
     no (a prompt for a person; --yes; an agent's own confirmation step)."""
     actions = driver.actions()
     if action_name not in actions:
-        raise HomelabError(f"{driver.label} can't {action_name.replace('_', ' ')} here")
+        raise OpsError(f"{driver.label} can't {action_name.replace('_', ' ')} here")
     act = actions[action_name]
     if sorted(args) != sorted(act.params) or not all(isinstance(v, str) and v for v in args.values()):
-        raise HomelabError(f"{action_name.replace('_', ' ')} takes: {', '.join(act.params) or 'nothing'}")
+        raise OpsError(f"{action_name.replace('_', ' ')} takes: {', '.join(act.params) or 'nothing'}")
     level = appliance.get("level", "watch")
     what = f"{action_name} {json.dumps(args, sort_keys=True)}"
     if not level_allows(level, act.level):
         audit(name, level, what, "refused: level")
-        raise HomelabError(f"'{name}' is connected at the {level} level; {act.summary} needs {act.level} "
+        raise OpsError(f"'{name}' is connected at the {level} level; {act.summary} needs {act.level} "
                            f"(a person can change that: {DISTRO_ID} {driver.role} connect {name} --level {act.level})")
     if recent_changes(name) >= RATE_LIMIT:
         audit(name, level, what, "refused: rate")
-        raise HomelabError(f"already {RATE_LIMIT} changes to '{name}' in the last minute; wait a moment")
+        raise OpsError(f"already {RATE_LIMIT} changes to '{name}' in the last minute; wait a moment")
     before = act.preview(args)
     out(f"{act.summary}:")
     for line in before.get("lines", []):
@@ -265,17 +265,17 @@ def mark(state):
 
 def check_name(name):
     if not NAME_RE.match(name or ""):
-        raise HomelabError("a name is lowercase letters, digits and -, up to 32 (e.g. nas, office-nas)")
+        raise OpsError("a name is lowercase letters, digits and -, up to 32 (e.g. nas, office-nas)")
     return name
 
 
 def check_address(addr):
     if not ADDRESS_RE.match(addr or "") or len(addr) > 255:
-        raise HomelabError(f"'{addr}' isn't a host name or address (e.g. nas.home.arpa, 10.0.0.20, nas:8443)")
+        raise OpsError(f"'{addr}' isn't a host name or address (e.g. nas.home.arpa, 10.0.0.20, nas:8443)")
     return addr
 
 
 def check_user(user):
     if not USER_RE.match(user or ""):
-        raise HomelabError("a user name is letters, digits, _ . -, up to 32")
+        raise OpsError("a user name is letters, digits, _ . -, up to 32")
     return user

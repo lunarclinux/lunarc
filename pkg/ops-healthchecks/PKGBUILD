@@ -1,0 +1,16 @@
+# Ops for Healthchecks: check-ins from scheduled jobs (backups) in the NAS's
+# status, with a read-only key. Not in the app catalog: which monitors Ops
+# supports is still to be decided.
+source "${DISTRO_SRC:?build with pkg/build}/distro.conf"
+
+pkgname=$DISTRO_ID-ops-healthchecks
+pkgver=${PKGVER:-0.0.0}
+pkgrel=1
+pkgdesc="$DISTRO_NAME Ops for Healthchecks"
+arch=(any)
+license=(GPL-3.0-or-later)
+depends=("$DISTRO_ID-ops=$pkgver")
+
+package() {
+  bash "$DISTRO_SRC/pkg/files.sh" ops-healthchecks "$DISTRO_SRC" "$pkgdir"
+}

@@ -140,3 +140,6 @@ mission-center   | system    | Mission Center         | repo     | mission-cente
 disks            | system    | Disks                  | repo     | gnome-disk-utility          | default
 printers         | system    | Print Settings (add and manage printers) | repo | system-config-printer | default
 disk-usage       | system    | Disk Usage Analyzer    | repo     | baobab                      |
+
+# Ops: your NAS, firewall and monitoring from this computer (`@DISTRO_ID@ nas`)
+ops-truenas      | ops       | Ops for TrueNAS (health, backups; agents within a level you set) | repo | @DISTRO_ID@-ops-truenas |

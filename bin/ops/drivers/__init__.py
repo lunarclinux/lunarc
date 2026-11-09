@@ -23,9 +23,23 @@ Commands, panels and agents only see this shape, so adding a product is
 adding a driver.
 """
 
-from . import fake, healthchecks, truenas
+import importlib
+import pkgutil
 
-DRIVERS = {d.name: d for d in (truenas.TrueNAS, fake.FakeNAS, healthchecks.Healthchecks)}
+# Each driver is a module here; vendor packages (<id>-ops-truenas, ...) add
+# theirs, so a product is supported once its package is installed. A module
+# names its driver classes in DRIVERS.
+DRIVERS = {}
+for _m in pkgutil.iter_modules(__path__):
+    try:
+        _mod = importlib.import_module(f"{__name__}.{_m.name}")
+    except ImportError:
+        continue  # a driver whose library is missing: not offered
+    for _d in getattr(_mod, "DRIVERS", []):
+        DRIVERS[_d.name] = _d
+
+# Products with a driver package, to say what to install for one that isn't.
+KNOWN = {"truenas": ("nas", "TrueNAS"), "healthchecks": ("monitor", "Healthchecks")}
 
 
 def for_role(role):
@@ -33,7 +47,9 @@ def for_role(role):
 
 
 def get(name):
-    from ..core import HomelabError
-    if name not in DRIVERS:
-        raise HomelabError(f"no driver called '{name}'")
-    return DRIVERS[name]
+    from ..core import DISTRO_ID, OpsError
+    if name in DRIVERS:
+        return DRIVERS[name]
+    if name in KNOWN:
+        raise OpsError(f"{KNOWN[name][1]} needs its package: sudo pacman -S {DISTRO_ID}-ops-{name}")
+    raise OpsError(f"no driver called '{name}'")

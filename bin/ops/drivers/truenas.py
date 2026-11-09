@@ -12,7 +12,7 @@ import itertools
 import json
 
 from .. import tls
-from ..core import HomelabError
+from ..core import OpsError
 
 
 class TrueNAS:
@@ -55,14 +55,14 @@ class TrueNAS:
         try:
             import websocket
         except ImportError:
-            raise HomelabError("the TrueNAS driver needs python-websocket-client (pacman -S python-websocket-client)")
+            raise OpsError("the TrueNAS driver needs python-websocket-client (pacman -S python-websocket-client)")
         host, port = tls.split_address(self.address)
         hostpart = f"[{host}]" if ":" in host else host
         try:
             self.ws = websocket.create_connection(f"wss://{hostpart}:{port}/api/current", timeout=20,
                                                   sslopt=tls.sslopt(self.tls))
         except Exception as e:  # websocket-client raises many kinds
-            raise HomelabError(f"can't connect to {self.address}: {e}")
+            raise OpsError(f"can't connect to {self.address}: {e}")
         tls.check_pin(self.ws.sock, self.tls, self.appliance)
 
     def call(self, method, *params):
@@ -74,7 +74,7 @@ class TrueNAS:
             try:
                 msg = json.loads(self.ws.recv())
             except Exception as e:
-                raise HomelabError(f"lost the connection to {self.address}: {e}")
+                raise OpsError(f"lost the connection to {self.address}: {e}")
             if msg.get("id") != n:
                 continue  # an event, or an answer to something else
             if "error" in msg:
@@ -99,12 +99,12 @@ class TrueNAS:
             r = self.call("auth.login_ex", {"mechanism": "API_KEY_PLAIN", "username": self.user,
                                             "api_key": self.key})
         except CallError as e:
-            raise HomelabError(f"sign-in failed: {e}")
+            raise OpsError(f"sign-in failed: {e}")
         kind = (r or {}).get("response_type")
         if kind == "EXPIRED":
-            raise HomelabError("the key has expired: make a new one and connect again")
+            raise OpsError("the key has expired: make a new one and connect again")
         if kind != "SUCCESS":
-            raise HomelabError("the NAS refused the key: check the user name and the key "
+            raise OpsError("the NAS refused the key: check the user name and the key "
                                "(a key sent over plain HTTP is revoked by TrueNAS)")
         info = r.get("user_info") or {}
         stronger = None
@@ -256,3 +256,6 @@ def _when(value):
         return d if d.tzinfo else d.replace(tzinfo=datetime.timezone.utc)
     except ValueError:
         return None
+
+
+DRIVERS = [TrueNAS]

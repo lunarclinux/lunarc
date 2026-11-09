@@ -13,11 +13,11 @@ import os
 import sys
 
 from . import core, drivers
-from .core import DISTRO_ID, HomelabError
+from .core import DISTRO_ID, OpsError
 
 PROTOCOL = "2025-06-18"
 
-INSTRUCTIONS = f"""Tools for the person's homelab appliances (NAS), from this computer. Rules:
+INSTRUCTIONS = f"""Tools for the person's NAS and other infrastructure, from this computer. Rules:
 - Check status before changing anything, and tell the person what you found.
 - Before a change, say what it will do and how to undo it; preview it (confirm=false) and show the preview.
 - Make one change at a time, then check status again to see it worked.
@@ -93,11 +93,11 @@ def call(tool, args):
         else:
             lines.append("Done. Check status to see it worked.")
         return _text("\n".join(lines))
-    raise HomelabError(f"no tool called {tool}")
+    raise OpsError(f"no tool called {tool}")
 
 
 def serve():
-    os.environ["HOMELAB_ACTOR"] = "agent"
+    os.environ["OPS_ACTOR"] = "agent"
     for line in sys.stdin:
         try:
             msg = json.loads(line)
@@ -119,7 +119,7 @@ def serve():
             elif method == "tools/call":
                 try:
                     result = call(params.get("name", ""), dict(params.get("arguments") or {}))
-                except HomelabError as e:
+                except OpsError as e:
                     result = _text(str(e), error=True)
             else:
                 reply = {"jsonrpc": "2.0", "id": mid, "error": {"code": -32601, "message": f"no method {method}"}}

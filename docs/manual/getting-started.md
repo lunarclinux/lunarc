@@ -128,7 +128,7 @@ Items are in `/usr/share/lunarc/default/menu/menu`; copy it to `~/.config/lunarc
 | `lunarc display size` / `scale 125%` | How big things look on screen |
 | `lunarc display edit` / `list` / `save <name>` | Screens: resolution, scale, arrangement, docked/undocked profiles |
 | `lunarc share list` / `add` / `test <name>` / `remove <name>` | Network shares (NAS), mounted on demand |
-| `lunarc nas connect` / `status` / `list` / `forget <name>` | Your NAS's health from this computer (TrueNAS): alerts, storage, apps, backups, updates. You pick how much this computer may do (`lunarc nas levels`); the key stays in your keyring. `lunarc nas mcp add` gives Claude Code the same tools, within the same level |
+| `lunarc nas connect` / `status` / `list` / `forget <name>` | Ops (install it: `lunarc app install ops-truenas`): your NAS's health from this computer: alerts, storage, apps, backups, updates. You pick how much this computer may do (`lunarc nas levels`); the key stays in your keyring. `lunarc nas mcp add` gives Claude Code the same tools, within the same level |
 | `lunarc app list` / `search <word>` / `install <app>` | Browse and install apps: browsers, editors, AI (Claude, ChatGPT, Ollama, Hermes), games (Steam, Lutris, Heroic), chat and more |
 | `lunarc app export apps.txt` / `import apps.txt` | Save your apps and a few settings to a file, then install them all on another computer |
 | `lunarc setup` / `setup backups` | The first-login choices again / set up backups |

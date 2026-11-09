@@ -2,7 +2,7 @@
 # Lays out the distro's files under a root directory. The PKGBUILDs call this
 # from package(); nothing else writes these paths.
 #
-#   pkg/files.sh main|settings <repo root> <destination root>
+#   pkg/files.sh main|settings|ops|ops-<product> <repo root> <destination root>
 set -euo pipefail
 part=$1 src=$2 dest=$3
 source "$src/distro.conf"
@@ -48,9 +48,6 @@ case $part in
     put "$src/etc/polkit/greeter-theme.rules" "$dest/usr/share/polkit-1/rules.d/50-$id-greeter-theme.rules"
     put "$src/distro.conf" "$dest/usr/lib/$id/distro.conf"
     put "$src/repo.conf" "$dest/usr/lib/$id/repo.conf"
-    # The homelab tools (`<id> nas`): Python, one module per appliance product.
-    while IFS= read -r -d '' f; do put "$f" "$dest/usr/lib/$id/homelab/${f#"$src"/bin/homelab/}"; done \
-      < <(find "$src/bin/homelab" -name '*.py' -print0)
     for cmd in "$src"/bin/commands/*; do put "$cmd" "$dest/usr/lib/$id/commands/${cmd##*/}" 755; done
 
     # Defaults (Hyprland, Noctalia, plugins, agent guides), themes, new users' configs.
@@ -196,6 +193,17 @@ case $part in
     put "$src/etc/profile.d/local-bin.sh" "$dest/etc/profile.d/$id-local-bin.sh"
     # The same editor default for shells outside the desktop session (TTY, SSH).
     put "$src/etc/profile.d/editor.sh" "$dest/etc/profile.d/$id-editor.sh"
+    ;;
+  ops)
+    # Ops (`<id> nas`): the shared core, the CLI, the agents' MCP server and the
+    # test driver. Each product's driver is in its own package (ops-<product>).
+    for f in "$src"/bin/ops/*.py "$src"/bin/ops/drivers/__init__.py "$src"/bin/ops/drivers/fake.py; do
+      put "$f" "$dest/usr/lib/$id/ops/${f#"$src"/bin/ops/}"
+    done
+    for cmd in "$src"/bin/ops/commands/*; do put "$cmd" "$dest/usr/lib/$id/commands/${cmd##*/}" 755; done
+    ;;
+  ops-*)
+    put "$src/bin/ops/drivers/${part#ops-}.py" "$dest/usr/lib/$id/ops/drivers/${part#ops-}.py"
     ;;
   settings)
     install -d -m750 "$dest/etc/sudoers.d"   # sudo's own package creates it 750

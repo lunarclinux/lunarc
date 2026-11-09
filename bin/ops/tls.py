@@ -11,7 +11,7 @@ import hashlib
 import socket
 import ssl
 
-from .core import HomelabError
+from .core import OpsError
 
 
 def split_address(address, default_port=443):
@@ -37,7 +37,7 @@ def system_trusts(host, port, timeout=10):
     except ssl.SSLError:
         return False
     except OSError as e:
-        raise HomelabError(f"can't reach {host}:{port}: {e}")
+        raise OpsError(f"can't reach {host}:{port}: {e}")
 
 
 def probe(address):
@@ -51,7 +51,7 @@ def probe(address):
             with ctx.wrap_socket(s, server_hostname=host) as t:
                 der = t.getpeercert(binary_form=True)
     except OSError as e:
-        raise HomelabError(f"can't reach {host}:{port} over HTTPS: {e}")
+        raise OpsError(f"can't reach {host}:{port} over HTTPS: {e}")
     return fingerprint(der), system_trusts(host, port)
 
 
@@ -69,7 +69,7 @@ def check_pin(sock, tls, name):
         return
     der = sock.getpeercert(binary_form=True)
     if not der or fingerprint(der) != tls.get("pin"):
-        raise HomelabError(
+        raise OpsError(
             f"'{name}' presented a different certificate than the one you trusted, so nothing was sent. "
             f"If you replaced its certificate, connect again to trust the new one; otherwise, something "
             f"between here and the appliance may be listening in.")

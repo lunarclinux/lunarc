@@ -7,7 +7,7 @@ import socket
 import sys
 
 from . import core, drivers, tls
-from .core import DISTRO_ID, LEVELS, LEVEL_SUMMARY, HomelabError
+from .core import DISTRO_ID, LEVELS, LEVEL_SUMMARY, OpsError
 
 ROLE_WORD = {"nas": "NAS", "fw": "firewall"}
 
@@ -16,12 +16,12 @@ def ask(question, default=None):
     if not sys.stdin.isatty():
         if default is not None:
             return default
-        raise HomelabError(f"{question}: not asked without a terminal (give it as an option)")
+        raise OpsError(f"{question}: not asked without a terminal (give it as an option)")
     hint = f" [{default}]" if default else ""
     try:
         answer = input(f"  {question}{hint}: ").strip()
     except EOFError:
-        raise HomelabError("cancelled")
+        raise OpsError("cancelled")
     return answer or (default or "")
 
 
@@ -54,14 +54,14 @@ def connect(role, a):
     driver = drivers.get(driver_name)
     # A monitor (check-ins from backup scripts) is connected alongside the NAS.
     if driver.role != role and not (role == "nas" and driver.role == "monitor"):
-        raise HomelabError(f"{driver.label} isn't a {word}")
+        raise OpsError(f"{driver.label} isn't a {word}")
     word = ROLE_WORD.get(driver.role, driver.label)
     existing = core.load_appliances()
 
     name = core.check_name(a.name or ask(f"A name for this {word}", role if driver.role == role else driver.name))
     if name in existing and not yes_no(f"'{name}' is already connected. Replace its key and settings?",
                                        assume_yes=a.yes):
-        raise HomelabError("left as it was")
+        raise OpsError("left as it was")
     address = a.address or ask(f"The {word}'s address (host name or IP)")
     if not driver.needs_tls:
         address = address.strip()
@@ -79,7 +79,7 @@ def connect(role, a):
             print("  Only this exact certificate will be accepted from now on, and no key is ever sent to "
                   "anything else.")
             if not yes_no("Is this your appliance, on your own network?", default=True, assume_yes=a.yes):
-                raise HomelabError("not connected")
+                raise OpsError("not connected")
             tls_conf = {"mode": "pin", "pin": fp}
 
     level = getattr(driver, "fixed_level", None) or a.level
@@ -90,7 +90,7 @@ def connect(role, a):
         print("  More permission means more can go wrong. Start with watch; you can move it later.")
         level = ask("Level", "watch")
     if level not in LEVELS:
-        raise HomelabError(f"the levels are {', '.join(LEVELS)}")
+        raise OpsError(f"the levels are {', '.join(LEVELS)}")
 
     user = a.user
     if not getattr(driver, "needs_user", True):
@@ -110,10 +110,10 @@ def connect(role, a):
         key = sys.stdin.readline().strip()
     else:
         if not sys.stdin.isatty():
-            raise HomelabError("the key: give it on stdin with --key-stdin")
+            raise OpsError("the key: give it on stdin with --key-stdin")
         key = getpass.getpass("  The API key (hidden as you paste): ").strip()
     if not key or len(key) > 4096 or any(c.isspace() for c in key):
-        raise HomelabError("that doesn't look like a key")
+        raise OpsError("that doesn't look like a key")
 
     appliance = {"role": driver.role, "driver": driver.name, "address": address, "user": user, "level": level,
                  "tls": tls_conf}
@@ -127,7 +127,7 @@ def connect(role, a):
         print(f"  Anything on this computer that gets it could do that much. Make a {level} key instead.")
         if not yes_no("Use it anyway?", default=False):
             core.audit(name, level, "connect", "refused: key stronger than level")
-            raise HomelabError("not connected; make a key for the level you picked")
+            raise OpsError("not connected; make a key for the level you picked")
 
     core.store_key(name, key)
     existing = core.load_appliances()
@@ -171,7 +171,7 @@ def full_status(name, appliance):
             try:
                 md = open_driver(mname, m)
                 sections += [(f"{t} ({mname})", lines) for t, lines in md.status()]
-            except HomelabError as e:
+            except OpsError as e:
                 sections.append((f"Check-ins ({mname})", [("warn", f"couldn't read: {e}")]))
     return sections
 
@@ -214,7 +214,7 @@ def mcp_cmd(role, a):
     import shutil
     import subprocess
     if not shutil.which("claude"):
-        raise HomelabError(f"Claude Code isn't installed ({DISTRO_ID} agent install claude); other agents: "
+        raise OpsError(f"Claude Code isn't installed ({DISTRO_ID} agent install claude); other agents: "
                            f"add an MCP server that runs '{DISTRO_ID} {role} mcp'")
     r = subprocess.run(["claude", "mcp", "add", "--scope", "user", f"{DISTRO_ID}-{role}", "--",
                         DISTRO_ID, role, "mcp"])
@@ -266,7 +266,7 @@ def main(role, argv):
             return 0
         p.print_help()
         return 0 if a.cmd is None else 2
-    except HomelabError as e:
+    except OpsError as e:
         print(f"{DISTRO_ID} {role}: {e}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:
